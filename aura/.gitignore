@@ -1,0 +1,14 @@
+node_modules
+__pycache__
+.pytest_cache
+*.pyc
+*.pyo
+*.log
+.env
+coverage
+apps/backend/.venv
+apps/backend/profile
+apps/web/dist
+apps/desktop/dist
+test_runs/*
+!test_runs/.keep

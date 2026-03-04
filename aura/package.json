@@ -1,0 +1,9 @@
+{
+  "name": "aura-monorepo",
+  "private": true,
+  "version": "1.0.0",
+  "scripts": {
+    "dev": "bash infra/scripts/dev.sh",
+    "test": "bash infra/scripts/run_tests.sh"
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "name": "aura-desktop",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "vitest run",
+    "dev": "echo 'Run electron manually for desktop in v1'"
+  },
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@testing-library/react": "^16.0.0",
+    "@types/react": "^18.3.3",
+    "@types/react-dom": "^18.3.0",
+    "jsdom": "^24.1.1",
+    "typescript": "^5.5.4",
+    "vitest": "^2.0.5"
+  }
+}
