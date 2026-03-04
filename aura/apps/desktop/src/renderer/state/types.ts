@@ -6,4 +6,5 @@ export type TimelineEvent = {
   status: string;
   timestamp?: number;
   message?: string;
+  type?: string;
 };

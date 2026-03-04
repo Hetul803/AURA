@@ -4,6 +4,9 @@
     "module": "esnext",
     "target": "es2020",
     "moduleResolution": "bundler",
-    "types": ["vitest/globals"]
-  }
+    "types": ["vitest/globals", "node"],
+    "strict": true,
+    "baseUrl": "."
+  },
+  "include": ["src/renderer", "src/shared", "tests", "vite.config.ts"]
 }

@@ -26,6 +26,7 @@ PY
 
 run_suite backend bash -lc "cd apps/backend && pytest -q"
 run_suite desktop bash -lc "cd apps/desktop && pnpm test"
+run_suite desktop_build_sanity bash -lc "cd apps/desktop && pnpm build"
 run_suite web bash -lc "cd apps/web && NODE_ENV=test pnpm test"
 
 end=$(python3 - <<'PY'

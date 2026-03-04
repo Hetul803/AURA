@@ -6,19 +6,31 @@ Local-first AI computer operator monorepo for desktop (Electron + Python backend
 ```bash
 pnpm -w install
 cd apps/backend && pip install -e .
+cd ../..
 pnpm -w dev
 ```
-Desktop UI (renderer tests) lives in `apps/desktop`. In full desktop mode, Electron hosts this renderer and talks to backend HTTP/SSE.
+In another terminal:
+```bash
+cd apps/desktop
+pnpm dev
+```
 
-## 3 demos that always work
+## Desktop demo loop
+- Desktop shows backend status (Connected/Disconnected + retry)
+- Enter command -> receives `run_id` -> subscribes to `/events/stream/{run_id}`
+- Action timeline updates live
+- Panic Stop calls `/panic/{run_id}`
+- If blocked with manual step, click **Continue** to call `/runs/{run_id}/resume`
+
+## 3 best demo commands
 1. `search ai operator design and give me key points`
-2. `open gmail` then choose clarifications once, then `summarize unread emails` (real Gmail may require login)
-3. `find flights from SFO to JFK on 2026-07-01 return 2026-07-10` then open best option as dry-run (no booking)
+2. `open gmail` then `summarize unread emails` (may require manual login + Continue)
+3. `find flights from SFO to JFK on 2026-07-01 return 2026-07-10`
 
 ## Troubleshooting
 - Ollama missing: backend auto-falls back to deterministic `SimpleLLM`.
 - Playwright browser install: run `python -m playwright install chromium` for real-site browsing.
-- Permissions/hotkeys: global hotkey may require OS accessibility permissions.
+- Permissions/hotkeys: desktop may require OS Accessibility permissions.
 
 ## Tests
 ```bash
@@ -27,5 +39,5 @@ bash infra/scripts/run_tests.sh
 Writes `test_runs/<timestamp>/results.json`.
 
 ## Known intentional stubs
-- Voice transcription (UI and backend signal stubbed transcription)
-- Final purchase/checkout completion is confirmation-gated and not auto-finalized
+- Voice transcription
+- Final purchase/checkout completion (confirmation-gated)

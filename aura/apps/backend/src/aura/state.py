@@ -5,6 +5,7 @@ from storage.db import get_conn
 
 PANIC = False
 RUN_CANCEL: dict[str, bool] = defaultdict(bool)
+RUN_CONTEXT: dict[str, dict] = {}
 LOCK = threading.Lock()
 
 
@@ -29,3 +30,13 @@ def cancel_run(run_id: str):
 def is_run_cancelled(run_id: str) -> bool:
     with LOCK:
         return RUN_CANCEL.get(run_id, False) or PANIC
+
+
+def set_run_context(run_id: str, context: dict):
+    with LOCK:
+        RUN_CONTEXT[run_id] = context
+
+
+def get_run_context(run_id: str) -> dict | None:
+    with LOCK:
+        return RUN_CONTEXT.get(run_id)

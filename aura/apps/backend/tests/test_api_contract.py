@@ -20,3 +20,10 @@ def test_command_and_events():
 def test_model_select():
     assert client.post('/models/select', params={'model_id': 'simple'}).status_code == 200
     assert client.get('/models/select').json()['model_id'] == 'simple'
+
+
+def test_run_resume_endpoint_exists():
+    r = client.post('/command', json={'text': 'open gmail'})
+    run_id = r.json()['run_id']
+    resumed = client.post(f'/runs/{run_id}/resume')
+    assert resumed.status_code == 200

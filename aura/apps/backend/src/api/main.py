@@ -3,7 +3,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 import json, queue
-from aura.orchestrator import run_command
+from aura.orchestrator import run_command, resume_run
 from aura.prefs import get_prefs, set_pref, reset_pref, reset_all
 from aura.macros import list_macros
 from aura.models import available_models
@@ -65,11 +65,12 @@ def get_model():
 @app.post('/command')
 def command(cmd: Cmd):
     run_id = 'pending'
+
     def emit(e):
         rid = e.get('run_id', run_id)
         _emit(rid, e)
-    resp = run_command(cmd.text, emit, cmd.choices, cmd.use_macro)
-    return resp
+
+    return run_command(cmd.text, emit, cmd.choices, cmd.use_macro)
 
 
 @app.post('/panic')
@@ -81,24 +82,41 @@ def panic(body: PanicBody):
     return {'panic': True, 'run_id': body.run_id}
 
 
+@app.post('/panic/{run_id}')
+def panic_run(run_id: str):
+    cancel_run(run_id)
+    _emit(run_id, {'type': 'run_cancelled', 'run_id': run_id, 'status': 'cancelled', 'message': 'panic stop'})
+    return {'panic': True, 'run_id': run_id}
+
+
 @app.post('/panic/reset')
 def panic_reset():
     set_panic(False)
     return {'panic': False}
 
 
+@app.post('/runs/{run_id}/resume')
+def resume(run_id: str):
+    def emit(e):
+        _emit(run_id, e)
+
+    return resume_run(run_id, emit)
+
+
 @app.get('/events/stream/{run_id}')
 def stream(run_id: str):
     q = EVENTS.setdefault(run_id, queue.Queue())
+
     def gen():
         idle = 0
-        while idle < 50:
+        while idle < 75:
             try:
                 item = q.get(timeout=0.2)
                 idle = 0
                 yield f"data: {item}\n\n"
             except Exception:
                 idle += 1
+
     return StreamingResponse(gen(), media_type='text/event-stream')
 
 
