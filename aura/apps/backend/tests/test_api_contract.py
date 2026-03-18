@@ -31,3 +31,9 @@ def test_run_resume_endpoint_exists():
 
 def test_clear_session_endpoint_exists():
     assert client.delete('/browser/session/mail_google_com').status_code == 200
+
+
+def test_sessions_and_storage_endpoints():
+    assert client.get('/browser/sessions').status_code == 200
+    assert client.get('/storage/stats').status_code == 200
+    assert client.get('/safety/events').status_code == 200

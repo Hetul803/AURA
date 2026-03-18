@@ -2,7 +2,8 @@ from __future__ import annotations
 import time
 from .safety import guard_step
 from tools.web_playwright import handle_web_action
-from .state import is_run_cancelled, set_run_context, get_run_context
+from tools.os_automation import handle_os_action, read_clipboard
+from .state import is_run_cancelled, set_run_context, get_run_context, record_safety_event
 
 
 def _condition_ok(cond, observation: dict) -> bool:
@@ -48,10 +49,12 @@ def execute_steps(run_id: str, steps, event_cb, wait_poll_ms: int = 100, start_i
         guard = guard_step(step)
         if guard == 'blocked':
             out.append({'step': step.id, 'status': 'blocked', 'step_index': idx})
+            record_safety_event({'kind':'blocked','run_id':run_id,'step_id':step.id,'action':step.action_type})
             event_cb({'type': 'step_status', 'run_id': run_id, 'step_id': step.id, 'status': 'failed', 'message': 'blocked by safety', 'timestamp': time.time(), 'url': obs.get('url', '')})
             continue
         if guard == 'confirm':
             out.append({'step': step.id, 'status': 'needs_confirmation', 'step_index': idx})
+            record_safety_event({'kind':'confirmation','run_id':run_id,'step_id':step.id,'action':step.action_type})
             event_cb({'type': 'step_status', 'run_id': run_id, 'step_id': step.id, 'status': 'clarification', 'message': 'confirmation required', 'timestamp': time.time(), 'url': obs.get('url', '')})
             continue
 
@@ -67,8 +70,21 @@ def execute_steps(run_id: str, steps, event_cb, wait_poll_ms: int = 100, start_i
                     time.sleep(wait_poll_ms / 1000)
                     elapsed += wait_poll_ms
                 res = {'ok': True, 'waited_ms': target_ms, 'observation': obs}
+            elif step.action_type.startswith('OS_') or step.action_type in ('TAKE_SCREENSHOT',):
+                if step.action_type == 'OS_PASTE' and not step.args.get('text'):
+                    clip = read_clipboard()
+                    step.args['text'] = clip.get('text', '')
+                res = handle_os_action(step)
+                if step.action_type in ('OS_PASTE','OS_WRITE_CLIPBOARD','OS_COPY_SELECTION'):
+                    record_safety_event({'kind':'clipboard','run_id':run_id,'step_id':step.id,'action':step.action_type,'ok':res.get('ok',False)})
+                res['observation'] = {**obs, **{k: v for k, v in res.items() if k in ('active_app','window_title')}}
             else:
+                if step.args.get('query') == '__FROM_CLIPBOARD__':
+                    clip = read_clipboard()
+                    step.args['query'] = clip.get('text', '')
                 res = handle_web_action(step)
+                if step.action_type == 'WEB_UPLOAD':
+                    record_safety_event({'kind':'upload','run_id':run_id,'step_id':step.id,'ok':res.get('ok',False),'file_path':step.args.get('file_path')})
             if res.get('ok'):
                 break
             if res.get('error') == 'user_action_needed':

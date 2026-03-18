@@ -3,6 +3,7 @@ pyproject.toml
 src/api/main.py
 src/aura/executor.py
 src/aura/macros.py
+src/aura/memory.py
 src/aura/models.py
 src/aura/observer.py
 src/aura/orchestrator.py
@@ -26,12 +27,17 @@ src/storage/migrations.py
 src/storage/profile_paths.py
 src/storage/retention.py
 src/storage/snapshots.py
+src/tools/browser_runtime.py
 src/tools/os_automation.py
 src/tools/web_playwright.py
 src/voice/transcriber.py
 tests/test_api_contract.py
 tests/test_macros.py
 tests/test_memory.py
+tests/test_os_automation.py
+tests/test_panic.py
+tests/test_planner_os_flows.py
 tests/test_playwright_fixtures.py
+tests/test_playwright_live_local.py
 tests/test_prefs.py
 tests/test_safety.py

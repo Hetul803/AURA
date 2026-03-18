@@ -1,5 +1,6 @@
 from __future__ import annotations
 from playwright.sync_api import Page
+from tools.os_automation import active_context
 
 
 def current_url(page: Page) -> str:
@@ -30,8 +31,7 @@ def element_exists(page: Page, selector: str) -> bool:
 
 def element_visible(page: Page, selector: str) -> bool:
     try:
-        loc = page.locator(selector).first
-        return loc.is_visible(timeout=500)
+        return page.locator(selector).first.is_visible(timeout=500)
     except Exception:
         return False
 
@@ -48,10 +48,20 @@ def gmail_unread_count(page: Page) -> int:
     return 0
 
 
+def browser_file_picker_open(page: Page) -> bool:
+    # best-effort signal: any visible file input
+    return element_visible(page, 'input[type="file"]')
+
+
 def snapshot(page: Page) -> dict:
+    os_ctx = active_context()
     return {
         'url': current_url(page),
         'title': page_title(page),
         'login_required': login_needed(page),
         'gmail_unread': gmail_unread_count(page),
+        'file_picker_open': browser_file_picker_open(page),
+        'active_app': os_ctx.get('active_app'),
+        'active_window_title': os_ctx.get('window_title'),
+        'clipboard_length': os_ctx.get('clipboard_length', 0),
     }

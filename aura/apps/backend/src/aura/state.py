@@ -6,6 +6,7 @@ from storage.db import get_conn
 PANIC = False
 RUN_CANCEL: dict[str, bool] = defaultdict(bool)
 RUN_CONTEXT: dict[str, dict] = {}
+SAFETY_EVENTS: list[dict] = []
 LOCK = threading.Lock()
 
 
@@ -40,3 +41,14 @@ def set_run_context(run_id: str, context: dict):
 def get_run_context(run_id: str) -> dict | None:
     with LOCK:
         return RUN_CONTEXT.get(run_id)
+
+
+def record_safety_event(evt: dict):
+    with LOCK:
+        SAFETY_EVENTS.append(evt)
+        del SAFETY_EVENTS[:-200]
+
+
+def list_safety_events() -> list[dict]:
+    with LOCK:
+        return list(SAFETY_EVENTS)

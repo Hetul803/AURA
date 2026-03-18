@@ -15,6 +15,8 @@ from storage.snapshots import create_snapshot
 from storage.retention import enforce_retention
 from aura.state import db_conn
 from tools.browser_runtime import browser_manager
+from storage.profile_paths import profile_dir
+from aura.state import list_safety_events
 
 run_migrations()
 app = FastAPI(title='AURA Backend')
@@ -126,6 +128,42 @@ def stream(run_id: str):
 def clear_browser_session(domain: str):
     browser_manager.clear_session(domain)
     return {'ok': True, 'domain': domain}
+
+
+@app.get('/browser/sessions')
+def list_browser_sessions():
+    state_dir = profile_dir() / 'browser_state'
+    sessions = []
+    for f in state_dir.glob('*.json'):
+        sessions.append({'domain': f.stem, 'path': str(f), 'size': f.stat().st_size})
+    return sessions
+
+
+@app.delete('/browser/sessions')
+def clear_all_browser_sessions():
+    state_dir = profile_dir() / 'browser_state'
+    for f in state_dir.glob('*.json'):
+        f.unlink(missing_ok=True)
+    return {'ok': True}
+
+
+@app.get('/safety/events')
+def safety_events():
+    return list_safety_events()
+
+
+@app.get('/storage/stats')
+def storage_stats():
+    base = profile_dir()
+    def dir_size(p):
+        return sum(f.stat().st_size for f in p.rglob('*') if f.is_file())
+    return {
+      'profile_dir': str(base),
+      'db_size': (base / 'aura.sqlite3').stat().st_size if (base / 'aura.sqlite3').exists() else 0,
+      'artifacts_size': dir_size(base / 'artifacts'),
+      'sessions_size': dir_size(base / 'browser_state'),
+      'snapshots_size': dir_size(base / 'snapshots')
+    }
 
 @app.get('/preferences')
 def prefs_list():

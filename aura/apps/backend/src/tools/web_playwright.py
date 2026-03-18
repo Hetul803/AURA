@@ -100,9 +100,25 @@ def _real_flights(query: str) -> dict:
     return {'ok': True, 'flights': flights, 'observation': observer.snapshot(page)}
 
 
+
+
+def _real_upload(url: str, selector: str, file_path: str) -> dict:
+    domain = browser_manager.domain_for_url(url)
+    page = browser_manager.page_for(domain)
+    page.goto(url, wait_until='domcontentloaded', timeout=20000)
+    try:
+        page.set_input_files(selector, file_path)
+        browser_manager.save_state(domain)
+        return {'ok': True, 'uploaded': file_path, 'observation': observer.snapshot(page)}
+    except Exception as e:
+        return {'ok': False, 'error': 'user_action_needed', 'message': f'Upload input not ready: {e}', 'observation': observer.snapshot(page)}
+
 def handle_web_action(step) -> dict:
     if step.action_type == 'NOOP':
         return {'ok': True, 'echo': step.args.get('echo') or step.args.get('message')}
+
+    if step.action_type == 'WEB_UPLOAD':
+        return _real_upload(step.args.get('url',''), step.args.get('selector','input[type="file"]'), step.args.get('file_path',''))
 
     if step.action_type == 'WEB_NAVIGATE':
         url = step.args.get('url')
