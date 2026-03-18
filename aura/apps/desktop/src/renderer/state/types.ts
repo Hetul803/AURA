@@ -7,4 +7,6 @@ export type TimelineEvent = {
   timestamp?: number;
   message?: string;
   type?: string;
+  url?: string;
+  session?: string;
 };

@@ -27,3 +27,7 @@ def test_run_resume_endpoint_exists():
     run_id = r.json()['run_id']
     resumed = client.post(f'/runs/{run_id}/resume')
     assert resumed.status_code == 200
+
+
+def test_clear_session_endpoint_exists():
+    assert client.delete('/browser/session/mail_google_com').status_code == 200

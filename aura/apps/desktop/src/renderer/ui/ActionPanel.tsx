@@ -12,5 +12,6 @@ export default function ActionPanel({ events }: { events: TimelineEvent[] }) {
       </li>)}
     </ul>
     <div><strong>Details:</strong> {latest?.message || latest?.status || 'none'}</div>
+    <div><strong>URL:</strong> {latest?.url || '-'} | <strong>Session:</strong> {latest?.session || 'unknown'}</div>
   </div>;
 }

@@ -36,10 +36,22 @@ def run_command(text: str, event_cb=lambda e: None, choices: dict | None = None,
         set_run_context(run_id, {'text': text, 'choices': choices or {}, 'use_macro': False, 'status': 'macro_suggested'})
         return {'ok': False, 'run_id': run_id, 'macro_suggestion': {'id': macro['id'], 'name': macro['name']}, 'plan_signature': plan['signature']}
 
+    set_run_context(run_id, {
+        'text': text,
+        'choices': choices or {},
+        'use_macro': use_macro,
+        'steps': [s.model_dump() for s in steps],
+        'current_step_index': 0,
+        'last_observation': {},
+        'status': 'running',
+    })
+
     result = execute_steps(run_id, steps, event_cb)
-    last = result[-1] if result else {'status': 'done'}
+    last = result[-1] if result else {'status': 'done', 'step_index': len(steps) - 1}
     status = 'needs_user' if last['status'] == 'needs_user' else ('done' if all(r['status'] == 'success' for r in result) else 'partial')
-    set_run_context(run_id, {'text': text, 'choices': choices or {}, 'use_macro': use_macro, 'status': status, 'step_index': last.get('step_index', 0)})
+
+    ctx = get_run_context(run_id) or {}
+    set_run_context(run_id, {**ctx, 'status': status, 'current_step_index': last.get('step_index', 0)})
 
     if result and all(r['status'] == 'success' for r in result):
         record_macro(name=f"{plan['signature']} workflow", trigger=plan['signature'], steps=[s.model_dump() for s in plan['steps']], slots=plan.get('slots'))
@@ -54,5 +66,12 @@ def resume_run(run_id: str, event_cb=lambda e: None):
     ctx = get_run_context(run_id)
     if not ctx:
         return {'ok': False, 'run_id': run_id, 'error': 'run_not_found'}
-    event_cb({'type': 'resumed', 'run_id': run_id, 'status': 'running', 'message': 'Run resumed by user'})
-    return run_command(ctx['text'], event_cb, ctx.get('choices', {}), ctx.get('use_macro', False), run_id=run_id)
+
+    steps = [Step(**s) for s in ctx.get('steps', [])]
+    start_index = int(ctx.get('paused_step_index', ctx.get('current_step_index', 0)))
+    event_cb({'type': 'resumed', 'run_id': run_id, 'status': 'running', 'message': 'Run resumed by user', 'url': (ctx.get('last_observation') or {}).get('url', '')})
+
+    result = execute_steps(run_id, steps, event_cb, start_index=start_index)
+    if result and result[-1]['status'] == 'needs_user':
+        return {'ok': False, 'run_id': run_id, 'status': 'needs_user', 'steps': result}
+    return {'ok': True, 'run_id': run_id, 'steps': result}

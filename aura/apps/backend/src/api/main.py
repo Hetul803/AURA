@@ -14,6 +14,7 @@ from storage.export_import import export_profile, import_profile
 from storage.snapshots import create_snapshot
 from storage.retention import enforce_retention
 from aura.state import db_conn
+from tools.browser_runtime import browser_manager
 
 run_migrations()
 app = FastAPI(title='AURA Backend')
@@ -119,6 +120,12 @@ def stream(run_id: str):
 
     return StreamingResponse(gen(), media_type='text/event-stream')
 
+
+
+@app.delete('/browser/session/{domain}')
+def clear_browser_session(domain: str):
+    browser_manager.clear_session(domain)
+    return {'ok': True, 'domain': domain}
 
 @app.get('/preferences')
 def prefs_list():

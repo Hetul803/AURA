@@ -19,6 +19,8 @@ export default function App() {
   const [events, setEvents] = useState<any[]>([]);
   const [needsUser, setNeedsUser] = useState('');
   const [logsPath, setLogsPath] = useState('');
+  const [currentUrl, setCurrentUrl] = useState('');
+  const [sessionState, setSessionState] = useState('unknown');
 
   useEffect(() => {
     let alive = true;
@@ -51,6 +53,8 @@ export default function App() {
         pushEvent(evt);
         setEvents([...(store.eventsByRun[res.run_id] || [])]);
         setRunStatus(evt.status || runStatus);
+        if (evt.url) setCurrentUrl(evt.url);
+        if (evt.session) setSessionState(evt.session);
         if (evt.type === 'needs_user') setNeedsUser(evt.message || 'User action required.');
         if (evt.type === 'resumed') setNeedsUser('');
       });
@@ -67,7 +71,8 @@ export default function App() {
     <h1>AURA Overlay</h1>
     <p><strong>Backend:</strong> {connection}</p>
     <div style={{ border: '1px solid #ddd', padding: 12, borderRadius: 8, marginBottom: 10 }}>
-      <strong>Run:</strong> {runId || '-'} | <strong>Status:</strong> {runStatus} | <strong>Elapsed:</strong> {elapsed}s
+      <strong>Run:</strong> {runId || '-'} | <strong>Status:</strong> {runStatus} | <strong>Elapsed:</strong> {elapsed}s<br/>
+      <strong>Current URL:</strong> {currentUrl || '-'} | <strong>Session:</strong> {sessionState}
     </div>
     {needsUser && <div role='alert' style={{ background: '#fff4db', border: '1px solid #f0c36d', padding: 12, borderRadius: 8, marginBottom: 10 }}>
       <strong>Action needed:</strong> {needsUser}
