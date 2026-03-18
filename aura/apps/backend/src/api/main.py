@@ -8,7 +8,7 @@ from aura.planner import plan_from_text
 from aura.prefs import get_prefs, set_pref, reset_pref, reset_all
 from aura.macros import list_macros
 from aura.models import available_models
-from aura.state import set_panic, cancel_run
+from aura.state import set_panic, cancel_run, get_run_context
 from aura.memory import list_memories, update_memory, delete_memory
 from storage.migrations import run_migrations
 from storage.export_import import export_profile, import_profile
@@ -113,6 +113,15 @@ def resume(run_id: str):
 
     return resume_run(run_id, emit)
 
+
+
+
+@app.get('/runs/{run_id}')
+def run_state(run_id: str):
+    state = get_run_context(run_id)
+    if not state:
+        raise HTTPException(404, 'run not found')
+    return state
 
 @app.get('/events/stream/{run_id}')
 def stream(run_id: str):

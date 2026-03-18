@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+
 from .state import db_conn
 from llm.embeddings import embed
 
@@ -47,9 +49,18 @@ def execution_hints(scope: str, limit: int = 5) -> list[dict]:
 
 
 
-def remember_execution(scope: str, outcome: str, detail: str, *, tags: list[str] | None = None, importance: int = 4):
+def latest_execution_memory(scope: str, outcome: str | None = None) -> dict | None:
+    key = f'exec:{scope}:'
+    if outcome:
+        key += outcome
+    return latest_memory(key)
+
+
+
+def remember_execution(scope: str, outcome: str, detail: str, *, tags: list[str] | None = None, importance: int = 4, metadata: dict | None = None):
     merged_tags = ['execution', *(tags or [])]
-    write_memory(f'exec:{scope}:{outcome}', detail, tags=merged_tags, importance=importance)
+    value = json.dumps({'detail': detail, 'metadata': metadata or {}}, sort_keys=True)
+    write_memory(f'exec:{scope}:{outcome}', value, tags=merged_tags, importance=importance)
 
 
 

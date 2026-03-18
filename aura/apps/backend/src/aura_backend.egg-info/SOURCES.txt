@@ -1,6 +1,7 @@
 README.md
 pyproject.toml
 src/api/main.py
+src/aura/evaluator.py
 src/aura/executor.py
 src/aura/macros.py
 src/aura/memory.py
@@ -9,6 +10,7 @@ src/aura/observer.py
 src/aura/orchestrator.py
 src/aura/planner.py
 src/aura/prefs.py
+src/aura/repair.py
 src/aura/safety.py
 src/aura/state.py
 src/aura/steps.py
@@ -37,6 +39,7 @@ src/tools/web_playwright.py
 src/voice/transcriber.py
 tests/test_api_contract.py
 tests/test_closed_loop_code_runner.py
+tests/test_evaluator.py
 tests/test_macros.py
 tests/test_memory.py
 tests/test_os_automation.py

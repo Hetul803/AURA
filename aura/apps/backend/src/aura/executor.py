@@ -1,12 +1,22 @@
 from __future__ import annotations
 
+import json
 import time
 from copy import deepcopy
 
 from . import observer
+from .evaluator import evaluate_step
+from .repair import build_repair_step, strategy_for_failure
 from .safety import guard_step
-from .state import is_run_cancelled, set_run_context, get_run_context, record_safety_event
-from tools.code_runner import classify_failure
+from .state import (
+    append_run_history,
+    get_run_context,
+    increment_run_counter,
+    is_run_cancelled,
+    record_safety_event,
+    set_run_context,
+    update_run_context,
+)
 from tools.os_automation import read_clipboard
 from tools.tool_router import dispatch_tool_action
 
@@ -38,59 +48,6 @@ def _check_conditions(step, observation: dict, which: str):
 
 
 
-def _expected_outcome_met(step, result: dict, observation_map: dict) -> bool:
-    expected = step.expected_outcome or {}
-    if not expected:
-        return result.get('ok', False)
-    for key, exp in expected.items():
-        if key == 'exit_code' and observation_map.get('exit_code') != exp:
-            return False
-        if key == 'exists' and bool(result.get('exists', observation_map.get('file_exists'))) != bool(exp):
-            return False
-        if key == 'url_contains' and exp not in str(observation_map.get('url', '')):
-            return False
-        if key == 'active_app_contains' and exp.lower() not in str(observation_map.get('active_app', '')).lower():
-            return False
-        if key == 'written_gte' and int(result.get('written', 0)) < int(exp):
-            return False
-        if key == 'pasted_gte' and int(result.get('pasted', 0)) < int(exp):
-            return False
-        if key == 'clipboard_length_gte' and int(observation_map.get('clipboard_length', 0)) < int(exp):
-            return False
-        if key == 'key_points_gte' and len(result.get('key_points', [])) < int(exp):
-            return False
-        if key == 'flights_gte' and len(result.get('flights', [])) < int(exp):
-            return False
-        if key == 'unread_count_gte' and int(result.get('unread_count', 0)) < int(exp):
-            return False
-        if key == 'opened_path' and str(result.get('opened_path', result.get('path', ''))) != str(exp):
-            return False
-        if key == 'ok' and bool(result.get('ok')) != bool(exp):
-            return False
-    return result.get('ok', False)
-
-
-
-def _build_repair_step(step, result: dict, attempt: int):
-    if step.fallback_hint == 'repair_python_and_retry' and step.action_type == 'CODE_RUN':
-        observation_map = result.get('observation') or {}
-        failure_info = classify_failure(observation_map.get('stderr', ''), observation_map.get('stdout', ''))
-        return {
-            'id': f'{step.id}:repair:{attempt}',
-            'name': f'Repair {step.name}',
-            'action_type': 'CODE_REPAIR',
-            'tool': 'code',
-            'args': {
-                'path': step.args.get('path', ''),
-                'error': result.get('error'),
-                'observation': observation_map,
-                'failure_class': failure_info.get('failure_class'),
-            },
-        }
-    return None
-
-
-
 def _emit_step(event_cb, run_id: str, step, status: str, **extra):
     payload = {
         'type': 'step_status',
@@ -106,11 +63,57 @@ def _emit_step(event_cb, run_id: str, step, status: str, **extra):
 
 
 
+def _record_failure(run_id: str, step, decision: dict, observation_map: dict):
+    failure_item = {
+        'step_id': step.id,
+        'action': step.action_type,
+        'failure_class': decision.get('failure_class'),
+        'reason': decision.get('reason'),
+        'signature': decision.get('signature'),
+        'timestamp': time.time(),
+        'detail': observation_map.get('failure_detail') or observation_map.get('last_error'),
+    }
+    append_run_history(run_id, 'failure_history', failure_item)
+    update_run_context(run_id, {'last_failure_class': decision.get('failure_class')})
+
+
+
+def _apply_repair(run_id: str, step, decision: dict, result: dict, observation_map: dict, event_cb) -> tuple[dict, dict]:
+    strategy = strategy_for_failure(decision.get('failure_class'))
+    repair_step = build_repair_step(step, result, int(time.time() * 1000) % 1000, strategy)
+    if not repair_step:
+        return {}, observation_map
+    _emit_step(event_cb, run_id, step, 'repairing', message=decision.get('reason'), repair_strategy=strategy.name)
+    repair_result = dispatch_tool_action(type('RepairStep', (), repair_step)())
+    repair_observation = observer.normalize_tool_observation(repair_result, observation_map)
+    repair_record = {
+        'step_id': step.id,
+        'failure_class': decision.get('failure_class'),
+        'strategy': strategy.name,
+        'reason': decision.get('reason'),
+        'change_summary': repair_result.get('result', {}).get('change_summary'),
+        'diff': repair_result.get('result', {}).get('diff'),
+        'before_hash': repair_result.get('result', {}).get('before_hash'),
+        'after_hash': repair_result.get('result', {}).get('after_hash'),
+        'timestamp': time.time(),
+        'ok': repair_result.get('ok', False),
+    }
+    append_run_history(run_id, 'repair_history', repair_record)
+    update_run_context(run_id, {'last_repair': repair_record, 'last_observation': repair_observation})
+    increment_run_counter(run_id, 'total_repairs', 1)
+    repair_attempts = dict((get_run_context(run_id) or {}).get('repair_attempts', {}))
+    repair_attempts[step.id] = repair_attempts.get(step.id, 0) + 1
+    update_run_context(run_id, {'repair_attempts': repair_attempts})
+    return repair_result, repair_observation
+
+
+
 def execute_steps(run_id: str, steps, event_cb, wait_poll_ms: int = 100, start_index: int = 0):
     out = []
     for idx, step in enumerate(steps[start_index:], start=start_index):
         if is_run_cancelled(run_id):
             event_cb({'type': 'run_cancelled', 'run_id': run_id, 'status': 'cancelled'})
+            update_run_context(run_id, {'terminal_outcome': 'cancelled', 'status': 'cancelled'})
             return out + [{'step': step.id, 'status': 'cancelled', 'step_index': idx}]
 
         ctx = get_run_context(run_id) or {}
@@ -124,6 +127,7 @@ def execute_steps(run_id: str, steps, event_cb, wait_poll_ms: int = 100, start_i
         if guard == 'blocked':
             out.append({'step': step.id, 'status': 'blocked', 'step_index': idx})
             record_safety_event({'kind': 'blocked', 'run_id': run_id, 'step_id': step.id, 'action': step.action_type})
+            update_run_context(run_id, {'terminal_outcome': 'blocked', 'status': 'blocked'})
             _emit_step(event_cb, run_id, step, 'failed', message='blocked by safety', url=last_obs.get('url', ''))
             continue
         if guard == 'confirm':
@@ -141,6 +145,7 @@ def execute_steps(run_id: str, steps, event_cb, wait_poll_ms: int = 100, start_i
         while attempts < max_attempts:
             if is_run_cancelled(run_id):
                 event_cb({'type': 'run_cancelled', 'run_id': run_id, 'status': 'cancelled'})
+                update_run_context(run_id, {'terminal_outcome': 'cancelled', 'status': 'cancelled'})
                 return out + [{'step': step.id, 'status': 'cancelled', 'step_index': idx}]
 
             _emit_step(event_cb, run_id, step, 'running', attempt=attempts + 1)
@@ -151,6 +156,7 @@ def execute_steps(run_id: str, steps, event_cb, wait_poll_ms: int = 100, start_i
                 while elapsed < target_ms:
                     if is_run_cancelled(run_id):
                         event_cb({'type': 'run_cancelled', 'run_id': run_id, 'status': 'cancelled'})
+                        update_run_context(run_id, {'terminal_outcome': 'cancelled', 'status': 'cancelled'})
                         return out + [{'step': step.id, 'status': 'cancelled', 'step_index': idx}]
                     time.sleep(wait_poll_ms / 1000)
                     elapsed += wait_poll_ms
@@ -165,61 +171,86 @@ def execute_steps(run_id: str, steps, event_cb, wait_poll_ms: int = 100, start_i
                 result = dispatch_tool_action(step_to_run)
 
             observation_map = observer.normalize_tool_observation(result, last_obs)
-            ctx = get_run_context(run_id) or {}
-            set_run_context(run_id, {**ctx, 'last_observation': observation_map, 'current_step_index': idx})
+            update_run_context(run_id, {'last_observation': observation_map, 'current_step_index': idx})
 
             if step.action_type in ('OS_PASTE', 'OS_WRITE_CLIPBOARD', 'OS_COPY_SELECTION'):
                 record_safety_event({'kind': 'clipboard', 'run_id': run_id, 'step_id': step.id, 'action': step.action_type, 'ok': result.get('ok', False)})
             if step.action_type == 'WEB_UPLOAD':
                 record_safety_event({'kind': 'upload', 'run_id': run_id, 'step_id': step.id, 'ok': result.get('ok', False), 'file_path': step.args.get('file_path')})
 
-            if result.get('requires_user'):
-                set_run_context(run_id, {**ctx, 'paused': True, 'paused_step_index': idx, 'last_observation': observation_map})
-                event_cb({'type': 'needs_user', 'run_id': run_id, 'status': 'needs_user', 'step_id': step.id, 'step_index': idx, 'message': result.get('error') or 'User action required', 'url': observation_map.get('url', ''), 'session': 'login_required'})
-                return out + [{'step': step.id, 'status': 'needs_user', 'result': result, 'step_index': idx}]
-
-            if _expected_outcome_met(step, result, observation_map) and _check_conditions(step, observation_map, 'post'):
+            decision = evaluate_step(step, result, observation_map, get_run_context(run_id) or {})
+            if decision['success'] and _check_conditions(step, observation_map, 'post'):
                 final_result = result
                 final_status = 'success'
+                update_run_context(run_id, {'terminal_outcome': 'success'})
                 break
 
-            repair_step = _build_repair_step(step, result, attempts)
-            if repair_step:
-                _emit_step(event_cb, run_id, step, 'repairing', message=repair_step['name'])
-                repair_result = dispatch_tool_action(type('RepairStep', (), repair_step)())
-                repair_observation = observer.normalize_tool_observation(repair_result, observation_map)
-                set_run_context(run_id, {**ctx, 'last_observation': repair_observation, 'current_step_index': idx})
+            _record_failure(run_id, step, decision, observation_map)
+
+            if decision['outcome'] == 'needs_user':
+                update_run_context(run_id, {'paused': True, 'paused_step_index': idx, 'last_observation': observation_map, 'user_intervention_required': True, 'terminal_outcome': 'needs_user'})
+                event_cb({'type': 'needs_user', 'run_id': run_id, 'status': 'needs_user', 'step_id': step.id, 'step_index': idx, 'message': decision.get('reason') or result.get('error') or 'User action required', 'url': observation_map.get('url', ''), 'session': 'login_required', 'failure_class': decision.get('failure_class')})
+                return out + [{'step': step.id, 'status': 'needs_user', 'result': result, 'step_index': idx}]
+
+            if decision['outcome'] == 'repair':
+                repair_result, repair_observation = _apply_repair(run_id, step, decision, result, observation_map, event_cb)
                 if repair_result.get('ok'):
-                    remember = f"{repair_result.get('result', {}).get('repair', 'repair applied')}"
-                    from .memory import remember_execution
-                    remember_execution(f"script:{step.args.get('path', '')}", 'repair', remember, tags=['code'])
+                    from .memory import remember_execution, latest_execution_memory
+                    previous = latest_execution_memory(f"script:{step.args.get('path', '')}:{decision['failure_class']}", 'repair_success')
+                    reason = 'previously_successful_strategy' if previous else decision['reason']
+                    remember_execution(
+                        f"script:{step.args.get('path', '')}:{decision['failure_class']}",
+                        'repair_success',
+                        reason,
+                        tags=['code', 'repair'],
+                        metadata={'strategy': decision['strategy'], 'change_summary': repair_result.get('result', {}).get('change_summary')},
+                    )
+                    _emit_step(event_cb, run_id, step, 'repair_applied', repair_strategy=decision['strategy'], message=repair_result.get('result', {}).get('change_summary', 'repair applied'))
                     attempts += 1
                     last_obs = repair_observation
                     time.sleep(step.retry_policy.backoff_ms / 1000)
                     continue
+                from .memory import remember_execution
+                remember_execution(
+                    f"script:{step.args.get('path', '')}:{decision['failure_class']}",
+                    'repair_failed',
+                    repair_result.get('error', 'repair_failed'),
+                    tags=['code', 'repair'],
+                    metadata={'strategy': decision['strategy']},
+                )
                 final_result = repair_result
-                final_status = 'fail'
+                final_status = 'terminal_failure'
+                update_run_context(run_id, {'terminal_outcome': 'failed'})
+                _emit_step(event_cb, run_id, step, 'terminal_failure', failure_class=decision.get('failure_class'), repair_strategy=decision.get('strategy'), message=repair_result.get('error', 'repair failed'))
                 break
 
+            if decision['outcome'] == 'retry':
+                attempts += 1
+                last_obs = observation_map
+                _emit_step(event_cb, run_id, step, 'retrying', failure_class=decision.get('failure_class'), message=decision.get('reason'))
+                time.sleep(step.retry_policy.backoff_ms / 1000)
+                continue
+
             final_result = result
-            final_status = 'fail'
-            if not result.get('retryable'):
-                break
-            attempts += 1
-            last_obs = observation_map
-            time.sleep(step.retry_policy.backoff_ms / 1000)
+            final_status = 'terminal_failure' if decision.get('terminal') else 'fail'
+            update_run_context(run_id, {'terminal_outcome': 'failed'})
+            _emit_step(event_cb, run_id, step, final_status, failure_class=decision.get('failure_class'), repair_strategy=decision.get('strategy'), message=decision.get('reason'))
+            break
 
         final_observation = observer.normalize_tool_observation(final_result or {}, last_obs)
         out.append({'step': step.id, 'status': final_status, 'result': final_result, 'step_index': idx})
-        _emit_step(
-            event_cb,
-            run_id,
-            step,
-            final_status,
-            message='' if final_status == 'success' else str((final_result or {}).get('error') or final_result),
-            url=final_observation.get('url', ''),
-            session='active' if not final_observation.get('login_required') else 'login_required',
-        )
+        if final_status == 'success':
+            _emit_step(
+                event_cb,
+                run_id,
+                step,
+                final_status,
+                message='',
+                url=final_observation.get('url', ''),
+                session='active' if not final_observation.get('login_required') else 'login_required',
+            )
+        if final_status in {'terminal_failure', 'fail'}:
+            update_run_context(run_id, {'last_failure_class': final_observation.get('failure_class'), 'terminal_outcome': 'failed'})
 
-    event_cb({'type': 'run_done', 'run_id': run_id, 'status': 'done', 'timestamp': time.time()})
+    event_cb({'type': 'run_done', 'run_id': run_id, 'status': 'done', 'timestamp': time.time(), 'run_state': get_run_context(run_id)})
     return out

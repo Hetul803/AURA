@@ -45,6 +45,7 @@ def test_model_select():
 def test_run_resume_endpoint_exists():
     r = client.post('/command', json={'text': 'open gmail'})
     run_id = r.json()['run_id']
+    assert client.get(f'/runs/{run_id}').status_code == 200
     resumed = client.post(f'/runs/{run_id}/resume')
     assert resumed.status_code == 200
 
