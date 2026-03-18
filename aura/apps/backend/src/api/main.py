@@ -4,6 +4,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 import json, queue
 from aura.orchestrator import run_command, resume_run
+from aura.planner import plan_from_text
 from aura.prefs import get_prefs, set_pref, reset_pref, reset_all
 from aura.macros import list_macros
 from aura.models import available_models
@@ -64,6 +65,13 @@ def get_model():
     row = db_conn().execute("SELECT value FROM profile_meta WHERE key='selected_model'").fetchone()
     return {'model_id': row['value'] if row else 'simple'}
 
+
+
+
+@app.post('/plan')
+def plan(cmd: Cmd):
+    planned = plan_from_text(cmd.text, cmd.choices)
+    return {**planned, 'steps': [s.model_dump() for s in planned.get('steps', [])]}
 
 @app.post('/command')
 def command(cmd: Cmd):

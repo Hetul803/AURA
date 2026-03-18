@@ -28,10 +28,15 @@ src/storage/profile_paths.py
 src/storage/retention.py
 src/storage/snapshots.py
 src/tools/browser_runtime.py
+src/tools/code_runner.py
+src/tools/filesystem_tool.py
 src/tools/os_automation.py
+src/tools/tool_result.py
+src/tools/tool_router.py
 src/tools/web_playwright.py
 src/voice/transcriber.py
 tests/test_api_contract.py
+tests/test_closed_loop_code_runner.py
 tests/test_macros.py
 tests/test_memory.py
 tests/test_os_automation.py

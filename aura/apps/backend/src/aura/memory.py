@@ -1,6 +1,8 @@
 from __future__ import annotations
+
 from .state import db_conn
 from llm.embeddings import embed
+
 
 
 def write_memory(key: str, value: str, tags: list[str] | None = None, importance: int = 1, pinned: int = 0):
@@ -9,6 +11,7 @@ def write_memory(key: str, value: str, tags: list[str] | None = None, importance
             'INSERT INTO memories(key,value,tags,importance,pinned) VALUES(?,?,?,?,?)',
             (key, value, ','.join(tags or []), importance, pinned),
         )
+
 
 
 def list_memories(q: str | None = None):
@@ -24,6 +27,32 @@ def list_memories(q: str | None = None):
     return [dict(r) for r in rows]
 
 
+
+def latest_memory(key_prefix: str) -> dict | None:
+    row = db_conn().execute(
+        'SELECT * FROM memories WHERE key LIKE ? ORDER BY pinned DESC, importance DESC, id DESC LIMIT 1',
+        (f'{key_prefix}%',),
+    ).fetchone()
+    return dict(row) if row else None
+
+
+
+def execution_hints(scope: str, limit: int = 5) -> list[dict]:
+    like = f'%{scope}%'
+    rows = db_conn().execute(
+        'SELECT * FROM memories WHERE key LIKE ? OR tags LIKE ? ORDER BY pinned DESC, importance DESC, id DESC LIMIT ?',
+        (like, '%execution%', limit),
+    ).fetchall()
+    return [dict(r) for r in rows]
+
+
+
+def remember_execution(scope: str, outcome: str, detail: str, *, tags: list[str] | None = None, importance: int = 4):
+    merged_tags = ['execution', *(tags or [])]
+    write_memory(f'exec:{scope}:{outcome}', detail, tags=merged_tags, importance=importance)
+
+
+
 def update_memory(mid: int, value: str | None = None, pinned: int | None = None):
     conn = db_conn()
     row = conn.execute('SELECT * FROM memories WHERE id=?', (mid,)).fetchone()
@@ -36,9 +65,11 @@ def update_memory(mid: int, value: str | None = None, pinned: int | None = None)
     return True
 
 
+
 def delete_memory(mid: int):
     with db_conn() as conn:
         conn.execute('DELETE FROM memories WHERE id=?', (mid,))
+
 
 
 def semantic_rank(query: str, items: list[dict]) -> list[dict]:

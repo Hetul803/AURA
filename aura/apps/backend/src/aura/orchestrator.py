@@ -1,12 +1,15 @@
 from __future__ import annotations
+
 import uuid
-from .planner import plan_from_text
+
 from .executor import execute_steps
 from .macros import match_macro, record_macro, render_macro_steps, touch_macro
+from .memory import write_memory, remember_execution
+from .planner import plan_from_text
 from .prefs import set_pref
-from .memory import write_memory
-from .steps import Step
 from .state import set_run_context, get_run_context
+from .steps import Step
+
 
 
 def _materialize_steps(plan: dict, use_macro: bool = False):
@@ -17,14 +20,15 @@ def _materialize_steps(plan: dict, use_macro: bool = False):
     return plan['steps'], macro
 
 
+
 def run_command(text: str, event_cb=lambda e: None, choices: dict | None = None, use_macro: bool = False, run_id: str | None = None):
     run_id = run_id or str(uuid.uuid4())
     event_cb({'type': 'run_start', 'run_id': run_id, 'status': 'running', 'message': text})
     plan = plan_from_text(text, choices)
 
     if plan['clarifications']:
-        set_run_context(run_id, {'text': text, 'choices': choices or {}, 'use_macro': use_macro, 'status': 'needs_clarification'})
-        return {'ok': False, 'run_id': run_id, 'needs_clarification': True, 'clarifications': plan['clarifications']}
+        set_run_context(run_id, {'text': text, 'choices': choices or {}, 'use_macro': use_macro, 'status': 'needs_clarification', 'plan': {**plan, 'steps': []}})
+        return {'ok': False, 'run_id': run_id, 'needs_clarification': True, 'clarifications': plan['clarifications'], 'plan': {k: v for k, v in plan.items() if k != 'steps'}}
 
     for key, value in (choices or {}).items():
         set_pref(key, value)
@@ -33,14 +37,15 @@ def run_command(text: str, event_cb=lambda e: None, choices: dict | None = None,
     steps, macro = _materialize_steps(plan, use_macro)
     if macro and not use_macro:
         event_cb({'type': 'macro_suggested', 'run_id': run_id, 'status': 'clarification', 'message': f"Use saved workflow {macro['name']}?"})
-        set_run_context(run_id, {'text': text, 'choices': choices or {}, 'use_macro': False, 'status': 'macro_suggested'})
-        return {'ok': False, 'run_id': run_id, 'macro_suggestion': {'id': macro['id'], 'name': macro['name']}, 'plan_signature': plan['signature']}
+        set_run_context(run_id, {'text': text, 'choices': choices or {}, 'use_macro': False, 'status': 'macro_suggested', 'plan': {**plan, 'steps': [s.model_dump() for s in steps]}})
+        return {'ok': False, 'run_id': run_id, 'macro_suggestion': {'id': macro['id'], 'name': macro['name']}, 'plan_signature': plan['signature'], 'plan': {k: v for k, v in plan.items() if k != 'steps'}}
 
     set_run_context(run_id, {
         'text': text,
         'choices': choices or {},
         'use_macro': use_macro,
         'steps': [s.model_dump() for s in steps],
+        'plan': {**plan, 'steps': [s.model_dump() for s in steps]},
         'current_step_index': 0,
         'last_observation': {},
         'status': 'running',
@@ -56,10 +61,16 @@ def run_command(text: str, event_cb=lambda e: None, choices: dict | None = None,
     if result and all(r['status'] == 'success' for r in result):
         record_macro(name=f"{plan['signature']} workflow", trigger=plan['signature'], steps=[s.model_dump() for s in plan['steps']], slots=plan.get('slots'))
         write_memory('workflow_success', plan['signature'], tags=['workflow'], importance=3)
+        remember_execution(plan['signature'], 'success', plan.get('goal', text), tags=['workflow'])
 
     if last['status'] == 'needs_user':
-        return {'ok': False, 'run_id': run_id, 'status': 'needs_user', 'resume_token': run_id, 'steps': result}
-    return {'ok': True, 'run_id': run_id, 'steps': result}
+        remember_execution(plan['signature'], 'blocked', str(last.get('result', {}).get('error', 'user_action_needed')), tags=['workflow'])
+        return {'ok': False, 'run_id': run_id, 'status': 'needs_user', 'resume_token': run_id, 'steps': result, 'plan': ctx.get('plan')}
+
+    if status != 'done':
+        remember_execution(plan['signature'], 'failure', str(last.get('result', {}).get('error', 'step_failed')), tags=['workflow'])
+    return {'ok': status == 'done', 'run_id': run_id, 'steps': result, 'plan': ctx.get('plan')}
+
 
 
 def resume_run(run_id: str, event_cb=lambda e: None):
@@ -73,5 +84,5 @@ def resume_run(run_id: str, event_cb=lambda e: None):
 
     result = execute_steps(run_id, steps, event_cb, start_index=start_index)
     if result and result[-1]['status'] == 'needs_user':
-        return {'ok': False, 'run_id': run_id, 'status': 'needs_user', 'steps': result}
-    return {'ok': True, 'run_id': run_id, 'steps': result}
+        return {'ok': False, 'run_id': run_id, 'status': 'needs_user', 'steps': result, 'plan': ctx.get('plan')}
+    return {'ok': True, 'run_id': run_id, 'steps': result, 'plan': ctx.get('plan')}

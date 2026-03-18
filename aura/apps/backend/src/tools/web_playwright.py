@@ -1,12 +1,16 @@
 from __future__ import annotations
+
 import os
+import re
 from pathlib import Path
 from urllib.parse import quote_plus
-import re
-from tools.browser_runtime import browser_manager
+
 from aura import observer
+from tools.browser_runtime import browser_manager
+from tools.tool_result import success, failure
 
 FIXTURE = Path(__file__).resolve().parents[2] / 'fixtures' / 'html'
+
 
 
 def parse_search_html(html: str) -> dict:
@@ -20,42 +24,46 @@ def parse_search_html(html: str) -> dict:
             url, title, snippet = hit
             rows.append({'title': title.strip(), 'url': url.strip(), 'snippet': snippet.strip()})
     dedup, seen = [], set()
-    for r in rows:
-        k = (r['title'], r['url'])
-        if k in seen:
+    for row in rows:
+        key = (row['title'], row['url'])
+        if key in seen:
             continue
-        seen.add(k)
-        dedup.append(r)
+        seen.add(key)
+        dedup.append(row)
     top = dedup[:5]
-    return {'ok': True, 'items': top, 'key_points': [f"{x['title']}: {x['snippet']}" for x in top], 'sources': [x['url'] for x in top]}
+    payload = {'items': top, 'key_points': [f"{x['title']}: {x['snippet']}" for x in top], 'sources': [x['url'] for x in top]}
+    return success('WEB_READ', result=payload, observation={'search_results_count': len(top)})
+
 
 
 def parse_gmail_html(html: str) -> dict:
     if any(token in html.lower() for token in ['sign in', 'identifier', 'accounts.google.com']):
-        return {'ok': False, 'error': 'user_action_needed', 'message': 'Please log in to Gmail in browser session.'}
+        return failure('WEB_READ', error='Please log in to Gmail in browser session.', requires_user=True, retryable=True, observation={'login_required': True})
     items = re.findall(r'<li data-from="([^"]+)" data-subject="([^"]+)">([^<]+)</li>', html)
-    summary = [f"From {f}: {s} ({snip})" for f, s, snip in items]
-    return {'ok': True, 'unread_count': len(items), 'summary': summary}
+    summary = [f'From {sender}: {subject} ({snippet})' for sender, subject, snippet in items]
+    return success('WEB_READ', result={'unread_count': len(items), 'summary': summary}, observation={'gmail_unread': len(items), 'login_required': False})
+
 
 
 def parse_flights_html(html: str) -> dict:
     rows = re.findall(r'data-airline="([^"]+)" data-price="([^"]*)" data-link="([^"]*)"(?: data-time="([^"]*)")?', html)
     flights = []
-    for air, price, link, tm in rows:
-        flights.append({'airline': air or None, 'price': int(price) if price.isdigit() else None, 'link': link or None, 'time': tm or None})
+    for airline, price, link, tm in rows:
+        flights.append({'airline': airline or None, 'price': int(price) if price.isdigit() else None, 'link': link or None, 'time': tm or None})
     if not flights:
         flights = [{'airline': None, 'price': None, 'link': None, 'time': None}]
-    return {'ok': True, 'flights': flights}
+    return success('WEB_READ', result={'flights': flights}, observation={'flights_found': len(flights)})
+
 
 
 def _real_search(query: str) -> dict:
     page = browser_manager.page_for('search')
     page.goto(f'https://duckduckgo.com/?q={quote_plus(query)}', wait_until='domcontentloaded', timeout=15000)
-    html = page.content()
-    out = parse_search_html(html)
+    out = parse_search_html(page.content())
     browser_manager.save_state('search')
-    out['observation'] = observer.snapshot(page)
+    out['observation'] = {**out.get('observation', {}), **observer.snapshot(page)}
     return out
+
 
 
 def _real_gmail_unread() -> dict:
@@ -65,40 +73,32 @@ def _real_gmail_unread() -> dict:
     snap = observer.snapshot(page)
     if snap['login_required']:
         browser_manager.save_state(domain)
-        return {'ok': False, 'error': 'user_action_needed', 'message': 'Login required for Gmail', 'observation': snap}
+        return failure('WEB_READ', error='Login required for Gmail', requires_user=True, retryable=True, observation=snap, result={'summary': [], 'unread_count': 0})
 
     unread = observer.gmail_unread_count(page)
     summaries = []
     try:
         rows = page.locator('tr.zE').all()[:5]
-        for r in rows:
-            text = r.inner_text(timeout=500).strip().replace('\n', ' ')
-            summaries.append(text)
+        for row in rows:
+            summaries.append(row.inner_text(timeout=500).strip().replace('\n', ' '))
     except Exception:
         pass
     browser_manager.save_state(domain)
-    return {'ok': True, 'unread_count': unread, 'summary': summaries, 'observation': snap}
+    return success('WEB_READ', result={'unread_count': unread, 'summary': summaries}, observation=snap)
+
 
 
 def _real_flights(query: str) -> dict:
     page = browser_manager.page_for('flights')
     page.goto(f'https://duckduckgo.com/?q={quote_plus(query)}', wait_until='domcontentloaded', timeout=15000)
-    html = page.content()
-    search = parse_search_html(html)
+    search = parse_search_html(page.content())
     flights = []
     for item in search.get('items', [])[:5]:
-        flights.append({
-            'airline': None,
-            'price': None,
-            'link': item.get('url'),
-            'time': None,
-            'title': item.get('title')
-        })
+        flights.append({'airline': None, 'price': None, 'link': item.get('url'), 'time': None, 'title': item.get('title')})
     if not flights:
         flights = [{'airline': None, 'price': None, 'link': None, 'time': None, 'title': None}]
     browser_manager.save_state('flights')
-    return {'ok': True, 'flights': flights, 'observation': observer.snapshot(page)}
-
+    return success('WEB_READ', result={'flights': flights}, observation=observer.snapshot(page))
 
 
 
@@ -109,16 +109,18 @@ def _real_upload(url: str, selector: str, file_path: str) -> dict:
     try:
         page.set_input_files(selector, file_path)
         browser_manager.save_state(domain)
-        return {'ok': True, 'uploaded': file_path, 'observation': observer.snapshot(page)}
+        return success('WEB_UPLOAD', result={'uploaded': file_path}, observation=observer.snapshot(page), artifacts=[file_path])
     except Exception as e:
-        return {'ok': False, 'error': 'user_action_needed', 'message': f'Upload input not ready: {e}', 'observation': observer.snapshot(page)}
+        return failure('WEB_UPLOAD', error=f'Upload input not ready: {e}', requires_user=True, retryable=True, observation=observer.snapshot(page), result={'uploaded': None})
+
+
 
 def handle_web_action(step) -> dict:
     if step.action_type == 'NOOP':
-        return {'ok': True, 'echo': step.args.get('echo') or step.args.get('message')}
+        return success('NOOP', result={'echo': step.args.get('echo') or step.args.get('message')})
 
     if step.action_type == 'WEB_UPLOAD':
-        return _real_upload(step.args.get('url',''), step.args.get('selector','input[type="file"]'), step.args.get('file_path',''))
+        return _real_upload(step.args.get('url', ''), step.args.get('selector', 'input[type="file"]'), step.args.get('file_path', ''))
 
     if step.action_type == 'WEB_NAVIGATE':
         url = step.args.get('url')
@@ -126,7 +128,7 @@ def handle_web_action(step) -> dict:
         page = browser_manager.page_for(domain)
         page.goto(url, wait_until='domcontentloaded', timeout=20000)
         browser_manager.save_state(domain)
-        return {'ok': True, 'navigated_to': url, 'observation': observer.snapshot(page)}
+        return success('WEB_NAVIGATE', result={'navigated_to': url}, observation=observer.snapshot(page))
 
     target = step.args.get('target')
     use_fixture = bool(step.args.get('use_fixture')) or os.getenv('AURA_FORCE_FIXTURES') == '1'
@@ -146,4 +148,4 @@ def handle_web_action(step) -> dict:
             return parse_flights_html(step.args.get('html', ''))
         return _real_flights(step.args.get('query', 'flights'))
 
-    return {'ok': False, 'error': 'unsupported'}
+    return failure(step.action_type, error='unsupported_web_action')
