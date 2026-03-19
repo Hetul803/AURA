@@ -76,7 +76,8 @@ def evaluate_step(step, result: dict[str, Any], observation_map: dict[str, Any],
         }
 
     failure_class = observation_map.get('failure_class') or 'unknown_error'
-    strategy = strategy_for_failure(failure_class)
+    task_type = (run_context.get('plan') or {}).get('signature')
+    strategy = strategy_for_failure(failure_class, task_type=task_type)
     failure_signature = _failure_signature(step, result, observation_map)
     failure_history = run_context.get('failure_history', [])
     identical_failures = sum(1 for item in failure_history if item.get('signature') == failure_signature)

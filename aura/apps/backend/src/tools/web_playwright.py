@@ -116,6 +116,8 @@ def _real_upload(url: str, selector: str, file_path: str) -> dict:
 
 
 def handle_web_action(step) -> dict:
+    use_fixture = bool(step.args.get('use_fixture')) or os.getenv('AURA_FORCE_FIXTURES') == '1'
+
     if step.action_type == 'NOOP':
         return success('NOOP', result={'echo': step.args.get('echo') or step.args.get('message')})
 
@@ -124,6 +126,8 @@ def handle_web_action(step) -> dict:
 
     if step.action_type == 'WEB_NAVIGATE':
         url = step.args.get('url')
+        if use_fixture:
+            return success('WEB_NAVIGATE', result={'navigated_to': url}, observation={'url': url, 'title': '', 'login_required': False})
         domain = browser_manager.domain_for_url(url)
         page = browser_manager.page_for(domain)
         page.goto(url, wait_until='domcontentloaded', timeout=20000)
@@ -131,7 +135,6 @@ def handle_web_action(step) -> dict:
         return success('WEB_NAVIGATE', result={'navigated_to': url}, observation=observer.snapshot(page))
 
     target = step.args.get('target')
-    use_fixture = bool(step.args.get('use_fixture')) or os.getenv('AURA_FORCE_FIXTURES') == '1'
 
     if step.action_type == 'WEB_READ' and target == 'search':
         if use_fixture:

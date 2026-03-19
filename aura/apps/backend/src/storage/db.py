@@ -59,6 +59,7 @@ SCHEMA = [
   candidate_site_memory TEXT,
   candidate_safety_memory TEXT,
   future_hints TEXT,
+  confidence_signals TEXT,
   confidence REAL DEFAULT 0.0
 );""",
 """CREATE TABLE IF NOT EXISTS site_memory(
@@ -127,3 +128,6 @@ def init_db() -> None:
             cols = [r[1] for r in conn.execute('PRAGMA table_info(memories)').fetchall()]
             if col not in cols:
                 conn.execute(ddl)
+        reflection_cols = [r[1] for r in conn.execute('PRAGMA table_info(reflection_records)').fetchall()]
+        if 'confidence_signals' not in reflection_cols:
+            conn.execute("ALTER TABLE reflection_records ADD COLUMN confidence_signals TEXT DEFAULT ''")

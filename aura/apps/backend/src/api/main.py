@@ -1,27 +1,38 @@
 from __future__ import annotations
+
+import json
+import queue
+
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
-import json, queue
-from aura.orchestrator import run_command, resume_run
-from aura.planner import plan_from_text
-from aura.prefs import get_prefs, set_pref, reset_pref, reset_all
+
+from aura.learning import (
+    consolidate_learning,
+    list_preference_memory,
+    list_reflection_records,
+    list_safety_memory,
+    list_site_memory,
+    list_workflow_memory,
+    query_relevant_memory,
+)
 from aura.macros import list_macros
+from aura.memory import delete_memory, list_memories, update_memory
 from aura.models import available_models
-from aura.state import set_panic, cancel_run, get_run_context
-from aura.memory import list_memories, update_memory, delete_memory
-from storage.migrations import run_migrations
+from aura.orchestrator import resume_run, run_command
+from aura.planner import plan_from_text
+from aura.prefs import get_prefs, reset_all, reset_pref, set_pref
+from aura.state import cancel_run, db_conn, get_run_context, list_safety_events, set_panic
 from storage.export_import import export_profile, import_profile
-from storage.snapshots import create_snapshot
-from storage.retention import enforce_retention
-from aura.state import db_conn
-from tools.browser_runtime import browser_manager
+from storage.migrations import run_migrations
 from storage.profile_paths import profile_dir
-from aura.state import list_safety_events
+from storage.retention import enforce_retention
+from storage.snapshots import create_snapshot
+from tools.browser_runtime import browser_manager
 
 run_migrations()
 app = FastAPI(title='AURA Backend')
-EVENTS: dict[str, "queue.Queue[str]"] = {}
+EVENTS: dict[str, queue.Queue[str]] = {}
 
 
 def _emit(run_id: str, e: dict):
@@ -41,6 +52,14 @@ class PanicBody(BaseModel):
 class MemoryPatch(BaseModel):
     value: str | None = None
     pinned: int | None = None
+
+
+class LearningQuery(BaseModel):
+    task_type: str | None = None
+    domain: str | None = None
+    failure_class: str | None = None
+    action_key: str | None = None
+    limit: int = 5
 
 
 @app.get('/health')
@@ -66,12 +85,11 @@ def get_model():
     return {'model_id': row['value'] if row else 'simple'}
 
 
-
-
 @app.post('/plan')
 def plan(cmd: Cmd):
     planned = plan_from_text(cmd.text, cmd.choices)
     return {**planned, 'steps': [s.model_dump() for s in planned.get('steps', [])]}
+
 
 @app.post('/command')
 def command(cmd: Cmd):
@@ -114,14 +132,13 @@ def resume(run_id: str):
     return resume_run(run_id, emit)
 
 
-
-
 @app.get('/runs/{run_id}')
 def run_state(run_id: str):
     state = get_run_context(run_id)
     if not state:
         raise HTTPException(404, 'run not found')
     return state
+
 
 @app.get('/events/stream/{run_id}')
 def stream(run_id: str):
@@ -138,7 +155,6 @@ def stream(run_id: str):
                 idle += 1
 
     return StreamingResponse(gen(), media_type='text/event-stream')
-
 
 
 @app.delete('/browser/session/{domain}')
@@ -172,15 +188,18 @@ def safety_events():
 @app.get('/storage/stats')
 def storage_stats():
     base = profile_dir()
+
     def dir_size(p):
         return sum(f.stat().st_size for f in p.rglob('*') if f.is_file())
+
     return {
-      'profile_dir': str(base),
-      'db_size': (base / 'aura.sqlite3').stat().st_size if (base / 'aura.sqlite3').exists() else 0,
-      'artifacts_size': dir_size(base / 'artifacts'),
-      'sessions_size': dir_size(base / 'browser_state'),
-      'snapshots_size': dir_size(base / 'snapshots')
+        'profile_dir': str(base),
+        'db_size': (base / 'aura.sqlite3').stat().st_size if (base / 'aura.sqlite3').exists() else 0,
+        'artifacts_size': dir_size(base / 'artifacts'),
+        'sessions_size': dir_size(base / 'browser_state'),
+        'snapshots_size': dir_size(base / 'snapshots'),
     }
+
 
 @app.get('/preferences')
 def prefs_list():
@@ -247,3 +266,44 @@ def profile_import(path: str):
 @app.post('/profile/snapshot')
 def snapshot():
     return {'snapshot': create_snapshot()}
+
+
+@app.get('/learning/reflections')
+def learning_reflections(limit: int = 100):
+    return list_reflection_records(limit=limit)
+
+
+@app.get('/learning/memory/workflow')
+def learning_workflow_memory():
+    return list_workflow_memory()
+
+
+@app.get('/learning/memory/preference')
+def learning_preference_memory():
+    return list_preference_memory()
+
+
+@app.get('/learning/memory/site')
+def learning_site_memory():
+    return list_site_memory()
+
+
+@app.get('/learning/memory/safety')
+def learning_safety_memory():
+    return list_safety_memory()
+
+
+@app.post('/learning/query')
+def learning_query(body: LearningQuery):
+    return query_relevant_memory(
+        task_type=body.task_type,
+        domain=body.domain,
+        failure_class=body.failure_class,
+        action_key=body.action_key,
+        limit=body.limit,
+    )
+
+
+@app.post('/learning/consolidate')
+def learning_consolidate():
+    return consolidate_learning()

@@ -4,13 +4,13 @@ import json
 import uuid
 
 from .executor import execute_steps
+from .learning import record_run_learning
 from .macros import match_macro, record_macro, render_macro_steps, touch_macro
-from .memory import write_memory, remember_execution
+from .memory import remember_execution, write_memory
 from .planner import plan_from_text
 from .prefs import set_pref
-from .state import set_run_context, get_run_context, update_run_context
+from .state import get_run_context, set_run_context, update_run_context
 from .steps import Step
-
 
 
 def _materialize_steps(plan: dict, use_macro: bool = False):
@@ -21,10 +21,8 @@ def _materialize_steps(plan: dict, use_macro: bool = False):
     return plan['steps'], macro
 
 
-
 def _memory_detail(text: str, extra: dict | None = None) -> str:
     return json.dumps({'detail': text, 'extra': extra or {}}, sort_keys=True)
-
 
 
 def run_command(text: str, event_cb=lambda e: None, choices: dict | None = None, use_macro: bool = False, run_id: str | None = None):
@@ -63,6 +61,9 @@ def run_command(text: str, event_cb=lambda e: None, choices: dict | None = None,
         'last_failure_class': None,
         'last_repair': None,
         'user_intervention_required': False,
+        'step_history': [],
+        'safety_history': [],
+        'learning': {},
     })
 
     result = execute_steps(run_id, steps, event_cb)
@@ -72,6 +73,8 @@ def run_command(text: str, event_cb=lambda e: None, choices: dict | None = None,
     ctx = get_run_context(run_id) or {}
     terminal_outcome = ctx.get('terminal_outcome') or ('success' if status == 'done' else 'failed')
     update_run_context(run_id, {'status': status, 'current_step_index': last.get('step_index', 0), 'terminal_outcome': terminal_outcome})
+    learning = record_run_learning(run_id, get_run_context(run_id) or {})
+    update_run_context(run_id, {'learning': learning})
 
     if result and all(r['status'] == 'success' for r in result):
         record_macro(name=f"{plan['signature']} workflow", trigger=plan['signature'], steps=[s.model_dump() for s in plan['steps']], slots=plan.get('slots'))
@@ -80,7 +83,7 @@ def run_command(text: str, event_cb=lambda e: None, choices: dict | None = None,
 
     if last['status'] == 'needs_user':
         remember_execution(plan['signature'], 'blocked', _memory_detail('user_action_needed', {'run_id': run_id, 'failure_class': ctx.get('last_failure_class')}), tags=['workflow'])
-        return {'ok': False, 'run_id': run_id, 'status': 'needs_user', 'resume_token': run_id, 'steps': result, 'plan': ctx.get('plan'), 'run_state': ctx}
+        return {'ok': False, 'run_id': run_id, 'status': 'needs_user', 'resume_token': run_id, 'steps': result, 'plan': ctx.get('plan'), 'run_state': get_run_context(run_id)}
 
     if status != 'done':
         remember_execution(
@@ -90,7 +93,6 @@ def run_command(text: str, event_cb=lambda e: None, choices: dict | None = None,
             tags=['workflow'],
         )
     return {'ok': status == 'done', 'run_id': run_id, 'steps': result, 'plan': ctx.get('plan'), 'run_state': get_run_context(run_id)}
-
 
 
 def resume_run(run_id: str, event_cb=lambda e: None):
@@ -104,5 +106,13 @@ def resume_run(run_id: str, event_cb=lambda e: None):
 
     result = execute_steps(run_id, steps, event_cb, start_index=start_index)
     if result and result[-1]['status'] == 'needs_user':
+        learning = record_run_learning(run_id, get_run_context(run_id) or {})
+        update_run_context(run_id, {'learning': learning})
         return {'ok': False, 'run_id': run_id, 'status': 'needs_user', 'steps': result, 'plan': ctx.get('plan'), 'run_state': get_run_context(run_id)}
-    return {'ok': True, 'run_id': run_id, 'steps': result, 'plan': ctx.get('plan'), 'run_state': get_run_context(run_id)}
+
+    status = 'done' if result and all(step['status'] == 'success' for step in result) else 'partial'
+    terminal_outcome = 'success' if status == 'done' else ((get_run_context(run_id) or {}).get('terminal_outcome') or 'failed')
+    update_run_context(run_id, {'status': status, 'terminal_outcome': terminal_outcome})
+    learning = record_run_learning(run_id, get_run_context(run_id) or {})
+    update_run_context(run_id, {'learning': learning})
+    return {'ok': status == 'done', 'run_id': run_id, 'steps': result, 'plan': ctx.get('plan'), 'run_state': get_run_context(run_id)}

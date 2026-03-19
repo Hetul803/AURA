@@ -3,7 +3,10 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from playwright.sync_api import Page
+try:
+    from playwright.sync_api import Page
+except Exception:  # pragma: no cover - optional runtime dependency for browser-backed flows
+    Page = Any
 
 from tools.os_automation import active_context
 

@@ -2,11 +2,12 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
+from urllib.parse import urlparse
 
+from .learning import query_relevant_memory
 from .memory import execution_hints, latest_memory
-from .prefs import should_ask, get_pref_value
-from .steps import Step, Condition, RetryPolicy
-
+from .prefs import get_pref_value, should_ask
+from .steps import Condition, RetryPolicy, Step
 
 
 def intent_signature(text: str) -> str:
@@ -28,35 +29,45 @@ def intent_signature(text: str) -> str:
     return 'generic:noop'
 
 
+def _domain_from_steps(steps: list[Step]) -> str | None:
+    for step in steps:
+        url = (step.args or {}).get('url')
+        if url:
+            return urlparse(url).netloc or None
+    return None
 
-def _gmail_clarifications() -> list[dict]:
+
+def _gmail_clarifications(choices: dict | None = None) -> list[dict]:
     asks = []
+    supplied = choices or {}
     for key, options in {
         'gmail.browser': ['Default', 'Chrome', 'Safari'],
         'gmail.mode': ['Web', 'App'],
         'gmail.account': ['Primary', 'Other'],
     }.items():
-        if should_ask(key):
+        if key not in supplied and should_ask(key):
             asks.append({'key': key, 'options': options})
     return asks
-
 
 
 def _build_plan(*, goal: str, signature: str, steps: list[Step], context: dict | None = None,
                 success_criteria: list[dict] | None = None, clarifications: list[dict] | None = None,
                 memory_scope: str | None = None, slots: dict | None = None) -> dict:
     scope = memory_scope or signature
+    plan_context = context or {}
+    domain = _domain_from_steps(steps)
+    learning_hints = query_relevant_memory(task_type=signature, domain=domain)
     return {
         'goal': goal,
         'signature': signature,
-        'context': context or {},
+        'context': plan_context,
         'steps': steps,
         'success_criteria': success_criteria or [],
         'clarifications': clarifications or [],
         'memory_hints': execution_hints(scope),
+        'learning_hints': learning_hints,
         'slots': slots or {},
     }
-
 
 
 def _extract_quoted_path(text: str) -> str:
@@ -67,7 +78,6 @@ def _extract_quoted_path(text: str) -> str:
     if match:
         return match.group(1)
     return text.rsplit(' ', 1)[-1]
-
 
 
 def _code_plan(text: str) -> dict:
@@ -97,7 +107,11 @@ def _code_plan(text: str) -> dict:
             retry_policy=RetryPolicy(max_retries=2, backoff_ms=50),
         ),
     ]
-    context = {'script_path': path, 'workspace': workspace, 'last_success_hint': last_success['value'] if last_success else None}
+    context = {
+        'script_path': path,
+        'workspace': workspace,
+        'last_success_hint': last_success['value'] if last_success else None,
+    }
     success_criteria = [{'type': 'exit_code', 'expected': 0}, {'type': 'artifact_exists', 'expected': path}]
     return _build_plan(
         goal=f'Execute and, if needed, repair the Python script at {path}',
@@ -107,7 +121,6 @@ def _code_plan(text: str) -> dict:
         success_criteria=success_criteria,
         memory_scope=f'script:{path}',
     )
-
 
 
 def plan_from_text(text: str, choices: dict | None = None) -> dict:
@@ -166,7 +179,7 @@ def plan_from_text(text: str, choices: dict | None = None) -> dict:
         )
 
     if t.startswith('open gmail'):
-        clarifications = _gmail_clarifications()
+        clarifications = _gmail_clarifications(choices)
         if clarifications:
             return _build_plan(goal='Open Gmail with the user preferred settings', signature=intent_signature(text), steps=[], clarifications=clarifications)
         browser = get_pref_value('gmail.browser') or 'Default'

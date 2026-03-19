@@ -1,7 +1,9 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any
+
+from .learning import workflow_guidance
 
 
 @dataclass(frozen=True)
@@ -27,10 +29,29 @@ STRATEGIES: dict[str, RepairStrategy] = {
 }
 
 
+def strategy_for_failure(failure_class: str | None, task_type: str | None = None) -> RepairStrategy:
+    base = STRATEGIES.get(failure_class or 'unknown_error', STRATEGIES['unknown_error'])
+    if not task_type:
+        return base
 
-def strategy_for_failure(failure_class: str | None) -> RepairStrategy:
-    return STRATEGIES.get(failure_class or 'unknown_error', STRATEGIES['unknown_error'])
-
+    guidance = workflow_guidance(task_type=task_type, failure_class=failure_class)
+    if guidance['avoid_strategy'] == base.name and base.auto_repair:
+        return replace(
+            base,
+            auto_repair=False,
+            max_attempts=0,
+            terminal=True,
+            stop_reason='repeated_failed_repair_strategy',
+        )
+    if guidance['escalate_early'] and base.auto_repair:
+        return replace(
+            base,
+            auto_repair=False,
+            max_attempts=0,
+            escalate_to_user=True,
+            stop_reason='historically_requires_user_intervention',
+        )
+    return base
 
 
 def build_repair_step(step, result: dict[str, Any], attempt: int, strategy: RepairStrategy) -> dict | None:

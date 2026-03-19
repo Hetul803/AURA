@@ -1,9 +1,16 @@
 from __future__ import annotations
+
+import threading
 from pathlib import Path
 from urllib.parse import urlparse
-from playwright.sync_api import sync_playwright, Browser, BrowserContext, Page
+
 from storage.profile_paths import profile_dir
-import threading
+
+try:
+    from playwright.sync_api import Browser, BrowserContext, Page, sync_playwright
+except Exception:  # pragma: no cover - optional runtime dependency for browser-backed flows
+    Browser = BrowserContext = Page = object
+    sync_playwright = None
 
 
 class BrowserManager:
@@ -16,20 +23,22 @@ class BrowserManager:
 
     def _ensure_browser(self):
         if self._browser is None:
+            if sync_playwright is None:
+                raise RuntimeError('playwright_not_installed')
             self._pw = sync_playwright().start()
             self._browser = self._pw.chromium.launch(headless=True)
 
     def _state_file(self, domain: str) -> Path:
-        return profile_dir() / "browser_state" / f"{domain}.json"
+        return profile_dir() / 'browser_state' / f'{domain}.json'
 
     def domain_for_url(self, url: str) -> str:
-        host = urlparse(url).hostname or "default"
-        return host.replace(".", "_")
+        host = urlparse(url).hostname or 'default'
+        return host.replace('.', '_')
 
     def page_for(self, domain: str) -> Page:
         with self._lock:
             self._ensure_browser()
-            if domain in self._pages and not self._pages[domain].is_closed():
+            if domain in self._pages and hasattr(self._pages[domain], 'is_closed') and not self._pages[domain].is_closed():
                 return self._pages[domain]
             storage_path = self._state_file(domain)
             if storage_path.exists():
@@ -50,7 +59,7 @@ class BrowserManager:
     def clear_session(self, domain: str):
         with self._lock:
             page = self._pages.pop(domain, None)
-            if page and not page.is_closed():
+            if page and hasattr(page, 'is_closed') and not page.is_closed():
                 page.close()
             ctx = self._contexts.pop(domain, None)
             if ctx:
