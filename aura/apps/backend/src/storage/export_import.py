@@ -3,10 +3,24 @@ import json
 from pathlib import Path
 from .db import get_conn
 
+PROFILE_TABLES = [
+    'memories',
+    'preferences',
+    'macros',
+    'actions_log',
+    'events',
+    'profile_meta',
+    'reflection_records',
+    'site_memory',
+    'preference_memory',
+    'workflow_memory',
+    'safety_memory',
+]
+
 def export_profile(path: str) -> str:
     conn = get_conn()
     data = {}
-    for table in ["memories", "preferences", "macros", "actions_log", "events", "profile_meta"]:
+    for table in PROFILE_TABLES:
         rows = [dict(r) for r in conn.execute(f"SELECT * FROM {table}").fetchall()]
         data[table] = rows
     Path(path).write_text(json.dumps(data, indent=2), encoding="utf-8")
