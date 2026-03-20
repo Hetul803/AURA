@@ -4,10 +4,23 @@ import re
 from pathlib import Path
 from urllib.parse import urlparse
 
+from .assist import classify_assist_task, style_hints_for
 from .learning import query_relevant_memory
 from .memory import execution_hints, latest_memory
 from .prefs import get_pref_value, should_ask
 from .steps import Condition, RetryPolicy, Step
+
+
+ASSIST_PREFIXES = (
+    'summarize this',
+    'explain this',
+    'rewrite this',
+    'rewrite this better',
+    'answer this',
+    'research this',
+    'draft a reply to this',
+    'reply to this',
+)
 
 
 def intent_signature(text: str) -> str:
@@ -20,8 +33,8 @@ def intent_signature(text: str) -> str:
         return 'gmail:web'
     if t.startswith('find flights from'):
         return 'flights:web'
-    if 'selected text' in t:
-        return 'selection:web'
+    if t.startswith(ASSIST_PREFIXES) or t in {'summarize', 'explain', 'rewrite', 'answer', 'reply'} or 'selected text' in t or 'clipboard' in t:
+        return 'assist:writing'
     if 'open cursor' in t:
         return 'cursor:os'
     if 'open this folder' in t or 'open this file' in t:
@@ -52,7 +65,7 @@ def _gmail_clarifications(choices: dict | None = None) -> list[dict]:
 
 def _build_plan(*, goal: str, signature: str, steps: list[Step], context: dict | None = None,
                 success_criteria: list[dict] | None = None, clarifications: list[dict] | None = None,
-                memory_scope: str | None = None, slots: dict | None = None) -> dict:
+                memory_scope: str | None = None, slots: dict | None = None, assist: dict | None = None) -> dict:
     scope = memory_scope or signature
     plan_context = context or {}
     domain = _domain_from_steps(steps)
@@ -61,6 +74,7 @@ def _build_plan(*, goal: str, signature: str, steps: list[Step], context: dict |
         'goal': goal,
         'signature': signature,
         'context': plan_context,
+        'assist': assist or {},
         'steps': steps,
         'success_criteria': success_criteria or [],
         'clarifications': clarifications or [],
@@ -123,11 +137,91 @@ def _code_plan(text: str) -> dict:
     )
 
 
+def _assist_plan(text: str) -> dict:
+    assist = classify_assist_task(text)
+    task_kind = assist['task_kind']
+    style_hints = style_hints_for(task_kind)
+    research_mode = assist['research_mode']
+    goal_map = {
+        'summarize': 'Summarize the captured text clearly',
+        'explain': 'Explain the captured text clearly',
+        'rewrite': 'Rewrite the captured text in a better form',
+        'reply': 'Draft a reply to the captured text',
+        'answer': 'Research and answer the captured text',
+    }
+    steps = [
+        Step(id='s1', name='Capture active context', action_type='ASSIST_CAPTURE_CONTEXT', tool='assist', expected_outcome={'ok': True}),
+    ]
+    if research_mode != 'none':
+        steps.append(
+            Step(
+                id='s2',
+                name='Gather bounded context',
+                action_type='ASSIST_RESEARCH_CONTEXT',
+                tool='assist',
+                args={'research_mode': research_mode},
+                expected_outcome={'ok': True},
+            )
+        )
+        draft_id = 's3'
+        approval_id = 's4'
+        paste_id = 's5'
+    else:
+        draft_id = 's2'
+        approval_id = 's3'
+        paste_id = 's4'
+    steps.extend([
+        Step(id=draft_id, name='Draft response', action_type='ASSIST_DRAFT', tool='assist', expected_outcome={'ok': True}),
+        Step(id=approval_id, name='Wait for approval', action_type='ASSIST_WAIT_APPROVAL', tool='assist', expected_outcome={'ok': True}, safety_level='CONFIRM'),
+        Step(id=paste_id, name='Paste approved result back', action_type='ASSIST_PASTE_BACK', tool='assist', expected_outcome={'pasted_gte': 1}, safety_level='CONFIRM'),
+    ])
+    context = {
+        'intent': task_kind,
+        'needs_research': assist['needs_research'],
+        'approval_required': True,
+        'style_hints': style_hints,
+        'pasteback': {'mode': 'reactivate_validate_paste'},
+    }
+    success_criteria = [
+        {'type': 'captured_input_present', 'expected': True},
+        {'type': 'draft_ready', 'expected': True},
+        {'type': 'approval_received', 'expected': True},
+        {'type': 'draft_pasted', 'expected': True},
+    ]
+    return _build_plan(
+        goal=f"{goal_map.get(task_kind, 'Draft a response')} and paste it back after approval",
+        signature='assist:writing',
+        steps=steps,
+        context=context,
+        success_criteria=success_criteria,
+        assist={
+            'task_kind': task_kind,
+            'research_mode': research_mode,
+            'target_behavior': 'paste_back',
+            'source_requirement': 'selection_or_clipboard',
+        },
+    )
+
+
 def plan_from_text(text: str, choices: dict | None = None) -> dict:
     t = text.lower().strip()
 
     if t.startswith('fix and run python script at') or t.startswith('run python script at'):
         return _code_plan(text)
+
+    if t.startswith('take the selected text, search it'):
+        return _build_plan(
+            goal='Capture selected text, research it on the web, and return key points',
+            signature=intent_signature(text),
+            steps=[
+                Step(id='s1', name='Copy selected text', action_type='OS_COPY_SELECTION', tool='os', expected_outcome={'clipboard_length_gte': 1}),
+                Step(id='s2', name='Search selected text', action_type='WEB_READ', tool='browser', args={'target': 'search', 'query': '__FROM_CLIPBOARD__'}, expected_outcome={'key_points_gte': 1}),
+            ],
+            success_criteria=[{'type': 'key_points_gte', 'expected': 1}],
+        )
+
+    if intent_signature(text) == 'assist:writing':
+        return _assist_plan(text)
 
     if t.startswith('open gmail, summarize unread emails, draft a reply'):
         return _build_plan(
@@ -142,16 +236,7 @@ def plan_from_text(text: str, choices: dict | None = None) -> dict:
             success_criteria=[{'type': 'gmail_summary_ready'}, {'type': 'draft_pasted'}],
         )
 
-    if t.startswith('take the selected text, search it'):
-        return _build_plan(
-            goal='Capture selected text, research it on the web, and return key points',
-            signature=intent_signature(text),
-            steps=[
-                Step(id='s1', name='Copy selected text', action_type='OS_COPY_SELECTION', tool='os', expected_outcome={'clipboard_length_gte': 1}),
-                Step(id='s2', name='Search selected text', action_type='WEB_READ', tool='browser', args={'target': 'search', 'query': '__FROM_CLIPBOARD__'}, expected_outcome={'key_points_gte': 1}),
-            ],
-            success_criteria=[{'type': 'key_points_gte', 'expected': 1}],
-        )
+
 
     if t.startswith('open cursor and paste this website prompt'):
         prompt = text.split(':', 1)[1].strip() if ':' in text else 'Build a modern landing page with hero, features, and CTA.'

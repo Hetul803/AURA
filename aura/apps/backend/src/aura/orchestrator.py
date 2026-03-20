@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import json
+import time
 import uuid
 
+from .assist import draft_from_state
 from .executor import execute_steps
 from .learning import record_run_learning
 from .macros import match_macro, record_macro, render_macro_steps, touch_macro
@@ -23,6 +25,19 @@ def _materialize_steps(plan: dict, use_macro: bool = False):
 
 def _memory_detail(text: str, extra: dict | None = None) -> str:
     return json.dumps({'detail': text, 'extra': extra or {}}, sort_keys=True)
+
+
+def _status_from_result(result: list[dict]) -> str:
+    if not result:
+        return 'done'
+    last = result[-1]
+    if last['status'] == 'needs_user':
+        return 'needs_user'
+    if last['status'] == 'awaiting_approval':
+        return 'awaiting_approval'
+    if last['status'] == 'rejected':
+        return 'rejected'
+    return 'done' if all(r['status'] == 'success' for r in result) else 'partial'
 
 
 def run_command(text: str, event_cb=lambda e: None, choices: dict | None = None, use_macro: bool = False, run_id: str | None = None):
@@ -64,14 +79,20 @@ def run_command(text: str, event_cb=lambda e: None, choices: dict | None = None,
         'step_history': [],
         'safety_history': [],
         'learning': {},
+        'captured_context': None,
+        'research_context': None,
+        'draft_state': None,
+        'approval_state': {'required': plan.get('assist', {}).get('target_behavior') == 'paste_back', 'status': 'not_requested'},
+        'pasteback_state': {'status': 'not_started'},
+        'assist': {},
     })
 
     result = execute_steps(run_id, steps, event_cb)
     last = result[-1] if result else {'status': 'done', 'step_index': len(steps) - 1}
-    status = 'needs_user' if last['status'] == 'needs_user' else ('done' if all(r['status'] == 'success' for r in result) else 'partial')
+    status = _status_from_result(result)
 
     ctx = get_run_context(run_id) or {}
-    terminal_outcome = ctx.get('terminal_outcome') or ('success' if status == 'done' else 'failed')
+    terminal_outcome = ctx.get('terminal_outcome') or ('success' if status == 'done' else ('needs_user' if status == 'awaiting_approval' else 'failed'))
     update_run_context(run_id, {'status': status, 'current_step_index': last.get('step_index', 0), 'terminal_outcome': terminal_outcome})
     learning = record_run_learning(run_id, get_run_context(run_id) or {})
     update_run_context(run_id, {'learning': learning})
@@ -84,6 +105,9 @@ def run_command(text: str, event_cb=lambda e: None, choices: dict | None = None,
     if last['status'] == 'needs_user':
         remember_execution(plan['signature'], 'blocked', _memory_detail('user_action_needed', {'run_id': run_id, 'failure_class': ctx.get('last_failure_class')}), tags=['workflow'])
         return {'ok': False, 'run_id': run_id, 'status': 'needs_user', 'resume_token': run_id, 'steps': result, 'plan': ctx.get('plan'), 'run_state': get_run_context(run_id)}
+
+    if last['status'] == 'awaiting_approval':
+        return {'ok': False, 'run_id': run_id, 'status': 'awaiting_approval', 'resume_token': run_id, 'steps': result, 'plan': ctx.get('plan'), 'run_state': get_run_context(run_id)}
 
     if status != 'done':
         remember_execution(
@@ -109,10 +133,67 @@ def resume_run(run_id: str, event_cb=lambda e: None):
         learning = record_run_learning(run_id, get_run_context(run_id) or {})
         update_run_context(run_id, {'learning': learning})
         return {'ok': False, 'run_id': run_id, 'status': 'needs_user', 'steps': result, 'plan': ctx.get('plan'), 'run_state': get_run_context(run_id)}
+    if result and result[-1]['status'] == 'awaiting_approval':
+        learning = record_run_learning(run_id, get_run_context(run_id) or {})
+        update_run_context(run_id, {'learning': learning, 'status': 'awaiting_approval'})
+        return {'ok': False, 'run_id': run_id, 'status': 'awaiting_approval', 'steps': result, 'plan': ctx.get('plan'), 'run_state': get_run_context(run_id)}
 
-    status = 'done' if result and all(step['status'] == 'success' for step in result) else 'partial'
+    status = _status_from_result(result)
     terminal_outcome = 'success' if status == 'done' else ((get_run_context(run_id) or {}).get('terminal_outcome') or 'failed')
-    update_run_context(run_id, {'status': status, 'terminal_outcome': terminal_outcome})
+    update_run_context(run_id, {'status': status, 'terminal_outcome': terminal_outcome, 'paused': False})
     learning = record_run_learning(run_id, get_run_context(run_id) or {})
     update_run_context(run_id, {'learning': learning})
     return {'ok': status == 'done', 'run_id': run_id, 'steps': result, 'plan': ctx.get('plan'), 'run_state': get_run_context(run_id)}
+
+
+def approve_assist_run(run_id: str, approved_text: str | None = None, event_cb=lambda e: None):
+    ctx = get_run_context(run_id)
+    if not ctx:
+        return {'ok': False, 'error': 'run_not_found', 'run_id': run_id}
+    approval = {**(ctx.get('approval_state') or {})}
+    final_text = approved_text or approval.get('draft_text') or ''
+    approval.update({
+        'status': 'approved',
+        'edited_text': approved_text or approval.get('edited_text', ''),
+        'final_text': final_text,
+        'approved_by_user': True,
+        'decided_at': time.time(),
+    })
+    update_run_context(run_id, {'approval_state': approval, 'status': 'approved_pending_paste', 'paused': False, 'user_intervention_required': False})
+    event_cb({'type': 'approval_received', 'run_id': run_id, 'status': 'approved', 'message': 'Draft approved for paste-back.'})
+    return resume_run(run_id, event_cb)
+
+
+def retry_assist_run(run_id: str, feedback: str | None = None, event_cb=lambda e: None):
+    ctx = get_run_context(run_id)
+    if not ctx:
+        return {'ok': False, 'error': 'run_not_found', 'run_id': run_id}
+    draft = draft_from_state(ctx, feedback=feedback)
+    approval = {**(ctx.get('approval_state') or {})}
+    approval.update({
+        'status': 'pending',
+        'draft_text': draft['draft_text'],
+        'edited_text': '',
+        'final_text': '',
+        'feedback': feedback or '',
+        'approved_by_user': False,
+        'requested_at': time.time(),
+    })
+    update_run_context(run_id, {'draft_state': draft, 'approval_state': approval, 'status': 'awaiting_approval', 'paused': True})
+    event_cb({'type': 'draft_regenerated', 'run_id': run_id, 'status': 'awaiting_approval', 'message': 'Draft regenerated for review.'})
+    learning = record_run_learning(run_id, get_run_context(run_id) or {})
+    update_run_context(run_id, {'learning': learning})
+    return {'ok': True, 'run_id': run_id, 'status': 'awaiting_approval', 'run_state': get_run_context(run_id)}
+
+
+def reject_assist_run(run_id: str, reason: str | None = None, event_cb=lambda e: None):
+    ctx = get_run_context(run_id)
+    if not ctx:
+        return {'ok': False, 'error': 'run_not_found', 'run_id': run_id}
+    approval = {**(ctx.get('approval_state') or {})}
+    approval.update({'status': 'rejected', 'decision_reason': reason or '', 'decided_at': time.time(), 'approved_by_user': False})
+    update_run_context(run_id, {'approval_state': approval, 'status': 'rejected', 'terminal_outcome': 'rejected', 'paused': False, 'pasteback_state': {'status': 'skipped'}})
+    event_cb({'type': 'draft_rejected', 'run_id': run_id, 'status': 'rejected', 'message': 'Draft rejected; paste-back skipped.'})
+    learning = record_run_learning(run_id, get_run_context(run_id) or {})
+    update_run_context(run_id, {'learning': learning})
+    return {'ok': True, 'run_id': run_id, 'status': 'rejected', 'run_state': get_run_context(run_id)}

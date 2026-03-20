@@ -60,3 +60,11 @@ def test_sessions_and_storage_endpoints():
     assert client.get('/browser/sessions').status_code == 200
     assert client.get('/storage/stats').status_code == 200
     assert client.get('/safety/events').status_code == 200
+
+
+def test_assist_endpoints_exist():
+    assert client.post('/assist/context').status_code == 200
+    run = client.post('/command', json={'text': 'Summarize this'})
+    run_id = run.json()['run_id']
+    assert client.post(f'/runs/{run_id}/retry', json={'feedback': 'more direct'}).status_code == 200
+    assert client.post(f'/runs/{run_id}/reject', json={'reason': 'skip'}).status_code == 200

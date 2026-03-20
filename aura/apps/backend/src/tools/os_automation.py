@@ -4,6 +4,7 @@ import platform
 import subprocess
 from datetime import datetime
 from pathlib import Path
+from urllib.parse import urlparse
 
 from storage.profile_paths import profile_dir
 from tools.tool_result import success, failure
@@ -30,6 +31,124 @@ def _osascript(script: str) -> tuple[bool, str]:
 def _not_supported(action: str):
     return failure(action, error='NOT_SUPPORTED_ON_THIS_OS', observation={'os': SYSTEM})
 
+
+
+
+
+def _safe_osascript_list(script: str) -> tuple[bool, list[str]]:
+    ok, out = _osascript(script)
+    if not ok:
+        return False, []
+    return True, [line.strip() for line in out.splitlines() if line.strip()]
+
+
+def get_browser_context(active_app: str | None = None) -> dict:
+    app = active_app or (get_active_app().get('result') or {}).get('active_app')
+    if SYSTEM != 'darwin' or not app:
+        return {}
+    scripts = {
+        'Google Chrome': 'tell application "Google Chrome" to if (count of windows) > 0 then return {URL of active tab of front window, title of active tab of front window}',
+        'Safari': 'tell application "Safari" to if (count of windows) > 0 then return {URL of front document, name of front document}',
+        'Arc': 'tell application "Arc" to if (count of windows) > 0 then return {URL of active tab of front window, title of active tab of front window}',
+    }
+    script = scripts.get(app)
+    if not script:
+        return {}
+    ok, values = _safe_osascript_list(script)
+    if not ok or not values:
+        return {}
+    url = values[0] if len(values) > 0 else ''
+    title = values[1] if len(values) > 1 else ''
+    return {'browser_url': url, 'browser_title': title}
+
+
+def capture_context() -> dict:
+    app_result = get_active_app()
+    title_result = get_active_window_title()
+    active_app_name = app_result.get('active_app') or (app_result.get('result') or {}).get('active_app') or ''
+    window_title = title_result.get('window_title') or (title_result.get('result') or {}).get('window_title') or ''
+    browser = get_browser_context(active_app_name)
+
+    selected_attempted = True
+    selection = copy_selected_text()
+    selected_text = (selection.get('result') or {}).get('text', '') if selection.get('ok') else ''
+    clipboard_fallback_used = False
+
+    if selected_text:
+        input_text = selected_text
+        input_source = 'selected_text'
+    else:
+        clip = read_clipboard()
+        input_text = (clip.get('result') or {}).get('text', '') if clip.get('ok') else ''
+        input_source = 'clipboard' if input_text else 'none'
+        clipboard_fallback_used = bool(input_text)
+
+    warnings = []
+    if not selected_text:
+        warnings.append('selected_text_unavailable')
+    if not input_text:
+        warnings.append('copy_or_select_text_first')
+
+    paste_target = {
+        'app_name': active_app_name,
+        'window_title': window_title,
+        'target_url': browser.get('browser_url'),
+        'captured_at': datetime.utcnow().isoformat() + 'Z',
+    }
+
+    return {
+        'ok': bool(active_app_name or window_title or input_text),
+        'active_app': active_app_name,
+        'window_title': window_title,
+        'browser_url': browser.get('browser_url'),
+        'browser_title': browser.get('browser_title') or window_title,
+        'selected_text': selected_text,
+        'clipboard_text': input_text if input_source == 'clipboard' else ((read_clipboard().get('result') or {}).get('text', '') if input_text else ''),
+        'input_text': input_text,
+        'input_source': input_source,
+        'capture_method': {
+            'selected_text_attempted': selected_attempted,
+            'selected_text_succeeded': bool(selected_text),
+            'clipboard_fallback_used': clipboard_fallback_used,
+        },
+        'paste_target': paste_target,
+        'warnings': warnings,
+    }
+
+
+def validate_target(target: dict | None, current: dict | None) -> tuple[bool, str]:
+    target = target or {}
+    current = current or {}
+    if not target:
+        return True, 'no_target_snapshot'
+    target_app = (target.get('app_name') or '').lower()
+    current_app = (current.get('active_app') or '').lower()
+    if target_app and current_app and target_app != current_app:
+        return False, 'active_app_changed'
+    target_url = target.get('target_url') or ''
+    current_url = current.get('browser_url') or ''
+    if target_url and current_url:
+        if urlparse(target_url).netloc != urlparse(current_url).netloc:
+            return False, 'browser_domain_changed'
+    target_title = target.get('window_title') or ''
+    current_title = current.get('window_title') or ''
+    if target_title and current_title and target_title != current_title and not current_title.startswith(target_title[:20]):
+        return False, 'window_title_changed'
+    return True, 'target_valid'
+
+
+def restore_target_and_paste(text: str, target: dict | None) -> dict:
+    target = target or {}
+    app_name = target.get('app_name') or ''
+    if app_name and SYSTEM == 'darwin':
+        activate_app(app_name)
+    current = capture_context()
+    valid, reason = validate_target(target, current)
+    if not valid:
+        return failure('OS_PASTE', error='paste_target_changed', observation={**current, 'failure_class': 'paste_target_changed', 'failure_detail': reason}, requires_user=True, retryable=True, result={'pasted': 0})
+    pasted = paste_to_active_app(text)
+    pasted['observation'] = {**(pasted.get('observation') or {}), 'target_validation': reason, 'browser_url': current.get('browser_url'), 'window_title': current.get('window_title')}
+    return pasted
 
 
 def open_app(app_name: str) -> dict:
@@ -190,10 +309,14 @@ def active_context() -> dict:
     app = get_active_app()
     title = get_active_window_title()
     clip = read_clipboard()
+    active_app_name = app.get('active_app') or (app.get('result') or {}).get('active_app')
+    browser = get_browser_context(active_app_name)
     return {
         'ok': app.get('ok', False) and title.get('ok', False),
-        'active_app': app.get('active_app') or (app.get('result') or {}).get('active_app'),
+        'active_app': active_app_name,
         'window_title': title.get('window_title') or (title.get('result') or {}).get('window_title'),
+        'browser_url': browser.get('browser_url'),
+        'browser_title': browser.get('browser_title'),
         'clipboard_length': clip.get('length', 0) or (clip.get('result') or {}).get('length', 0),
     }
 
@@ -214,7 +337,7 @@ def handle_os_action(step) -> dict:
     if action == 'OS_OPEN_FOLDER':
         return open_path(args.get('path', ''), folder=True)
     if action == 'OS_GET_ACTIVE_CONTEXT':
-        ctx = active_context()
+        ctx = capture_context()
         if ctx.get('ok'):
             return success('OS_GET_ACTIVE_CONTEXT', result=ctx, observation=ctx)
         return failure('OS_GET_ACTIVE_CONTEXT', error='active_context_failed', observation=ctx)
@@ -223,6 +346,8 @@ def handle_os_action(step) -> dict:
     if action == 'OS_WRITE_CLIPBOARD':
         return write_clipboard(args.get('text', ''))
     if action == 'OS_PASTE':
+        if args.get('target'):
+            return restore_target_and_paste(args.get('text', ''), args.get('target'))
         return paste_to_active_app(args.get('text', ''))
     if action == 'OS_COPY_SELECTION':
         return copy_selected_text()

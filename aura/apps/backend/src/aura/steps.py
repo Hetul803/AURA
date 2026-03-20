@@ -9,9 +9,10 @@ ActionType = Literal[
     'OS_OPEN_URL', 'WEB_NAVIGATE', 'WEB_CLICK', 'WEB_TYPE', 'WEB_READ', 'WEB_UPLOAD',
     'FS_EXISTS', 'FS_READ_TEXT', 'FS_WRITE_TEXT',
     'CODE_RUN', 'CODE_REPAIR',
-    'TAKE_SCREENSHOT', 'CLIPBOARD_COPY', 'CLIPBOARD_PASTE', 'WAIT_FOR', 'NOOP'
+    'TAKE_SCREENSHOT', 'CLIPBOARD_COPY', 'CLIPBOARD_PASTE', 'WAIT_FOR', 'NOOP',
+    'ASSIST_CAPTURE_CONTEXT', 'ASSIST_RESEARCH_CONTEXT', 'ASSIST_DRAFT', 'ASSIST_WAIT_APPROVAL', 'ASSIST_PASTE_BACK'
 ]
-ToolType = Literal['browser', 'os', 'filesystem', 'code', 'control']
+ToolType = Literal['browser', 'os', 'filesystem', 'code', 'control', 'assist']
 SafetyLevel = Literal['SAFE', 'CONFIRM', 'BLOCKED']
 
 

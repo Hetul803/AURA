@@ -70,12 +70,16 @@ def _task_goal(ctx: dict) -> str:
 def _derive_outcome(ctx: dict) -> str:
     terminal = ctx.get('terminal_outcome')
     status = ctx.get('status')
-    if terminal in {'success', 'failed', 'blocked', 'cancelled', 'needs_user'}:
+    if terminal in {'success', 'failed', 'blocked', 'cancelled', 'needs_user', 'rejected'}:
         return terminal
     if status == 'done':
         return 'success'
     if status == 'needs_user':
         return 'blocked'
+    if status == 'awaiting_approval':
+        return 'awaiting_approval'
+    if status == 'rejected':
+        return 'rejected'
     if status == 'partial':
         return 'partial'
     return status or 'unknown'
@@ -102,6 +106,9 @@ def _normalized_context(ctx: dict) -> dict:
     last_observation = ctx.get('last_observation') or {}
     failure_classes = [item.get('failure_class') for item in _failure_history(ctx) if item.get('failure_class')]
     actions = [item.get('action') for item in _step_history(ctx) if item.get('action')]
+    captured = ctx.get('captured_context') or {}
+    approval = ctx.get('approval_state') or {}
+    draft = ctx.get('draft_state') or {}
     return {
         'task_type': _task_type(ctx),
         'script_path': _script_path(ctx),
@@ -112,6 +119,10 @@ def _normalized_context(ctx: dict) -> dict:
         'last_failure_class': ctx.get('last_failure_class'),
         'last_action': last_observation.get('last_action'),
         'user_intervention_required': bool(ctx.get('user_intervention_required')),
+        'active_app': captured.get('active_app'),
+        'input_source': captured.get('input_source'),
+        'approval_status': approval.get('status'),
+        'draft_style': draft.get('style_hints'),
     }
 
 
@@ -162,7 +173,7 @@ def _repairs_that_failed(ctx: dict, outcome: str) -> list[dict]:
 
 def _candidate_preferences(ctx: dict) -> list[dict]:
     task_type = _task_type(ctx)
-    return [
+    candidates = [
         {
             'scope': task_type,
             'memory_key': key,
@@ -170,6 +181,19 @@ def _candidate_preferences(ctx: dict) -> list[dict]:
         }
         for key, value in (ctx.get('choices') or {}).items()
     ]
+    if task_type == 'assist:writing':
+        draft = ctx.get('draft_state') or {}
+        styles = draft.get('style_hints') or {}
+        if styles.get('length'):
+            candidates.append({'scope': task_type, 'memory_key': 'writing.length', 'value': styles['length']})
+        if styles.get('tone'):
+            candidates.append({'scope': task_type, 'memory_key': 'writing.tone', 'value': styles['tone']})
+        approval = ctx.get('approval_state') or {}
+        if approval.get('status') in {'approved', 'pasted'}:
+            candidates.append({'scope': task_type, 'memory_key': 'assist.approval', 'value': 'required'})
+        if (ctx.get('research_context') or {}).get('sources'):
+            candidates.append({'scope': task_type, 'memory_key': 'assist.research', 'value': 'useful'})
+    return candidates
 
 
 def _candidate_site_memory(ctx: dict, outcome: str) -> list[dict]:
@@ -192,6 +216,23 @@ def _candidate_site_memory(ctx: dict, outcome: str) -> list[dict]:
             'value': _task_type(ctx),
             'outcome': outcome,
         })
+    if _task_type(ctx) == 'assist:writing':
+        approval = ctx.get('approval_state') or {}
+        captured = ctx.get('captured_context') or {}
+        if captured.get('active_app'):
+            candidates.append({
+                'domain': domain,
+                'memory_key': 'assist.active_app',
+                'value': captured.get('active_app'),
+                'outcome': outcome,
+            })
+        if approval.get('status') == 'pasted':
+            candidates.append({
+                'domain': domain,
+                'memory_key': 'assist.pasteback',
+                'value': 'success',
+                'outcome': outcome,
+            })
     return candidates
 
 
@@ -211,6 +252,10 @@ def _candidate_safety_memory(ctx: dict) -> list[dict]:
                 'action_key': event.get('action'),
                 'policy': 'blocked',
             })
+    if _task_type(ctx) == 'assist:writing':
+        candidates.append({'scope': scope, 'action_key': 'ASSIST_PASTE_BACK', 'policy': 'require_confirmation'})
+        if (ctx.get('pasteback_state') or {}).get('status') == 'failed':
+            candidates.append({'scope': scope, 'action_key': 'ASSIST_PASTE_BACK', 'policy': 'revalidate_target'})
     return candidates
 
 
@@ -233,10 +278,38 @@ def _candidate_workflow_patterns(ctx: dict, outcome: str) -> list[dict]:
             'outcome': 'blocked',
             'notes': 'manual_intervention_required',
         })
+    if task_type == 'assist:writing':
+        approval = ctx.get('approval_state') or {}
+        captured = ctx.get('captured_context') or {}
+        research = ctx.get('research_context') or {}
+        candidates.append({
+            'task_type': task_type,
+            'pattern_key': f"task_kind:{(ctx.get('plan') or {}).get('assist', {}).get('task_kind', 'unknown')}",
+            'strategy': 'capture_draft_approve_paste',
+            'outcome': 'success' if approval.get('status') == 'pasted' else approval.get('status') or outcome,
+            'notes': captured.get('input_source') or '',
+        })
+        if research.get('sources'):
+            candidates.append({
+                'task_type': task_type,
+                'pattern_key': 'research:bounded',
+                'strategy': 'page_plus_single_search',
+                'outcome': 'success' if approval.get('status') in {'approved', 'pasted'} else outcome,
+                'notes': ','.join(research.get('sources', [])[:2]),
+            })
+        if approval.get('status') == 'rejected':
+            candidates.append({
+                'task_type': task_type,
+                'pattern_key': 'approval:rejected',
+                'strategy': 'regenerate_before_paste',
+                'outcome': 'failure',
+                'notes': approval.get('decision_reason') or '',
+            })
     return candidates
 
 
 def _confidence_signals(ctx: dict, outcome: str) -> dict:
+    approval = ctx.get('approval_state') or {}
     return {
         'outcome': outcome,
         'steps_seen': len(_step_history(ctx)),
@@ -244,6 +317,8 @@ def _confidence_signals(ctx: dict, outcome: str) -> dict:
         'repairs_attempted': len(_repair_history(ctx)),
         'user_intervention_required': bool(ctx.get('user_intervention_required')),
         'safety_events_seen': len(_safety_history(ctx)),
+        'approval_status': approval.get('status'),
+        'research_sources_count': len((ctx.get('research_context') or {}).get('sources', [])),
     }
 
 
@@ -256,6 +331,10 @@ def _useful_observations(ctx: dict) -> list[dict]:
         observations.append({'type': 'traceback_excerpt', 'value': last_observation.get('traceback_excerpt')})
     if last_observation.get('url'):
         observations.append({'type': 'url', 'value': last_observation.get('url')})
+    if (ctx.get('captured_context') or {}).get('input_source'):
+        observations.append({'type': 'input_source', 'value': (ctx.get('captured_context') or {}).get('input_source')})
+    if (ctx.get('approval_state') or {}).get('status'):
+        observations.append({'type': 'approval_status', 'value': (ctx.get('approval_state') or {}).get('status')})
     return observations
 
 

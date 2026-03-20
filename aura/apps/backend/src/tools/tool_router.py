@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from aura.assist import handle_assist_action
 from tools.code_runner import handle_code_action
 from tools.filesystem_tool import handle_filesystem_action
 from tools.os_automation import handle_os_action
@@ -14,10 +15,12 @@ OS_ACTIONS = {
 WEB_ACTIONS = {'OS_OPEN_URL', 'WEB_NAVIGATE', 'WEB_CLICK', 'WEB_TYPE', 'WEB_READ', 'WEB_UPLOAD', 'NOOP'}
 FILESYSTEM_ACTIONS = {'FS_EXISTS', 'FS_READ_TEXT', 'FS_WRITE_TEXT'}
 CODE_ACTIONS = {'CODE_RUN', 'CODE_REPAIR'}
+ASSIST_ACTIONS = {'ASSIST_CAPTURE_CONTEXT', 'ASSIST_RESEARCH_CONTEXT', 'ASSIST_DRAFT', 'ASSIST_WAIT_APPROVAL', 'ASSIST_PASTE_BACK'}
 
 
-
-def dispatch_tool_action(step) -> dict:
+def dispatch_tool_action(step, run_context: dict | None = None) -> dict:
+    if step.action_type in ASSIST_ACTIONS:
+        return handle_assist_action(step, run_context)
     if step.action_type in OS_ACTIONS:
         return handle_os_action(step)
     if step.action_type in WEB_ACTIONS:

@@ -19,6 +19,13 @@ from tools.os_automation import read_clipboard
 from tools.tool_router import dispatch_tool_action
 
 
+ASSIST_CAPTURE = 'ASSIST_CAPTURE_CONTEXT'
+ASSIST_RESEARCH = 'ASSIST_RESEARCH_CONTEXT'
+ASSIST_DRAFT = 'ASSIST_DRAFT'
+ASSIST_APPROVAL = 'ASSIST_WAIT_APPROVAL'
+ASSIST_PASTE = 'ASSIST_PASTE_BACK'
+
+
 def _condition_ok(cond, observation: dict) -> bool:
     typ = cond.type
     key = cond.key
@@ -100,7 +107,7 @@ def _apply_repair(run_id: str, step, decision: dict, result: dict, observation_m
         return {}, observation_map
     _emit_step(event_cb, run_id, step, 'repairing', message=decision.get('reason'), repair_strategy=strategy.name)
     _record_step_history(run_id, step, 'repairing', repair_strategy=strategy.name, failure_class=decision.get('failure_class'))
-    repair_result = dispatch_tool_action(type('RepairStep', (), repair_step)())
+    repair_result = dispatch_tool_action(type('RepairStep', (), repair_step)(), get_run_context(run_id) or {})
     repair_observation = observer.normalize_tool_observation(repair_result, observation_map)
     repair_record = {
         'step_id': step.id,
@@ -121,6 +128,46 @@ def _apply_repair(run_id: str, step, decision: dict, result: dict, observation_m
     repair_attempts[step.id] = repair_attempts.get(step.id, 0) + 1
     update_run_context(run_id, {'repair_attempts': repair_attempts})
     return repair_result, repair_observation
+
+
+def _update_assist_context(run_id: str, step, result: dict):
+    payload: dict = {}
+    if step.action_type == ASSIST_CAPTURE:
+        captured = result.get('result', {}).get('captured_context') or {}
+        payload['captured_context'] = captured
+        payload['assist'] = {**((get_run_context(run_id) or {}).get('assist') or {}), 'captured_context': captured}
+    elif step.action_type == ASSIST_RESEARCH:
+        research = result.get('result', {}).get('research_context') or {}
+        payload['research_context'] = research
+        payload['assist'] = {**((get_run_context(run_id) or {}).get('assist') or {}), 'research_context': research}
+    elif step.action_type == ASSIST_DRAFT:
+        draft = result.get('result', {}).get('draft') or {}
+        approval_state = {
+            'required': True,
+            'status': 'pending',
+            'draft_text': draft.get('draft_text', ''),
+            'edited_text': '',
+            'final_text': '',
+            'feedback': draft.get('feedback', ''),
+            'requested_at': time.time(),
+            'approved_by_user': False,
+            'paste_after_approval': True,
+        }
+        payload['draft_state'] = draft
+        payload['approval_state'] = approval_state
+        payload['assist'] = {**((get_run_context(run_id) or {}).get('assist') or {}), 'draft': draft}
+    elif step.action_type == ASSIST_PASTE:
+        paste_state = {
+            'status': 'pasted' if result.get('ok') else 'failed',
+            'pasted_length': result.get('result', {}).get('pasted', result.get('pasted', 0)),
+            'target_validation': (result.get('observation') or {}).get('target_validation'),
+        }
+        payload['pasteback_state'] = paste_state
+        approval_state = {**((get_run_context(run_id) or {}).get('approval_state') or {})}
+        approval_state['status'] = 'pasted' if result.get('ok') else approval_state.get('status', 'approved')
+        payload['approval_state'] = approval_state
+    if payload:
+        update_run_context(run_id, payload)
 
 
 def execute_steps(run_id: str, steps, event_cb, wait_poll_ms: int = 100, start_index: int = 0):
@@ -149,7 +196,7 @@ def execute_steps(run_id: str, steps, event_cb, wait_poll_ms: int = 100, start_i
             update_run_context(run_id, {'terminal_outcome': 'blocked', 'status': 'blocked'})
             _emit_step(event_cb, run_id, step, 'failed', message='blocked by safety', url=last_obs.get('url', ''))
             continue
-        if guard == 'confirm':
+        if guard == 'confirm' and step.action_type not in (ASSIST_APPROVAL, ASSIST_PASTE):
             out.append({'step': step.id, 'status': 'needs_confirmation', 'step_index': idx})
             event = {'kind': 'confirmation', 'run_id': run_id, 'step_id': step.id, 'action': step.action_type}
             _record_safety_history(run_id, event)
@@ -189,13 +236,17 @@ def execute_steps(run_id: str, steps, event_cb, wait_poll_ms: int = 100, start_i
                 if step_to_run.args.get('query') == '__FROM_CLIPBOARD__':
                     clip = read_clipboard()
                     step_to_run.args['query'] = clip.get('text', '')
-                result = dispatch_tool_action(step_to_run)
+                if step_to_run.action_type == 'ASSIST_PASTE_BACK':
+                    approval = (ctx.get('approval_state') or {})
+                    step_to_run.args['text'] = approval.get('final_text') or approval.get('edited_text') or approval.get('draft_text') or ''
+                result = dispatch_tool_action(step_to_run, get_run_context(run_id) or {})
 
             observation_map = observer.normalize_tool_observation(result, last_obs)
             _record_step_history(run_id, step, 'executed', attempt=attempts + 1)
             update_run_context(run_id, {'last_observation': observation_map, 'current_step_index': idx})
+            _update_assist_context(run_id, step, result)
 
-            if step.action_type in ('OS_PASTE', 'OS_WRITE_CLIPBOARD', 'OS_COPY_SELECTION'):
+            if step.action_type in ('OS_PASTE', 'OS_WRITE_CLIPBOARD', 'OS_COPY_SELECTION', ASSIST_PASTE):
                 _record_safety_history(run_id, {'kind': 'clipboard', 'run_id': run_id, 'step_id': step.id, 'action': step.action_type, 'ok': result.get('ok', False)})
             if step.action_type == 'WEB_UPLOAD':
                 _record_safety_history(run_id, {'kind': 'upload', 'run_id': run_id, 'step_id': step.id, 'action': step.action_type, 'ok': result.get('ok', False), 'file_path': step.args.get('file_path')})
@@ -212,9 +263,18 @@ def execute_steps(run_id: str, steps, event_cb, wait_poll_ms: int = 100, start_i
 
             if decision['outcome'] == 'needs_user':
                 _record_step_history(run_id, step, 'needs_user', failure_class=decision.get('failure_class'))
-                update_run_context(run_id, {'paused': True, 'paused_step_index': idx, 'last_observation': observation_map, 'user_intervention_required': True, 'terminal_outcome': 'needs_user'})
-                event_cb({'type': 'needs_user', 'run_id': run_id, 'status': 'needs_user', 'step_id': step.id, 'step_index': idx, 'message': decision.get('reason') or result.get('error') or 'User action required', 'url': observation_map.get('url', ''), 'session': 'login_required', 'failure_class': decision.get('failure_class')})
-                return out + [{'step': step.id, 'status': 'needs_user', 'result': result, 'step_index': idx}]
+                paused_patch = {'paused': True, 'paused_step_index': idx, 'last_observation': observation_map, 'user_intervention_required': True, 'terminal_outcome': 'needs_user'}
+                event_type = 'needs_user'
+                message = decision.get('reason') or result.get('error') or 'User action required'
+                if step.action_type == ASSIST_APPROVAL:
+                    approval_state = {**((get_run_context(run_id) or {}).get('approval_state') or {})}
+                    approval_state['status'] = 'pending'
+                    paused_patch.update({'paused_step_index': idx + 1, 'approval_state': approval_state, 'status': 'awaiting_approval', 'user_intervention_required': False})
+                    event_type = 'approval_required'
+                    message = 'Draft ready for approval.'
+                update_run_context(run_id, paused_patch)
+                event_cb({'type': event_type, 'run_id': run_id, 'status': paused_patch.get('status', 'needs_user'), 'step_id': step.id, 'step_index': idx, 'message': message, 'url': observation_map.get('url', ''), 'session': 'login_required', 'failure_class': decision.get('failure_class')})
+                return out + [{'step': step.id, 'status': paused_patch.get('status', 'needs_user'), 'result': result, 'step_index': idx}]
 
             if decision['outcome'] == 'repair':
                 repair_result, repair_observation = _apply_repair(run_id, step, decision, result, observation_map, event_cb)
@@ -275,12 +335,8 @@ def execute_steps(run_id: str, steps, event_cb, wait_poll_ms: int = 100, start_i
                 run_id,
                 step,
                 final_status,
-                message='',
+                message='done' if step.action_type == ASSIST_PASTE else '',
                 url=final_observation.get('url', ''),
                 session='active' if not final_observation.get('login_required') else 'login_required',
             )
-        if final_status in {'terminal_failure', 'fail'}:
-            update_run_context(run_id, {'last_failure_class': final_observation.get('failure_class'), 'terminal_outcome': 'failed'})
-
-    event_cb({'type': 'run_done', 'run_id': run_id, 'status': 'done', 'timestamp': time.time(), 'run_state': get_run_context(run_id)})
     return out

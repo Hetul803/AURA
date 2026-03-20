@@ -7,6 +7,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
+from aura.assist import capture_structured_context
 from aura.learning import (
     consolidate_learning,
     list_preference_memory,
@@ -19,7 +20,7 @@ from aura.learning import (
 from aura.macros import list_macros
 from aura.memory import delete_memory, list_memories, update_memory
 from aura.models import available_models
-from aura.orchestrator import resume_run, run_command
+from aura.orchestrator import approve_assist_run, reject_assist_run, resume_run, retry_assist_run, run_command
 from aura.planner import plan_from_text
 from aura.prefs import get_prefs, reset_all, reset_pref, set_pref
 from aura.state import cancel_run, db_conn, get_run_context, list_safety_events, set_panic
@@ -62,6 +63,18 @@ class LearningQuery(BaseModel):
     limit: int = 5
 
 
+class ApprovalBody(BaseModel):
+    text: str | None = None
+
+
+class RetryBody(BaseModel):
+    feedback: str | None = None
+
+
+class RejectBody(BaseModel):
+    reason: str | None = None
+
+
 @app.get('/health')
 def health():
     return {'ok': True}
@@ -102,6 +115,12 @@ def command(cmd: Cmd):
     return run_command(cmd.text, emit, cmd.choices, cmd.use_macro)
 
 
+@app.post('/assist/context')
+def assist_context_capture():
+    result = capture_structured_context()
+    return result.get('result', {}).get('captured_context') or result
+
+
 @app.post('/panic')
 def panic(body: PanicBody):
     set_panic(True)
@@ -130,6 +149,30 @@ def resume(run_id: str):
         _emit(run_id, e)
 
     return resume_run(run_id, emit)
+
+
+@app.post('/runs/{run_id}/approve')
+def approve(run_id: str, body: ApprovalBody):
+    def emit(e):
+        _emit(run_id, e)
+
+    return approve_assist_run(run_id, body.text, emit)
+
+
+@app.post('/runs/{run_id}/retry')
+def retry(run_id: str, body: RetryBody):
+    def emit(e):
+        _emit(run_id, e)
+
+    return retry_assist_run(run_id, body.feedback, emit)
+
+
+@app.post('/runs/{run_id}/reject')
+def reject(run_id: str, body: RejectBody):
+    def emit(e):
+        _emit(run_id, e)
+
+    return reject_assist_run(run_id, body.reason, emit)
 
 
 @app.get('/runs/{run_id}')

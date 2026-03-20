@@ -16,6 +16,11 @@ export async function sendCommand(text: string, choices: Record<string, string> 
   return r.json();
 }
 
+export async function captureAssistContext() {
+  const r = await fetch(`${BACKEND_URL}/assist/context`, { method: 'POST' });
+  return r.json();
+}
+
 export function subscribeRun(runId: string, onEvent: (e: any) => void) {
   const es = new EventSource(`${BACKEND_URL}/events/stream/${runId}`);
   es.onmessage = (msg) => onEvent(JSON.parse(msg.data));
@@ -29,5 +34,31 @@ export async function panicStop(runId: string) {
 
 export async function resumeRun(runId: string) {
   const r = await fetch(`${BACKEND_URL}/runs/${runId}/resume`, { method: 'POST' });
+  return r.json();
+}
+
+export async function getRunState(runId: string) {
+  const r = await fetch(`${BACKEND_URL}/runs/${runId}`);
+  return r.json();
+}
+
+export async function approveRun(runId: string, text?: string) {
+  const r = await fetch(`${BACKEND_URL}/runs/${runId}/approve`, {
+    method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ text })
+  });
+  return r.json();
+}
+
+export async function retryRun(runId: string, feedback?: string) {
+  const r = await fetch(`${BACKEND_URL}/runs/${runId}/retry`, {
+    method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ feedback })
+  });
+  return r.json();
+}
+
+export async function rejectRun(runId: string, reason?: string) {
+  const r = await fetch(`${BACKEND_URL}/runs/${runId}/reject`, {
+    method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ reason })
+  });
   return r.json();
 }
