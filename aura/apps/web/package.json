@@ -1,0 +1,13 @@
+{
+  "name": "aura-web",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "node src/server.js",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "vitest": "^2.0.5"
+  }
+}
