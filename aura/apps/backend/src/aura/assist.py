@@ -6,197 +6,137 @@ from datetime import datetime, timezone
 from types import SimpleNamespace
 from urllib.parse import urlparse
 
+from llm.assist_client import classify_assist_request, generate_assist_draft
 from .learning import query_relevant_memory
-from .prefs import get_pref_value
+from .prefs import get_pref_value, set_pref
+from .memory import write_memory
 from tools.os_automation import capture_context, restore_target_and_paste
 from tools.tool_result import failure, success
 from tools.web_playwright import handle_web_action
+
+SUPPORTED_ASSIST_KINDS = {'summarize', 'reply', 'rewrite', 'explain', 'answer', 'research_and_respond'}
 
 
 def _now_iso() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace('+00:00', 'Z')
 
 
+def looks_like_assist_request(text: str) -> bool:
+    lower = text.lower().strip()
+    strong_markers = ['summarize', 'reply', 'respond', 'rewrite', 'reword', 'explain', 'answer', 'research']
+    if any(marker in lower for marker in strong_markers):
+        return True
+    if lower.endswith(' this') or lower.startswith(('please ', 'can you ', 'help me ')):
+        return any(token in lower for token in ['this', 'text', 'message', 'email', 'paragraph', 'clipboard', 'selected'])
+    return False
+
+
 def classify_assist_task(text: str) -> dict:
-    original = text.strip()
-    lower = original.lower()
-    if any(token in lower for token in ['rewrite', 'rewrite this', 'make this better', 'polish this']):
-        task_kind = 'rewrite'
-    elif any(token in lower for token in ['reply', 'respond', 'draft a reply']):
-        task_kind = 'reply'
-    elif any(token in lower for token in ['explain', 'what does this mean']):
-        task_kind = 'explain'
-    elif any(token in lower for token in ['answer', 'research']) or '?' in original:
-        task_kind = 'answer'
-    else:
+    intent = classify_assist_request(text)
+    task_kind = intent.task_kind
+    if task_kind not in SUPPORTED_ASSIST_KINDS:
         task_kind = 'summarize'
-
-    explicit_research = any(token in lower for token in ['research', 'look up', 'find sources', 'search'])
-    needs_research = explicit_research or task_kind == 'answer'
-    research_mode = 'web_search' if needs_research else 'page'
-    if task_kind in {'rewrite', 'reply', 'summarize'} and not explicit_research:
-        research_mode = 'none'
-
     return {
         'task_kind': task_kind,
-        'needs_research': needs_research,
-        'research_mode': research_mode,
-        'approval_required': True,
+        'source_text_present': intent.source_text_present,
+        'intent_confidence': intent.intent_confidence,
+        'needs_research': intent.needs_research,
+        'style_hints': dict(intent.style_hints),
+        'approval_required': intent.approval_required,
         'input_requirement': 'selection_or_clipboard',
-        'original_text': original,
+        'pasteback_mode': intent.pasteback_mode,
+        'reasoning_summary': intent.reasoning_summary,
+        'provider': intent.provider,
+        'model': intent.model,
+        'fallback_used': intent.fallback_used,
+        'original_text': text.strip(),
     }
 
 
-def style_hints_for(task_kind: str) -> dict:
-    relevant = query_relevant_memory(task_type='assist:writing')
+def _memory_value(rows: list[dict], memory_key: str) -> str | None:
+    for row in rows:
+        if row.get('memory_key') == memory_key:
+            return str(row.get('value'))
+    return None
 
-    def _memory_value(memory_key: str) -> str | None:
-        for row in relevant.get('preferences', []):
-            if row.get('memory_key') == memory_key:
-                return str(row.get('value'))
-        return None
 
-    length = (
-        get_pref_value(f'assist.{task_kind}.length')
-        or get_pref_value('assist.writing.length')
-        or get_pref_value('writing.length')
-        or _memory_value('writing.length')
-        or 'concise'
-    )
-    tone = (
-        get_pref_value(f'assist.{task_kind}.tone')
-        or get_pref_value('assist.writing.tone')
-        or get_pref_value('writing.tone')
-        or _memory_value('writing.tone')
-        or 'polished'
-    )
+def extract_feedback_preferences(feedback: str | None) -> dict[str, str]:
+    lower = (feedback or '').lower()
+    prefs: dict[str, str] = {}
+    if any(token in lower for token in ['more direct', 'be direct', 'less polished']):
+        prefs['writing.tone'] = 'direct'
+    if any(token in lower for token in ['more polished', 'warmer', 'friendlier']):
+        prefs['writing.tone'] = 'polished'
+    if any(token in lower for token in ['more detail', 'expand', 'longer']):
+        prefs['writing.length'] = 'detailed'
+    if any(token in lower for token in ['shorter', 'more concise', 'tighten', 'brief']):
+        prefs['writing.length'] = 'concise'
+    if any(token in lower for token in ['no research', 'don\'t research', 'not needed']) or 'unnecessary research' in lower:
+        prefs['assist.research'] = 'avoid'
+    if any(token in lower for token in ['research more', 'check sources', 'look it up']):
+        prefs['assist.research'] = 'prefer'
+    return prefs
+
+
+def apply_feedback_preferences(feedback: str | None, task_kind: str | None = None):
+    learned = extract_feedback_preferences(feedback)
+    for key, value in learned.items():
+        scoped_key = f'assist.{task_kind}.{key.split(".")[-1]}' if task_kind and key.startswith('writing.') else key
+        set_pref(key, value)
+        write_memory(key, value, tags=['preference', 'assist', 'feedback'], importance=4)
+        if scoped_key != key:
+            set_pref(scoped_key, value)
+            write_memory(scoped_key, value, tags=['preference', 'assist', 'feedback'], importance=4)
+    return learned
+
+
+def learning_signals_for(task_kind: str) -> dict:
+    relevant = query_relevant_memory(task_type='assist:writing', action_key='ASSIST_PASTE_BACK')
+    prefs = relevant.get('preferences', [])
+    workflow = relevant.get('workflow', [])
+    safety = relevant.get('safety', [])
+    signals = {
+        'preferred_length': get_pref_value(f'assist.{task_kind}.length') or get_pref_value('writing.length') or _memory_value(prefs, 'writing.length') or 'concise',
+        'preferred_tone': get_pref_value(f'assist.{task_kind}.tone') or get_pref_value('writing.tone') or _memory_value(prefs, 'writing.tone') or 'polished',
+        'research_preference': get_pref_value(f'assist.{task_kind}.research') or get_pref_value('assist.research') or _memory_value(prefs, 'assist.research') or 'auto',
+        'approval_required': True,
+        'strict_paste_validation': any(item.get('policy') == 'revalidate_target' for item in safety),
+        'recent_workflow_patterns': [item.get('pattern_key') for item in workflow[:3]],
+    }
+    return signals
+
+
+def style_hints_for(task_kind: str, feedback: str | None = None) -> dict:
+    signals = learning_signals_for(task_kind)
+    hinted = extract_feedback_preferences(feedback)
+    length = hinted.get('writing.length') or signals['preferred_length']
+    tone = hinted.get('writing.tone') or signals['preferred_tone']
     return {'length': length, 'tone': tone, 'task_kind': task_kind}
 
 
-def _clean_text(text: str) -> str:
-    return re.sub(r'\s+', ' ', (text or '')).strip()
+def research_mode_for(task_kind: str, needs_research: bool, feedback: str | None = None) -> str:
+    signals = learning_signals_for(task_kind)
+    overrides = extract_feedback_preferences(feedback)
+    research_pref = overrides.get('assist.research') or signals.get('research_preference') or 'auto'
+    if research_pref == 'avoid' and task_kind not in {'research_and_respond'}:
+        return 'none'
+    if needs_research or research_pref == 'prefer' or task_kind == 'research_and_respond':
+        return 'web_search'
+    if task_kind in {'answer', 'explain'}:
+        return 'page'
+    return 'none'
 
 
-def _sentences(text: str) -> list[str]:
-    parts = re.split(r'(?<=[.!?])\s+', _clean_text(text))
-    return [part.strip() for part in parts if part.strip()]
-
-
-def _truncate(text: str, limit: int = 220) -> str:
-    text = _clean_text(text)
-    return text if len(text) <= limit else text[: limit - 1].rstrip() + '…'
-
-
-def _top_points(text: str, limit: int = 3) -> list[str]:
-    points: list[str] = []
-    for sentence in _sentences(text):
-        points.append(sentence)
-        if len(points) >= limit:
-            break
-    if not points and _clean_text(text):
-        points = [_truncate(text, 180)]
-    return points
-
-
-def _research_summary(research: dict) -> str:
-    if not research:
-        return ''
-    notes = list(research.get('key_points') or [])
-    if not notes and research.get('page_context'):
-        notes = [research['page_context']]
-    return ' '.join(_truncate(note, 160) for note in notes[:2]).strip()
-
-
-def _polish(sentence: str, tone: str) -> str:
-    sentence = sentence.strip()
-    if not sentence:
-        return sentence
-    if tone == 'direct':
-        return sentence
-    if sentence.endswith('.'):
-        return sentence
-    return sentence + '.'
-
-
-def generate_draft(*, task_kind: str, input_text: str, style_hints: dict, research: dict | None = None, feedback: str | None = None) -> dict:
-    clean = _clean_text(input_text)
-    tone = style_hints.get('tone', 'polished')
-    length = style_hints.get('length', 'concise')
-    points = _top_points(clean, limit=4 if length == 'detailed' else 2)
-    research_note = _research_summary(research or {})
-    feedback_note = _clean_text(feedback or '')
-
-    if task_kind == 'summarize':
-        lead = 'Here’s the short version:' if length == 'concise' else 'Here’s a clear summary:'
-        body = ' '.join(points)
-        if length == 'detailed' and len(_sentences(clean)) > len(points):
-            remainder = _sentences(clean)[len(points):len(points) + 2]
-            if remainder:
-                body = f"{body} {' '.join(remainder)}"
-        text = f"{lead} {_polish(body, tone)}"
-    elif task_kind == 'explain':
-        lead = 'In plain terms,' if tone == 'direct' else 'Here’s what this is saying:'
-        body = ' '.join(points)
-        if research_note:
-            body = f"{body} {research_note}"
-        text = f"{lead} {_polish(body, tone)}"
-    elif task_kind == 'rewrite':
-        rewritten = clean
-        rewritten = re.sub(r'\bi\b', 'I', rewritten)
-        rewritten = rewritten[0].upper() + rewritten[1:] if rewritten else rewritten
-        if tone == 'polished':
-            rewritten = rewritten.replace('can\'t', 'cannot').replace("don\'t", 'do not')
-        if length == 'concise' and len(rewritten) > 220:
-            rewritten = _truncate(rewritten, 220)
-        text = rewritten
-    elif task_kind == 'reply':
-        opener = 'Thanks for sending this.' if tone == 'polished' else 'Thanks for this.'
-        if clean.endswith('?'):
-            response = 'My quick take is that this makes sense, and I can help with the next step.'
-        else:
-            response = 'I reviewed it and I’m aligned on the next step.' if tone == 'polished' else 'I reviewed it and I’m on it.'
-        if points:
-            response = f"{response} { _polish('The key point is ' + points[0].rstrip('.'), tone)}"
-        if research_note:
-            response = f"{response} { _polish('I also checked the relevant context: ' + research_note, tone)}"
-        closing = 'I’ll follow up shortly.' if length == 'concise' else 'If you want, I can turn this into a more detailed follow-up as well.'
-        text = f"{opener} {response} {closing}".strip()
-    else:  # answer
-        opener = 'Answer:' if tone == 'direct' else 'Here’s the best answer I can draft:'
-        answer_bits = points[:1] or [_truncate(clean, 140)]
-        body = answer_bits[0]
-        if research_note:
-            body = f"{body} {research_note}".strip()
-        if length == 'detailed' and len(points) > 1:
-            body = f"{body} {' '.join(points[1:3])}".strip()
-        text = f"{opener} {_polish(body, tone)}"
-
-    if feedback_note:
-        if 'short' in feedback_note.lower() and len(text) > 180:
-            text = _truncate(text, 180)
-        elif 'more detail' in feedback_note.lower() and task_kind != 'rewrite':
-            extras = _sentences(clean)[1:3]
-            if extras:
-                text = f"{text} {' '.join(extras)}"
-
-    return {
-        'text': _clean_text(text),
-        'style_hints': {'length': length, 'tone': tone},
-        'task_kind': task_kind,
-        'research_used': bool(research_note),
-    }
-
-
-def build_research_query(text: str, browser_title: str | None = None) -> str:
-    base = _clean_text(text)
-    if len(base) > 120:
-        base = base[:120]
+def build_research_query(request_text: str, source_text: str, browser_title: str | None = None) -> str:
+    base = re.sub(r'\s+', ' ', source_text or request_text).strip()
+    if len(base) > 140:
+        base = base[:140]
     if browser_title and browser_title.lower() not in base.lower():
-        return f"{base} {browser_title}".strip()
+        return f'{base} {browser_title}'.strip()
     return base
 
 
-def gather_context(*, captured_context: dict, research_mode: str) -> dict:
+def gather_context(*, request_text: str, captured_context: dict, research_mode: str) -> dict:
     page_context = {
         'browser_url': captured_context.get('browser_url'),
         'browser_title': captured_context.get('browser_title'),
@@ -204,21 +144,19 @@ def gather_context(*, captured_context: dict, research_mode: str) -> dict:
         'sources': [],
         'key_points': [],
         'research_mode': research_mode,
+        'search_used': False,
     }
     if captured_context.get('browser_url'):
         page_context['sources'].append(captured_context['browser_url'])
         title = captured_context.get('browser_title') or captured_context.get('window_title') or ''
         if title:
-            page_context['page_context'] = f"Current page: {title}"
-            page_context['key_points'].append(f"Current page context: {title}")
+            page_context['page_context'] = f'Current page: {title}'
+            page_context['key_points'].append(f'Current page context: {title}')
 
     if research_mode != 'web_search':
         return page_context
 
-    query = build_research_query(
-        captured_context.get('input_text', ''),
-        captured_context.get('browser_title'),
-    )
+    query = build_research_query(request_text, captured_context.get('input_text', ''), captured_context.get('browser_title'))
     if not query:
         return page_context
 
@@ -228,11 +166,12 @@ def gather_context(*, captured_context: dict, research_mode: str) -> dict:
         return {
             **page_context,
             'query': query,
+            'search_used': True,
             'key_points': list(dict.fromkeys([*(page_context.get('key_points') or []), *(search.get('key_points') or [])]))[:4],
             'sources': list(dict.fromkeys([*(page_context.get('sources') or []), *(search.get('sources') or [])]))[:4],
             'search_results_count': search.get('search_results_count', 0),
         }
-    return {**page_context, 'query': query, 'warnings': [search.get('error') or 'research_unavailable']}
+    return {**page_context, 'query': query, 'search_used': True, 'warnings': [search.get('error') or 'research_unavailable']}
 
 
 def capture_structured_context() -> dict:
@@ -252,10 +191,12 @@ def capture_structured_context() -> dict:
 def gather_structured_context(step, run_context: dict | None = None) -> dict:
     ctx = run_context or {}
     captured = ctx.get('captured_context') or ((ctx.get('assist') or {}).get('captured_context')) or {}
-    research = gather_context(captured_context=captured, research_mode=step.args.get('research_mode', 'none'))
+    request_text = (ctx.get('plan') or {}).get('context', {}).get('request_text') or ctx.get('text') or ''
+    research = gather_context(request_text=request_text, captured_context=captured, research_mode=step.args.get('research_mode', 'none'))
     return success('ASSIST_RESEARCH_CONTEXT', result={'research_context': research}, observation={
         'research_mode': research.get('research_mode'),
         'research_sources_count': len(research.get('sources', [])),
+        'research_used': bool(research.get('search_used') or research.get('page_context')),
     })
 
 
@@ -264,29 +205,57 @@ def draft_from_state(run_context: dict, feedback: str | None = None) -> dict:
     assist_plan = plan.get('assist') or {}
     captured = run_context.get('captured_context') or ((run_context.get('assist') or {}).get('captured_context')) or {}
     research = run_context.get('research_context') or ((run_context.get('assist') or {}).get('research_context')) or {}
-    styles = (plan.get('context') or {}).get('style_hints') or style_hints_for(assist_plan.get('task_kind', 'summarize'))
-    draft = generate_draft(
-        task_kind=assist_plan.get('task_kind', 'summarize'),
-        input_text=captured.get('input_text', ''),
+    task_kind = assist_plan.get('task_kind', 'summarize')
+    learning_signals = learning_signals_for(task_kind)
+    plan_styles = (plan.get('context') or {}).get('style_hints') or {}
+    styles = {**plan_styles, **style_hints_for(task_kind, feedback=feedback)}
+    retry_feedback = feedback or ((run_context.get('approval_state') or {}).get('feedback')) or ''
+    generated = generate_assist_draft(
+        task_kind=task_kind,
+        source_text=captured.get('input_text', ''),
+        request_text=run_context.get('text') or plan.get('context', {}).get('request_text') or '',
+        research_context=research,
         style_hints=styles,
-        research=research,
-        feedback=feedback or ((run_context.get('approval_state') or {}).get('feedback')),
+        retry_feedback=retry_feedback,
+        learning_signals=learning_signals,
     )
     return {
-        'draft_text': draft['text'],
-        'task_kind': draft['task_kind'],
-        'style_hints': draft['style_hints'],
-        'research_used': draft['research_used'],
-        'feedback': feedback or '',
+        'draft_text': generated.draft_text,
+        'task_kind': task_kind,
+        'style_hints': dict(generated.style_signals_used or styles),
+        'research_used': generated.research_used,
+        'feedback': retry_feedback,
+        'provider': generated.provider,
+        'model': generated.model,
+        'fallback_used': generated.fallback_used,
+        'confidence': generated.confidence,
+        'notes': generated.notes,
+        'learning_signals_applied': learning_signals,
     }
 
 
 def draft_step(step, run_context: dict | None = None) -> dict:
-    draft = draft_from_state(run_context or {}, feedback=step.args.get('feedback'))
+    try:
+        draft = draft_from_state(run_context or {}, feedback=step.args.get('feedback'))
+    except RuntimeError as exc:
+        message = str(exc)
+        return failure(
+            'ASSIST_DRAFT',
+            error=message,
+            observation={'failure_class': 'assist_model_unavailable' if 'unavailable' in message else 'assist_generation_failed'},
+            requires_user=True,
+            retryable=False,
+        )
     return success(
         'ASSIST_DRAFT',
         result={'draft': draft},
-        observation={'draft_ready': True, 'draft_length': len(draft['draft_text'])},
+        observation={
+            'draft_ready': True,
+            'draft_length': len(draft['draft_text']),
+            'generation_provider': draft['provider'],
+            'generation_model': draft['model'],
+            'generation_confidence': draft['confidence'],
+        },
     )
 
 
@@ -313,7 +282,8 @@ def paste_back_step(run_context: dict | None = None) -> dict:
     target = ((ctx.get('captured_context') or {}).get('paste_target')) or {}
     if not final_text:
         return failure('ASSIST_PASTE_BACK', error='missing_approved_text', observation={'failure_class': 'missing_approved_text'})
-    result = restore_target_and_paste(final_text, target)
+    strict = bool(((ctx.get('draft_state') or {}).get('learning_signals_applied') or {}).get('strict_paste_validation'))
+    result = restore_target_and_paste(final_text, target, strict=strict)
     result['action'] = 'ASSIST_PASTE_BACK'
     return result
 

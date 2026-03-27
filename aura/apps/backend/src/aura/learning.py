@@ -109,6 +109,7 @@ def _normalized_context(ctx: dict) -> dict:
     captured = ctx.get('captured_context') or {}
     approval = ctx.get('approval_state') or {}
     draft = ctx.get('draft_state') or {}
+    assist = ctx.get('assist') or {}
     return {
         'task_type': _task_type(ctx),
         'script_path': _script_path(ctx),
@@ -123,6 +124,8 @@ def _normalized_context(ctx: dict) -> dict:
         'input_source': captured.get('input_source'),
         'approval_status': approval.get('status'),
         'draft_style': draft.get('style_hints'),
+        'generation_provider': (assist.get('generation') or {}).get('provider'),
+        'research_used': assist.get('research_used'),
     }
 
 
@@ -193,6 +196,8 @@ def _candidate_preferences(ctx: dict) -> list[dict]:
             candidates.append({'scope': task_type, 'memory_key': 'assist.approval', 'value': 'required'})
         if (ctx.get('research_context') or {}).get('sources'):
             candidates.append({'scope': task_type, 'memory_key': 'assist.research', 'value': 'useful'})
+        if (assist := (ctx.get('assist') or {})).get('generation', {}).get('provider'):
+            candidates.append({'scope': task_type, 'memory_key': 'assist.provider', 'value': assist['generation']['provider']})
     return candidates
 
 
@@ -335,6 +340,8 @@ def _useful_observations(ctx: dict) -> list[dict]:
         observations.append({'type': 'input_source', 'value': (ctx.get('captured_context') or {}).get('input_source')})
     if (ctx.get('approval_state') or {}).get('status'):
         observations.append({'type': 'approval_status', 'value': (ctx.get('approval_state') or {}).get('status')})
+    if ((ctx.get('assist') or {}).get('generation') or {}).get('provider'):
+        observations.append({'type': 'generation_provider', 'value': ((ctx.get('assist') or {}).get('generation') or {}).get('provider')})
     return observations
 
 

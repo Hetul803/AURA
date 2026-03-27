@@ -131,15 +131,21 @@ def _apply_repair(run_id: str, step, decision: dict, result: dict, observation_m
 
 
 def _update_assist_context(run_id: str, step, result: dict):
+    current = get_run_context(run_id) or {}
     payload: dict = {}
+    assist_state = {**(current.get('assist') or {})}
     if step.action_type == ASSIST_CAPTURE:
         captured = result.get('result', {}).get('captured_context') or {}
         payload['captured_context'] = captured
-        payload['assist'] = {**((get_run_context(run_id) or {}).get('assist') or {}), 'captured_context': captured}
+        intent = {**(assist_state.get('intent') or {})}
+        intent['source_text_present'] = bool(captured.get('input_text'))
+        assist_state.update({'captured_context': captured, 'intent': intent, 'capture_path': captured.get('input_source')})
+        payload['assist'] = assist_state
     elif step.action_type == ASSIST_RESEARCH:
         research = result.get('result', {}).get('research_context') or {}
         payload['research_context'] = research
-        payload['assist'] = {**((get_run_context(run_id) or {}).get('assist') or {}), 'research_context': research}
+        assist_state.update({'research_context': research, 'research_used': bool(research.get('search_used') or research.get('page_context'))})
+        payload['assist'] = assist_state
     elif step.action_type == ASSIST_DRAFT:
         draft = result.get('result', {}).get('draft') or {}
         approval_state = {
@@ -152,20 +158,36 @@ def _update_assist_context(run_id: str, step, result: dict):
             'requested_at': time.time(),
             'approved_by_user': False,
             'paste_after_approval': True,
+            'generated_text': draft.get('draft_text', ''),
         }
         payload['draft_state'] = draft
         payload['approval_state'] = approval_state
-        payload['assist'] = {**((get_run_context(run_id) or {}).get('assist') or {}), 'draft': draft}
+        assist_state.update({
+            'draft': draft,
+            'generation': {
+                'provider': draft.get('provider'),
+                'model': draft.get('model'),
+                'fallback_used': draft.get('fallback_used', False),
+                'confidence': draft.get('confidence'),
+                'notes': draft.get('notes', []),
+            },
+            'style_signals_used': draft.get('style_hints', {}),
+            'learning_signals': draft.get('learning_signals_applied', {}),
+        })
+        payload['assist'] = assist_state
     elif step.action_type == ASSIST_PASTE:
         paste_state = {
             'status': 'pasted' if result.get('ok') else 'failed',
             'pasted_length': result.get('result', {}).get('pasted', result.get('pasted', 0)),
             'target_validation': (result.get('observation') or {}).get('target_validation'),
+            'strict_validation': (result.get('observation') or {}).get('strict_validation', False),
         }
         payload['pasteback_state'] = paste_state
-        approval_state = {**((get_run_context(run_id) or {}).get('approval_state') or {})}
+        approval_state = {**(current.get('approval_state') or {})}
         approval_state['status'] = 'pasted' if result.get('ok') else approval_state.get('status', 'approved')
         payload['approval_state'] = approval_state
+        assist_state['paste_validation'] = paste_state
+        payload['assist'] = assist_state
     if payload:
         update_run_context(run_id, payload)
 

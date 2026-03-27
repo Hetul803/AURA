@@ -4,7 +4,7 @@ import json
 import time
 import uuid
 
-from .assist import draft_from_state
+from .assist import apply_feedback_preferences, draft_from_state
 from .executor import execute_steps
 from .learning import record_run_learning
 from .macros import match_macro, record_macro, render_macro_steps, touch_macro
@@ -84,7 +84,11 @@ def run_command(text: str, event_cb=lambda e: None, choices: dict | None = None,
         'draft_state': None,
         'approval_state': {'required': plan.get('assist', {}).get('target_behavior') == 'paste_back', 'status': 'not_requested'},
         'pasteback_state': {'status': 'not_started'},
-        'assist': {},
+        'assist': {
+            'intent': plan.get('assist', {}),
+            'generation': {},
+            'learning_signals': {},
+        },
     })
 
     result = execute_steps(run_id, steps, event_cb)
@@ -110,12 +114,7 @@ def run_command(text: str, event_cb=lambda e: None, choices: dict | None = None,
         return {'ok': False, 'run_id': run_id, 'status': 'awaiting_approval', 'resume_token': run_id, 'steps': result, 'plan': ctx.get('plan'), 'run_state': get_run_context(run_id)}
 
     if status != 'done':
-        remember_execution(
-            plan['signature'],
-            'failure',
-            _memory_detail('terminal_failure', {'run_id': run_id, 'failure_class': ctx.get('last_failure_class'), 'terminal_outcome': terminal_outcome}),
-            tags=['workflow'],
-        )
+        remember_execution(plan['signature'], 'failure', _memory_detail('terminal_failure', {'run_id': run_id, 'failure_class': ctx.get('last_failure_class'), 'terminal_outcome': terminal_outcome}), tags=['workflow'])
     return {'ok': status == 'done', 'run_id': run_id, 'steps': result, 'plan': ctx.get('plan'), 'run_state': get_run_context(run_id)}
 
 
@@ -151,14 +150,19 @@ def approve_assist_run(run_id: str, approved_text: str | None = None, event_cb=l
     if not ctx:
         return {'ok': False, 'error': 'run_not_found', 'run_id': run_id}
     approval = {**(ctx.get('approval_state') or {})}
-    final_text = approved_text or approval.get('draft_text') or ''
-    approval.update({
-        'status': 'approved',
-        'edited_text': approved_text or approval.get('edited_text', ''),
-        'final_text': final_text,
-        'approved_by_user': True,
-        'decided_at': time.time(),
-    })
+    generated_text = approval.get('draft_text') or ''
+    final_text = approved_text or generated_text
+    task_kind = (ctx.get('plan') or {}).get('assist', {}).get('task_kind')
+    if final_text != generated_text:
+        approval['edited_text'] = approved_text or ''
+        if len(final_text) > len(generated_text) * 1.3:
+            apply_feedback_preferences('more detail', task_kind)
+        elif generated_text and len(final_text) < len(generated_text) * 0.8:
+            apply_feedback_preferences('more concise', task_kind)
+    if (ctx.get('research_context') or {}).get('search_used'):
+        set_pref(f'assist.{task_kind}.research', 'prefer')
+        write_memory(f'assist.{task_kind}.research', 'prefer', tags=['preference', 'assist', 'research'], importance=4)
+    approval.update({'status': 'approved', 'final_text': final_text, 'approved_by_user': True, 'decided_at': time.time()})
     update_run_context(run_id, {'approval_state': approval, 'status': 'approved_pending_paste', 'paused': False, 'user_intervention_required': False})
     event_cb({'type': 'approval_received', 'run_id': run_id, 'status': 'approved', 'message': 'Draft approved for paste-back.'})
     return resume_run(run_id, event_cb)
@@ -168,18 +172,17 @@ def retry_assist_run(run_id: str, feedback: str | None = None, event_cb=lambda e
     ctx = get_run_context(run_id)
     if not ctx:
         return {'ok': False, 'error': 'run_not_found', 'run_id': run_id}
-    draft = draft_from_state(ctx, feedback=feedback)
+    task_kind = (ctx.get('plan') or {}).get('assist', {}).get('task_kind')
+    learned = apply_feedback_preferences(feedback, task_kind)
+    try:
+        draft = draft_from_state(ctx, feedback=feedback)
+    except RuntimeError as exc:
+        update_run_context(run_id, {'status': 'needs_user', 'last_failure_class': 'assist_model_unavailable', 'assist': {**(ctx.get('assist') or {}), 'learning_signals': {'feedback_preferences': learned}}})
+        event_cb({'type': 'needs_user', 'run_id': run_id, 'status': 'needs_user', 'message': str(exc)})
+        return {'ok': False, 'run_id': run_id, 'status': 'needs_user', 'run_state': get_run_context(run_id)}
     approval = {**(ctx.get('approval_state') or {})}
-    approval.update({
-        'status': 'pending',
-        'draft_text': draft['draft_text'],
-        'edited_text': '',
-        'final_text': '',
-        'feedback': feedback or '',
-        'approved_by_user': False,
-        'requested_at': time.time(),
-    })
-    update_run_context(run_id, {'draft_state': draft, 'approval_state': approval, 'status': 'awaiting_approval', 'paused': True})
+    approval.update({'status': 'pending', 'draft_text': draft['draft_text'], 'edited_text': '', 'final_text': '', 'feedback': feedback or '', 'approved_by_user': False, 'requested_at': time.time()})
+    update_run_context(run_id, {'draft_state': draft, 'approval_state': approval, 'status': 'awaiting_approval', 'paused': True, 'assist': {**(ctx.get('assist') or {}), 'learning_signals': {'feedback_preferences': learned}}})
     event_cb({'type': 'draft_regenerated', 'run_id': run_id, 'status': 'awaiting_approval', 'message': 'Draft regenerated for review.'})
     learning = record_run_learning(run_id, get_run_context(run_id) or {})
     update_run_context(run_id, {'learning': learning})
@@ -190,9 +193,14 @@ def reject_assist_run(run_id: str, reason: str | None = None, event_cb=lambda e:
     ctx = get_run_context(run_id)
     if not ctx:
         return {'ok': False, 'error': 'run_not_found', 'run_id': run_id}
+    task_kind = (ctx.get('plan') or {}).get('assist', {}).get('task_kind')
+    learned = apply_feedback_preferences(reason, task_kind)
+    if (ctx.get('research_context') or {}).get('search_used') and reason and 'not needed' in reason.lower():
+        set_pref(f'assist.{task_kind}.research', 'avoid')
+        write_memory(f'assist.{task_kind}.research', 'avoid', tags=['preference', 'assist', 'research'], importance=4)
     approval = {**(ctx.get('approval_state') or {})}
     approval.update({'status': 'rejected', 'decision_reason': reason or '', 'decided_at': time.time(), 'approved_by_user': False})
-    update_run_context(run_id, {'approval_state': approval, 'status': 'rejected', 'terminal_outcome': 'rejected', 'paused': False, 'pasteback_state': {'status': 'skipped'}})
+    update_run_context(run_id, {'approval_state': approval, 'status': 'rejected', 'terminal_outcome': 'rejected', 'paused': False, 'pasteback_state': {'status': 'skipped'}, 'assist': {**(ctx.get('assist') or {}), 'learning_signals': {'feedback_preferences': learned}}})
     event_cb({'type': 'draft_rejected', 'run_id': run_id, 'status': 'rejected', 'message': 'Draft rejected; paste-back skipped.'})
     learning = record_run_learning(run_id, get_run_context(run_id) or {})
     update_run_context(run_id, {'learning': learning})

@@ -112,6 +112,7 @@ export default function App() {
   const approvalState = runState?.approval_state || {};
   const capturedContext = runState?.captured_context || previewContext;
   const pendingApproval = approvalState.status === 'pending' || runStatus === 'awaiting_approval';
+  const generation = runState?.assist?.generation || {};
 
   return <div style={{ fontFamily: 'Inter, sans-serif', maxWidth: 980, margin: '0 auto', padding: 16 }}>
     <h1>AURA Overlay</h1>
@@ -160,6 +161,8 @@ export default function App() {
       <section style={{ border: '1px solid #ddd', borderRadius: 8, padding: 12 }}>
         <h3>Draft Review</h3>
         <div><strong>Approval:</strong> {approvalState.status || 'not requested'}</div>
+        <div><strong>Generation:</strong> {generation.provider ? `${generation.provider}${generation.model ? ` / ${generation.model}` : ''}` : '-'}</div>
+        <div><strong>Confidence:</strong> {generation.confidence ?? '-'}</div>
         <textarea aria-label='draft editor' value={draftText} onChange={e => setDraftText(e.target.value)} rows={10} style={{ width: '100%' }} placeholder='Generated draft will appear here.' />
         <input aria-label='retry feedback' value={feedback} onChange={e => setFeedback(e.target.value)} placeholder='Optional retry feedback (e.g. make it more direct)' style={{ width: '100%', marginTop: 8 }} />
         <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
