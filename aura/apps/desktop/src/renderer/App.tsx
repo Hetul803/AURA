@@ -113,6 +113,8 @@ export default function App() {
   const capturedContext = runState?.captured_context || previewContext;
   const pendingApproval = approvalState.status === 'pending' || runStatus === 'awaiting_approval';
   const generation = runState?.assist?.generation || {};
+  const captureMethod = capturedContext?.capture_method || {};
+  const pasteState = runState?.pasteback_state || {};
 
   return <div style={{ fontFamily: 'Inter, sans-serif', maxWidth: 980, margin: '0 auto', padding: 16 }}>
     <h1>AURA Overlay</h1>
@@ -153,7 +155,9 @@ export default function App() {
         <h3>Captured Context</h3>
         <div><strong>App:</strong> {capturedContext?.active_app || '-'}</div>
         <div><strong>Window:</strong> {capturedContext?.window_title || '-'}</div>
-        <div><strong>Source:</strong> {capturedContext?.input_source || '-'}</div>
+        <div><strong>Capture Path:</strong> {capturedContext?.capture_path_used || capturedContext?.input_source || '-'}</div>
+        <div><strong>Clipboard preserved:</strong> {captureMethod.clipboard_preserved === undefined ? '-' : String(captureMethod.clipboard_preserved)}</div>
+        <div><strong>Clipboard restored:</strong> {captureMethod.clipboard_restored_after_capture === undefined ? '-' : String(captureMethod.clipboard_restored_after_capture)}</div>
         <div><strong>Browser URL:</strong> {capturedContext?.browser_url || '-'}</div>
         <pre style={{ whiteSpace: 'pre-wrap' }}>{capturedContext?.input_text || 'Select or copy text in another app, then run an assist command.'}</pre>
       </section>
@@ -163,6 +167,8 @@ export default function App() {
         <div><strong>Approval:</strong> {approvalState.status || 'not requested'}</div>
         <div><strong>Generation:</strong> {generation.provider ? `${generation.provider}${generation.model ? ` / ${generation.model}` : ''}` : '-'}</div>
         <div><strong>Confidence:</strong> {generation.confidence ?? '-'}</div>
+        <div><strong>Revalidation:</strong> {pasteState.target_validation_result || pasteState.target_validation || '-'}</div>
+        <div><strong>Paste issue:</strong> {pasteState.paste_blocked_reason || pasteState.context_drift_reason || pasteState.clipboard_restore_error_after_paste || '-'}</div>
         <textarea aria-label='draft editor' value={draftText} onChange={e => setDraftText(e.target.value)} rows={10} style={{ width: '100%' }} placeholder='Generated draft will appear here.' />
         <input aria-label='retry feedback' value={feedback} onChange={e => setFeedback(e.target.value)} placeholder='Optional retry feedback (e.g. make it more direct)' style={{ width: '100%', marginTop: 8 }} />
         <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>

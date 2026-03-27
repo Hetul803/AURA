@@ -95,12 +95,18 @@ def learning_signals_for(task_kind: str) -> dict:
     prefs = relevant.get('preferences', [])
     workflow = relevant.get('workflow', [])
     safety = relevant.get('safety', [])
+    drift_signals = [item for item in workflow if 'paste_target_changed' in str(item.get('pattern_key') or '') or 'target_drift' in str(item.get('pattern_key') or '')]
+    exact_match_successes = [item for item in workflow if item.get('pattern_key') == 'paste_validation:exact_match' and item.get('success_count', 0) >= max(1, item.get('failure_count', 0))]
+    clipboard_fallback_usage = [item for item in workflow if item.get('pattern_key') == 'capture_path:clipboard_fallback']
     signals = {
         'preferred_length': get_pref_value(f'assist.{task_kind}.length') or get_pref_value('writing.length') or _memory_value(prefs, 'writing.length') or 'concise',
         'preferred_tone': get_pref_value(f'assist.{task_kind}.tone') or get_pref_value('writing.tone') or _memory_value(prefs, 'writing.tone') or 'polished',
         'research_preference': get_pref_value(f'assist.{task_kind}.research') or get_pref_value('assist.research') or _memory_value(prefs, 'assist.research') or 'auto',
         'approval_required': True,
         'strict_paste_validation': any(item.get('policy') == 'revalidate_target' for item in safety),
+        'cautious_paste_mode': any(item.get('policy') in {'require_confirmation', 'revalidate_target'} for item in safety) or len(drift_signals) >= 2,
+        'preferred_capture_mode': 'clipboard_fallback' if clipboard_fallback_usage else 'selected_text',
+        'paste_confidence': 'high' if exact_match_successes else 'normal',
         'recent_workflow_patterns': [item.get('pattern_key') for item in workflow[:3]],
     }
     return signals
@@ -282,8 +288,10 @@ def paste_back_step(run_context: dict | None = None) -> dict:
     target = ((ctx.get('captured_context') or {}).get('paste_target')) or {}
     if not final_text:
         return failure('ASSIST_PASTE_BACK', error='missing_approved_text', observation={'failure_class': 'missing_approved_text'})
-    strict = bool(((ctx.get('draft_state') or {}).get('learning_signals_applied') or {}).get('strict_paste_validation'))
-    result = restore_target_and_paste(final_text, target, strict=strict)
+    learned = ((ctx.get('draft_state') or {}).get('learning_signals_applied') or {})
+    strict = bool(learned.get('strict_paste_validation'))
+    cautious = bool(learned.get('cautious_paste_mode'))
+    result = restore_target_and_paste(final_text, target, strict=strict, cautious=cautious)
     result['action'] = 'ASSIST_PASTE_BACK'
     return result
 

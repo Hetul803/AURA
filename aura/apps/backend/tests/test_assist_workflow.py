@@ -10,6 +10,7 @@ from aura.prefs import get_pref_value, reset_all
 from aura.state import db_conn
 from storage.db import init_db
 from tools.os_automation import capture_context as os_capture_context
+from tools.os_automation import copy_selected_text, restore_target_and_paste
 from tools.tool_result import failure, success
 
 
@@ -63,8 +64,10 @@ def _patch_assist(monkeypatch, *, task_kind='summarize', input_text='Original so
         'clipboard_text': '',
         'input_text': input_text,
         'input_source': 'selected_text',
-        'capture_method': {'selected_text_attempted': True, 'selected_text_succeeded': True, 'clipboard_fallback_used': False},
-        'paste_target': {'app_name': 'Notes', 'window_title': 'Draft Window', 'target_url': 'https://example.com/page', 'target_domain': 'example.com', 'browser_title': 'Example Page', 'captured_at': '2026-03-18T00:00:00Z'},
+        'capture_path_used': 'selected_text',
+        'capture_method': {'selection_copy_attempted': True, 'selection_copy_succeeded': True, 'clipboard_fallback_used': False, 'clipboard_preserved': True, 'clipboard_restored_after_capture': True, 'capture_failure_reason': None},
+        'target_fingerprint': {'app_name': 'Notes', 'window_title': 'Draft Window', 'browser_url': 'https://example.com/page', 'browser_domain': 'example.com', 'browser_title': 'Example Page', 'captured_at': '2026-03-18T00:00:00Z', 'capture_path_used': 'selected_text', 'normalized': {'app_name': 'notes', 'window_title': 'draft window', 'browser_url': 'https://example.com/page', 'browser_domain': 'example.com', 'browser_title': 'example page'}},
+        'paste_target': {'app_name': 'Notes', 'window_title': 'Draft Window', 'browser_url': 'https://example.com/page', 'browser_domain': 'example.com', 'browser_title': 'Example Page', 'captured_at': '2026-03-18T00:00:00Z', 'capture_path_used': 'selected_text', 'normalized': {'app_name': 'notes', 'window_title': 'draft window', 'browser_url': 'https://example.com/page', 'browser_domain': 'example.com', 'browser_title': 'example page'}},
         'warnings': [],
     })
 
@@ -103,9 +106,9 @@ def _patch_assist(monkeypatch, *, task_kind='summarize', input_text='Original so
     monkeypatch.setattr(assist, 'generate_assist_draft', fake_generate)
     calls = {'pastes': [], 'generate_calls': generate_calls, 'search_calls': search_calls}
 
-    def fake_restore(text: str, target: dict, strict: bool = False):
-        calls['pastes'].append((text, target, strict))
-        return paste_result or success('OS_PASTE', result={'pasted': len(text)}, observation={'target_validation': 'target_valid', 'strict_validation': strict})
+    def fake_restore(text: str, target: dict, strict: bool = False, cautious: bool = False):
+        calls['pastes'].append((text, target, strict, cautious))
+        return paste_result or success('OS_PASTE', result={'pasted': len(text)}, observation={'target_validation': 'exact_match', 'target_validation_result': 'exact_match', 'strict_validation': strict, 'cautious_validation': cautious, 'paste_attempted': True, 'clipboard_preserved': True, 'clipboard_restored_after_paste': True, 'paste_blocked_reason': None, 'context_drift_reason': None, 'target_fingerprint': target})
 
     monkeypatch.setattr(assist, 'restore_target_and_paste', fake_restore)
     return calls
@@ -126,14 +129,67 @@ def test_context_capture_falls_back_to_clipboard(monkeypatch):
     monkeypatch.setattr(os_automation, 'get_active_app', lambda: success('OS_GET_ACTIVE_CONTEXT', result={'active_app': 'Notes'}, observation={'active_app': 'Notes'}))
     monkeypatch.setattr(os_automation, 'get_active_window_title', lambda: success('OS_GET_ACTIVE_CONTEXT', result={'window_title': 'Draft'}, observation={'window_title': 'Draft'}))
     monkeypatch.setattr(os_automation, 'get_browser_context', lambda _app=None: {})
-    monkeypatch.setattr(os_automation, 'copy_selected_text', lambda: failure('OS_COPY_SELECTION', error='selection_unavailable', observation={}))
-    monkeypatch.setattr(os_automation, '_clipboard_text', lambda: 'Clipboard fallback text')
+    monkeypatch.setattr(os_automation, 'copy_selected_text', lambda: failure('OS_COPY_SELECTION', error='selection_unavailable', observation={'selection_copy_attempted': True, 'selection_copy_succeeded': False, 'clipboard_preserved': True, 'clipboard_restored_after_capture': True, 'capture_failure_reason': 'selection_copy_no_change'}, result={'original_clipboard_text': 'Clipboard fallback text', 'clipboard_preserved': True, 'clipboard_restored_after_capture': True}))
 
     captured = os_capture_context()
 
-    assert captured['input_source'] == 'clipboard'
+    assert captured['input_source'] == 'clipboard_fallback'
     assert captured['input_text'] == 'Clipboard fallback text'
+    assert captured['capture_path_used'] == 'clipboard_fallback'
     assert captured['capture_method']['clipboard_fallback_used'] is True
+    assert captured['capture_method']['clipboard_restored_after_capture'] is True
+
+
+def test_context_capture_reports_none_when_no_usable_source(monkeypatch):
+    from tools import os_automation
+
+    monkeypatch.setattr(os_automation, 'get_active_app', lambda: success('OS_GET_ACTIVE_CONTEXT', result={'active_app': 'Notes'}, observation={'active_app': 'Notes'}))
+    monkeypatch.setattr(os_automation, 'get_active_window_title', lambda: success('OS_GET_ACTIVE_CONTEXT', result={'window_title': 'Draft'}, observation={'window_title': 'Draft'}))
+    monkeypatch.setattr(os_automation, 'get_browser_context', lambda _app=None: {})
+    monkeypatch.setattr(os_automation, 'copy_selected_text', lambda: failure('OS_COPY_SELECTION', error='selection_unavailable', observation={'selection_copy_attempted': True, 'selection_copy_succeeded': False, 'clipboard_preserved': True, 'clipboard_restored_after_capture': True, 'capture_failure_reason': 'selection_copy_no_change'}, result={'original_clipboard_text': '', 'clipboard_preserved': True, 'clipboard_restored_after_capture': True}))
+
+    captured = os_capture_context()
+
+    assert captured['capture_path_used'] == 'none'
+    assert captured['input_text'] == ''
+    assert 'copy_or_select_text_first' in captured['warnings']
+
+
+def test_context_capture_records_selection_clipboard_safety(monkeypatch):
+    from tools import os_automation
+
+    monkeypatch.setattr(os_automation, 'get_active_app', lambda: success('OS_GET_ACTIVE_CONTEXT', result={'active_app': 'Mail'}, observation={'active_app': 'Mail'}))
+    monkeypatch.setattr(os_automation, 'get_active_window_title', lambda: success('OS_GET_ACTIVE_CONTEXT', result={'window_title': 'Composer'}, observation={'window_title': 'Composer'}))
+    monkeypatch.setattr(os_automation, 'get_browser_context', lambda _app=None: {'browser_url': 'https://mail.example.com/thread', 'browser_title': 'Mail Thread'})
+    monkeypatch.setattr(os_automation, 'copy_selected_text', lambda: success('OS_COPY_SELECTION', result={'text': 'Selected text', 'original_clipboard_text': 'Original clipboard', 'clipboard_preserved': True, 'clipboard_restored_after_capture': True, 'clipboard_restore_error_after_capture': None}, observation={'selection_copy_attempted': True, 'selection_copy_succeeded': True, 'clipboard_preserved': True, 'clipboard_restored_after_capture': True}))
+
+    captured = os_capture_context()
+
+    assert captured['capture_path_used'] == 'selected_text'
+    assert captured['capture_method']['clipboard_preserved'] is True
+    assert captured['capture_method']['clipboard_restored_after_capture'] is True
+    assert captured['target_fingerprint']['browser_domain'] == 'mail.example.com'
+
+
+def test_selection_copy_preserves_and_restores_clipboard(monkeypatch):
+    from tools import os_automation
+
+    clipboard_reads = iter(['Original clipboard', 'Selected text'])
+    restore_calls = []
+
+    monkeypatch.setattr(os_automation, 'SYSTEM', 'darwin')
+    monkeypatch.setattr(os_automation, '_preserve_clipboard', lambda: {'ok': True, 'preserved': True, 'text': 'Original clipboard', 'length': 18, 'error': None})
+    monkeypatch.setattr(os_automation, 'press_keys', lambda keys: success('OS_PRESS_KEYS', result={'keys': keys}, observation={}))
+    monkeypatch.setattr(os_automation, '_clipboard_text', lambda: next(clipboard_reads))
+    monkeypatch.setattr(os_automation, '_restore_clipboard_text', lambda text, reason: restore_calls.append((text, reason)) or {'ok': True, 'restored': True, 'error': None, 'reason': reason})
+
+    copied = copy_selected_text()
+
+    assert copied['ok'] is True
+    assert copied['result']['text'] == 'Selected text'
+    assert copied['result']['clipboard_preserved'] is True
+    assert copied['result']['clipboard_restored_after_capture'] is True
+    assert restore_calls == [('Original clipboard', 'after_capture')]
 
 
 def test_planner_produces_richer_assisted_writing_plan(monkeypatch):
@@ -175,8 +231,10 @@ def test_explicit_failure_if_no_real_model_is_available(monkeypatch):
         'clipboard_text': '',
         'input_text': 'Source',
         'input_source': 'selected_text',
-        'capture_method': {'selected_text_attempted': True, 'selected_text_succeeded': True, 'clipboard_fallback_used': False},
-        'paste_target': {'app_name': 'Notes', 'window_title': 'Draft Window', 'captured_at': '2026-03-18T00:00:00Z'},
+        'capture_path_used': 'selected_text',
+        'capture_method': {'selection_copy_attempted': True, 'selection_copy_succeeded': True, 'clipboard_fallback_used': False, 'clipboard_preserved': True, 'clipboard_restored_after_capture': True, 'capture_failure_reason': None},
+        'target_fingerprint': {'app_name': 'Notes', 'window_title': 'Draft Window', 'captured_at': '2026-03-18T00:00:00Z', 'capture_path_used': 'selected_text', 'normalized': {'app_name': 'notes', 'window_title': 'draft window'}},
+        'paste_target': {'app_name': 'Notes', 'window_title': 'Draft Window', 'captured_at': '2026-03-18T00:00:00Z', 'capture_path_used': 'selected_text', 'normalized': {'app_name': 'notes', 'window_title': 'draft window'}},
         'warnings': [],
     })
     monkeypatch.setattr(assist, 'generate_assist_draft', lambda **kwargs: (_ for _ in ()).throw(RuntimeError('assist_model_unavailable')))
@@ -246,13 +304,14 @@ def test_successful_paste_back_path_records_provider_and_validation(monkeypatch)
     assert approved['ok']
     assert calls['pastes']
     assert approved['run_state']['pasteback_state']['status'] == 'pasted'
-    assert approved['run_state']['assist']['paste_validation']['target_validation'] == 'target_valid'
+    assert approved['run_state']['assist']['paste_validation']['target_validation_result'] == 'exact_match'
+    assert approved['run_state']['pasteback_state']['clipboard_restored_after_paste'] is True
     assert approved['run_state']['assist']['generation']['provider'] == 'ollama'
 
 
 def test_safe_stop_when_context_is_lost(monkeypatch):
     _clear_learning_tables()
-    paste_failure = failure('OS_PASTE', error='paste_target_changed', observation={'failure_class': 'paste_target_changed', 'failure_detail': 'window_title_changed', 'strict_validation': True}, requires_user=True, retryable=True, result={'pasted': 0})
+    paste_failure = failure('OS_PASTE', error='paste_target_changed', observation={'failure_class': 'paste_target_changed', 'failure_detail': 'window_title_changed', 'strict_validation': True, 'target_validation_result': 'drifted', 'target_validation': 'active_app_changed', 'paste_attempted': False, 'paste_blocked_reason': 'target_drift_detected', 'context_drift_reason': 'window_title_changed', 'clipboard_restored_after_paste': True}, requires_user=True, retryable=True, result={'pasted': 0})
     _patch_assist(monkeypatch, paste_result=paste_failure)
 
     run = run_command('Summarize this')
@@ -261,6 +320,107 @@ def test_safe_stop_when_context_is_lost(monkeypatch):
     assert not resumed['ok']
     assert resumed['status'] == 'needs_user'
     assert resumed['run_state']['last_failure_class'] == 'paste_target_changed'
+    assert resumed['run_state']['pasteback_state']['target_validation_result'] == 'drifted'
+    assert resumed['run_state']['pasteback_state']['paste_blocked_reason'] == 'target_drift_detected'
+
+
+def test_target_fingerprint_is_stored_in_run_state(monkeypatch):
+    _clear_learning_tables()
+    calls = _patch_assist(monkeypatch)
+    run = run_command('Summarize this')
+
+    assert calls['generate_calls']
+    assert run['run_state']['captured_context']['target_fingerprint']['app_name'] == 'Notes'
+    assert run['run_state']['assist']['target_fingerprint']['browser_domain'] == 'example.com'
+
+
+def test_restore_target_and_paste_allows_exact_and_acceptable_matches(monkeypatch):
+    from tools import os_automation
+
+    target = {
+        'app_name': 'Notes',
+        'window_title': 'Draft Window',
+        'browser_url': 'https://example.com/page',
+        'browser_domain': 'example.com',
+        'browser_title': 'Example Page',
+        'normalized': {
+            'app_name': 'notes',
+            'window_title': 'draft window',
+            'browser_url': 'https://example.com/page',
+            'browser_domain': 'example.com',
+            'browser_title': 'example page',
+        },
+    }
+    monkeypatch.setattr(os_automation, 'activate_app', lambda app_name: success('OS_ACTIVATE_APP', result={'app': app_name}, observation={}))
+    monkeypatch.setattr(os_automation, 'active_context', lambda: {'active_app': 'Notes', 'window_title': 'Draft Window – follow-up', 'browser_url': 'https://example.com/other', 'browser_title': 'Example Page – follow-up', 'normalized': {'active_app': 'notes', 'window_title': 'draft window – follow-up', 'browser_url': 'https://example.com/other', 'browser_domain': 'example.com', 'browser_title': 'example page – follow-up'}})
+    monkeypatch.setattr(os_automation, 'paste_to_active_app', lambda text, preserve_clipboard=True: success('OS_PASTE', result={'pasted': len(text)}, observation={'clipboard_preserved': True, 'clipboard_restored_after_paste': True}))
+
+    pasted = restore_target_and_paste('Approved draft', target, strict=False, cautious=False)
+
+    assert pasted['ok'] is True
+    assert pasted['observation']['target_validation_result'] == 'acceptable_match'
+    assert pasted['observation']['paste_attempted'] is True
+
+
+def test_restore_target_and_paste_blocks_drifted_or_cautious_targets(monkeypatch):
+    from tools import os_automation
+
+    target = {
+        'app_name': 'Notes',
+        'window_title': 'Draft Window',
+        'browser_url': 'https://example.com/page',
+        'browser_domain': 'example.com',
+        'browser_title': 'Example Page',
+        'normalized': {
+            'app_name': 'notes',
+            'window_title': 'draft window',
+            'browser_url': 'https://example.com/page',
+            'browser_domain': 'example.com',
+            'browser_title': 'example page',
+        },
+    }
+    monkeypatch.setattr(os_automation, 'activate_app', lambda app_name: success('OS_ACTIVATE_APP', result={'app': app_name}, observation={}))
+    monkeypatch.setattr(os_automation, 'paste_to_active_app', lambda text, preserve_clipboard=True: success('OS_PASTE', result={'pasted': len(text)}, observation={}))
+
+    monkeypatch.setattr(os_automation, 'active_context', lambda: {'active_app': 'Mail', 'window_title': 'Inbox', 'browser_url': 'https://mail.example.com', 'browser_title': 'Inbox', 'normalized': {'active_app': 'mail', 'window_title': 'inbox', 'browser_url': 'https://mail.example.com', 'browser_domain': 'mail.example.com', 'browser_title': 'inbox'}})
+    drifted = restore_target_and_paste('Approved draft', target, strict=False, cautious=False)
+    assert drifted['ok'] is False
+    assert drifted['observation']['target_validation_result'] == 'drifted'
+    assert drifted['observation']['paste_blocked_reason'] == 'target_drift_detected'
+
+    monkeypatch.setattr(os_automation, 'active_context', lambda: {'active_app': 'Notes', 'window_title': 'Draft Window – follow-up', 'browser_url': 'https://example.com/other', 'browser_title': 'Example Page – follow-up', 'normalized': {'active_app': 'notes', 'window_title': 'draft window – follow-up', 'browser_url': 'https://example.com/other', 'browser_domain': 'example.com', 'browser_title': 'example page – follow-up'}})
+    cautious = restore_target_and_paste('Approved draft', target, strict=False, cautious=True)
+    assert cautious['ok'] is False
+    assert cautious['observation']['target_validation_result'] == 'acceptable_match'
+    assert cautious['observation']['paste_blocked_reason'] == 'acceptable_match_requires_caution'
+
+
+def test_acceptable_match_paste_back_is_allowed_without_caution(monkeypatch):
+    _clear_learning_tables()
+    paste_result = success('OS_PASTE', result={'pasted': 19}, observation={'target_validation': 'acceptable_match', 'target_validation_result': 'acceptable_match', 'strict_validation': False, 'cautious_validation': False, 'paste_attempted': True, 'clipboard_preserved': True, 'clipboard_restored_after_paste': True, 'paste_blocked_reason': None, 'context_drift_reason': None})
+    calls = _patch_assist(monkeypatch, paste_result=paste_result)
+
+    run = run_command('Summarize this')
+    approved = approve_assist_run(run['run_id'], 'Approved draft text')
+
+    assert approved['ok']
+    assert calls['pastes']
+    assert approved['run_state']['pasteback_state']['target_validation_result'] == 'acceptable_match'
+
+
+def test_repeated_drift_influences_future_caution(monkeypatch):
+    _clear_learning_tables()
+    drift_failure = failure('OS_PASTE', error='paste_target_changed', observation={'failure_class': 'paste_target_changed', 'failure_detail': 'browser_domain_changed', 'strict_validation': True, 'target_validation_result': 'drifted', 'target_validation': 'active_app_changed', 'paste_attempted': False, 'paste_blocked_reason': 'target_drift_detected', 'context_drift_reason': 'browser_domain_changed', 'clipboard_restored_after_paste': True}, requires_user=True, retryable=True, result={'pasted': 0})
+    _patch_assist(monkeypatch, paste_result=drift_failure)
+
+    first = run_command('Summarize this')
+    approve_assist_run(first['run_id'], 'Approved draft')
+
+    _patch_assist(monkeypatch)
+    second = run_command('Summarize this')
+
+    assert second['run_state']['draft_state']['learning_signals_applied']['strict_paste_validation'] is True
+    assert second['run_state']['draft_state']['learning_signals_applied']['cautious_paste_mode'] is True
 
 
 def test_learning_influences_later_runs(monkeypatch):

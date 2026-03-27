@@ -3,7 +3,7 @@ from __future__ import annotations
 import platform
 import subprocess
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -37,9 +37,29 @@ def _safe_osascript_list(script: str) -> tuple[bool, list[str]]:
     return True, [line.strip() for line in out.splitlines() if line.strip()]
 
 
-def _clipboard_text() -> str:
-    clip = read_clipboard()
-    return (clip.get('result') or {}).get('text', '') if clip.get('ok') else ''
+def _normalize_text(value: str | None) -> str:
+    return ' '.join((value or '').strip().lower().split())
+
+
+def _normalize_url(value: str | None) -> str:
+    return (value or '').strip().lower()
+
+
+def _normalized_domain(value: str | None) -> str:
+    return urlparse(value or '').netloc.lower()
+
+
+def _common_prefix(a: str, b: str) -> int:
+    count = 0
+    for left, right in zip(a, b):
+        if left != right:
+            break
+        count += 1
+    return count
+
+
+def _now_iso() -> str:
+    return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace('+00:00', 'Z')
 
 
 def get_browser_context(active_app: str | None = None) -> dict:
@@ -148,6 +168,41 @@ def write_clipboard(text: str) -> dict:
     return failure('OS_WRITE_CLIPBOARD', error=detail or 'clipboard_write_failed', observation=observation)
 
 
+def _clipboard_text() -> str:
+    clip = read_clipboard()
+    return (clip.get('result') or {}).get('text', '') if clip.get('ok') else ''
+
+
+def _preserve_clipboard() -> dict:
+    clip = read_clipboard()
+    if not clip.get('ok'):
+        return {
+            'ok': False,
+            'preserved': False,
+            'text': '',
+            'length': 0,
+            'error': clip.get('error') or 'clipboard_read_failed',
+        }
+    text = (clip.get('result') or {}).get('text', '')
+    return {
+        'ok': True,
+        'preserved': True,
+        'text': text,
+        'length': len(text),
+        'error': None,
+    }
+
+
+def _restore_clipboard_text(text: str, *, reason: str) -> dict:
+    restored = write_clipboard(text)
+    return {
+        'ok': restored.get('ok', False),
+        'restored': restored.get('ok', False),
+        'error': None if restored.get('ok') else restored.get('error') or f'clipboard_restore_failed:{reason}',
+        'reason': reason,
+    }
+
+
 def press_keys(keys: str) -> dict:
     if SYSTEM == 'darwin':
         mapping = {'cmd+c': 'keystroke "c" using command down', 'cmd+v': 'keystroke "v" using command down'}
@@ -162,30 +217,98 @@ def press_keys(keys: str) -> dict:
 def copy_selected_text() -> dict:
     if SYSTEM != 'darwin':
         return _not_supported('OS_COPY_SELECTION')
-    original_clipboard = _clipboard_text()
+
+    preserved = _preserve_clipboard()
+    original_clipboard = preserved['text'] if preserved['preserved'] else ''
     key_result = press_keys('cmd+c')
     if not key_result.get('ok'):
-        return key_result
-    selected_text = original_clipboard
+        return failure(
+            'OS_COPY_SELECTION',
+            error=key_result.get('error') or 'selection_copy_failed',
+            observation={
+                'selection_copy_attempted': True,
+                'selection_copy_succeeded': False,
+                'capture_path_used': 'none',
+                'clipboard_preserved': preserved['preserved'],
+                'clipboard_restored_after_capture': preserved['preserved'],
+                'capture_failure_reason': key_result.get('error') or 'selection_copy_failed',
+            },
+            result={
+                'text': '',
+                'length': 0,
+                'capture_path_used': 'none',
+                'clipboard_preserved': preserved['preserved'],
+                'clipboard_restored_after_capture': preserved['preserved'],
+                'original_clipboard_text': original_clipboard,
+            },
+        )
+
+    selected_text = ''
     changed = False
-    for _ in range(6):
+    for _ in range(8):
         time.sleep(0.08)
         current = _clipboard_text()
         if current != original_clipboard:
             selected_text = current
             changed = True
             break
-    if not changed:
-        selected_text = _clipboard_text()
-    clip = success(
+
+    capture_succeeded = bool(changed and selected_text.strip())
+    restore = {'restored': preserved['preserved'], 'ok': preserved['preserved'], 'error': None}
+    if preserved['preserved'] and changed:
+        restore = _restore_clipboard_text(original_clipboard, reason='after_capture')
+
+    if capture_succeeded:
+        observation = {
+            'selection_copy_attempted': True,
+            'selection_copy_succeeded': True,
+            'clipboard_changed_during_capture': changed,
+            'capture_path_used': 'selected_text',
+            'clipboard_preserved': preserved['preserved'],
+            'clipboard_restored_after_capture': restore['restored'],
+            'clipboard_restore_error_after_capture': restore['error'],
+            'capture_failure_reason': None,
+            'clipboard_length': len(selected_text),
+            'clipboard_preview': selected_text[:120],
+        }
+        result = {
+            'text': selected_text,
+            'length': len(selected_text),
+            'capture_path_used': 'selected_text',
+            'clipboard_preserved': preserved['preserved'],
+            'clipboard_restored_after_capture': restore['restored'],
+            'clipboard_restore_error_after_capture': restore['error'],
+            'original_clipboard_text': original_clipboard,
+        }
+        return success('OS_COPY_SELECTION', result=result, observation=observation, safety_flags=['clipboard_read'])
+
+    failure_reason = 'selection_copy_no_change' if preserved['preserved'] else 'clipboard_preserve_failed'
+    return failure(
         'OS_COPY_SELECTION',
-        result={'text': selected_text, 'length': len(selected_text), 'clipboard_preserved': original_clipboard},
-        observation={'clipboard_length': len(selected_text), 'clipboard_preview': selected_text[:120], 'selection_changed_clipboard': changed},
+        error='selection_unavailable',
+        observation={
+            'selection_copy_attempted': True,
+            'selection_copy_succeeded': False,
+            'clipboard_changed_during_capture': changed,
+            'capture_path_used': 'none',
+            'clipboard_preserved': preserved['preserved'],
+            'clipboard_restored_after_capture': restore['restored'],
+            'clipboard_restore_error_after_capture': restore['error'],
+            'capture_failure_reason': failure_reason,
+        },
+        result={
+            'text': '',
+            'length': 0,
+            'capture_path_used': 'none',
+            'clipboard_preserved': preserved['preserved'],
+            'clipboard_restored_after_capture': restore['restored'],
+            'clipboard_restore_error_after_capture': restore['error'],
+            'original_clipboard_text': original_clipboard,
+            'selection_copy_attempted': True,
+            'selection_copy_succeeded': False,
+        },
         safety_flags=['clipboard_read'],
     )
-    if original_clipboard != selected_text:
-        write_clipboard(original_clipboard)
-    return clip
 
 
 def type_text(text: str) -> dict:
@@ -198,20 +321,78 @@ def type_text(text: str) -> dict:
     return _not_supported('OS_TYPE_TEXT')
 
 
+def _build_target_fingerprint(*, active_app: str, window_title: str, browser: dict, capture_path_used: str) -> dict:
+    browser_url = browser.get('browser_url') or ''
+    browser_title = browser.get('browser_title') or window_title or ''
+    return {
+        'app_name': active_app,
+        'window_title': window_title,
+        'browser_url': browser_url,
+        'browser_domain': _normalized_domain(browser_url),
+        'browser_title': browser_title,
+        'captured_at': _now_iso(),
+        'capture_path_used': capture_path_used,
+        'normalized': {
+            'app_name': _normalize_text(active_app),
+            'window_title': _normalize_text(window_title),
+            'browser_url': _normalize_url(browser_url),
+            'browser_domain': _normalized_domain(browser_url),
+            'browser_title': _normalize_text(browser_title),
+        },
+    }
+
+
 def paste_to_active_app(text: str, preserve_clipboard: bool = True) -> dict:
-    original_clipboard = _clipboard_text() if preserve_clipboard else ''
+    preserved = _preserve_clipboard() if preserve_clipboard else {'preserved': False, 'text': '', 'error': None}
+    if preserve_clipboard and not preserved['preserved']:
+        return failure(
+            'OS_PASTE',
+            error='clipboard_preserve_failed',
+            observation={
+                'paste_attempted': False,
+                'clipboard_preserved': False,
+                'clipboard_restored_after_paste': False,
+                'clipboard_restore_error_after_paste': preserved.get('error'),
+                'paste_blocked_reason': 'clipboard_preserve_failed',
+            },
+            retryable=True,
+            requires_user=True,
+            result={'pasted': 0},
+        )
+
     write_result = write_clipboard(text)
     if not write_result.get('ok'):
-        write_result['action'] = 'OS_PASTE'
-        return write_result
+        return failure(
+            'OS_PASTE',
+            error=write_result.get('error') or 'clipboard_write_failed',
+            observation={
+                'paste_attempted': False,
+                'clipboard_preserved': preserved['preserved'],
+                'clipboard_restored_after_paste': preserved['preserved'],
+                'clipboard_restore_error_after_paste': None,
+                'paste_blocked_reason': 'clipboard_write_failed',
+            },
+            result={'pasted': 0},
+        )
+
     keys = 'cmd+v' if SYSTEM == 'darwin' else 'ctrl+v'
     press_result = press_keys(keys)
-    observation = {'clipboard_length': len(text), 'active_app': active_context().get('active_app'), 'clipboard_preserved': preserve_clipboard}
-    if preserve_clipboard and original_clipboard != text:
-        write_clipboard(original_clipboard)
+    restore = {'restored': preserved['preserved'], 'error': None}
+    if preserve_clipboard:
+        restore = _restore_clipboard_text(preserved['text'], reason='after_paste')
+
+    observation = {
+        'clipboard_length': len(text),
+        'active_app': active_context().get('active_app'),
+        'paste_attempted': True,
+        'clipboard_preserved': preserved['preserved'],
+        'clipboard_restored_after_paste': restore['restored'],
+        'clipboard_restore_error_after_paste': restore['error'],
+        'paste_blocked_reason': None,
+    }
     if press_result.get('ok'):
         return success('OS_PASTE', result={'pasted': len(text)}, observation=observation, safety_flags=['clipboard_write', 'text_entry'])
-    return failure('OS_PASTE', error=press_result.get('error') or 'paste_failed', observation=observation)
+    return failure('OS_PASTE', error=press_result.get('error') or 'paste_failed', observation=observation, result={'pasted': 0})
 
 
 def take_screenshot() -> dict:
@@ -232,34 +413,36 @@ def capture_context() -> dict:
     window_title = title_result.get('window_title') or (title_result.get('result') or {}).get('window_title') or ''
     browser = get_browser_context(active_app_name)
 
-    selected_attempted = True
     selection = copy_selected_text()
-    selected_text = (selection.get('result') or {}).get('text', '') if selection.get('ok') else ''
-    clipboard_fallback_used = False
-    original_clipboard = _clipboard_text()
+    selection_result = selection.get('result') or {}
+    selection_observation = selection.get('observation') or {}
+    clipboard_text = selection_result.get('original_clipboard_text', '')
 
-    if selected_text:
-        input_text = selected_text
-        input_source = 'selected_text'
-    else:
-        input_text = original_clipboard
-        input_source = 'clipboard' if input_text else 'none'
-        clipboard_fallback_used = bool(input_text)
+    capture_path_used = 'none'
+    input_text = ''
+    capture_failure_reason = selection_observation.get('capture_failure_reason')
+    if selection.get('ok') and selection_result.get('text'):
+        capture_path_used = 'selected_text'
+        input_text = selection_result.get('text', '')
+        capture_failure_reason = None
+    elif clipboard_text:
+        capture_path_used = 'clipboard_fallback'
+        input_text = clipboard_text
+
+    target_fingerprint = _build_target_fingerprint(
+        active_app=active_app_name,
+        window_title=window_title,
+        browser=browser,
+        capture_path_used=capture_path_used,
+    )
 
     warnings = []
-    if not selected_text:
+    if capture_path_used != 'selected_text':
         warnings.append('selected_text_unavailable')
+    if capture_path_used == 'clipboard_fallback':
+        warnings.append('clipboard_fallback_used')
     if not input_text:
         warnings.append('copy_or_select_text_first')
-
-    paste_target = {
-        'app_name': active_app_name,
-        'window_title': window_title,
-        'target_url': browser.get('browser_url'),
-        'target_domain': urlparse(browser.get('browser_url') or '').netloc,
-        'browser_title': browser.get('browser_title') or window_title,
-        'captured_at': datetime.utcnow().isoformat() + 'Z',
-    }
 
     return {
         'ok': bool(active_app_name or window_title or input_text),
@@ -267,17 +450,22 @@ def capture_context() -> dict:
         'window_title': window_title,
         'browser_url': browser.get('browser_url'),
         'browser_title': browser.get('browser_title') or window_title,
-        'selected_text': selected_text,
-        'clipboard_text': original_clipboard,
+        'selected_text': selection_result.get('text', '') if capture_path_used == 'selected_text' else '',
+        'clipboard_text': clipboard_text,
         'input_text': input_text,
-        'input_source': input_source,
+        'input_source': capture_path_used,
+        'capture_path_used': capture_path_used,
         'capture_method': {
-            'selected_text_attempted': selected_attempted,
-            'selected_text_succeeded': bool(selected_text),
-            'clipboard_fallback_used': clipboard_fallback_used,
-            'clipboard_preserved_after_capture': True,
+            'selection_copy_attempted': selection_observation.get('selection_copy_attempted', True),
+            'selection_copy_succeeded': selection_observation.get('selection_copy_succeeded', False),
+            'clipboard_fallback_used': capture_path_used == 'clipboard_fallback',
+            'clipboard_preserved': selection_result.get('clipboard_preserved', selection_observation.get('clipboard_preserved', False)),
+            'clipboard_restored_after_capture': selection_result.get('clipboard_restored_after_capture', selection_observation.get('clipboard_restored_after_capture', False)),
+            'clipboard_restore_error_after_capture': selection_result.get('clipboard_restore_error_after_capture', selection_observation.get('clipboard_restore_error_after_capture')),
+            'capture_failure_reason': capture_failure_reason,
         },
-        'paste_target': paste_target,
+        'target_fingerprint': target_fingerprint,
+        'paste_target': target_fingerprint,
         'warnings': warnings,
     }
 
@@ -295,48 +483,163 @@ def active_context() -> dict:
         'browser_url': browser.get('browser_url'),
         'browser_title': browser.get('browser_title'),
         'clipboard_length': clip.get('length', 0) or (clip.get('result') or {}).get('length', 0),
+        'normalized': {
+            'active_app': _normalize_text(active_app_name),
+            'window_title': _normalize_text(title.get('window_title') or (title.get('result') or {}).get('window_title')),
+            'browser_url': _normalize_url(browser.get('browser_url')),
+            'browser_domain': _normalized_domain(browser.get('browser_url')),
+            'browser_title': _normalize_text(browser.get('browser_title')),
+        },
     }
 
 
-def validate_target(target: dict | None, current: dict | None, strict: bool = False) -> tuple[bool, str]:
+def validate_target(target: dict | None, current: dict | None, strict: bool = False, cautious: bool = False) -> dict:
     target = target or {}
     current = current or {}
     if not target:
-        return True, 'no_target_snapshot'
-    target_app = (target.get('app_name') or '').lower()
-    current_app = (current.get('active_app') or '').lower()
-    if target_app and current_app and target_app != current_app:
-        return False, 'active_app_changed'
-    target_domain = target.get('target_domain') or urlparse(target.get('target_url') or '').netloc
-    current_domain = urlparse(current.get('browser_url') or '').netloc
-    if target_domain and current_domain and target_domain != current_domain:
-        return False, 'browser_domain_changed'
-    target_title = target.get('window_title') or ''
-    current_title = current.get('window_title') or ''
-    if target_title and current_title:
-        if strict and target_title != current_title:
-            return False, 'window_title_changed'
-        if not strict and target_title != current_title and not current_title.startswith(target_title[:20]):
-            return False, 'window_title_changed'
-    target_browser_title = target.get('browser_title') or ''
-    current_browser_title = current.get('browser_title') or ''
-    if strict and target_browser_title and current_browser_title and target_browser_title != current_browser_title:
-        return False, 'browser_title_changed'
-    return True, 'target_valid'
+        return {
+            'result': 'unknown',
+            'safe_to_paste': False,
+            'reason': 'no_target_fingerprint',
+            'context_drift_reason': None,
+            'matched_fields': [],
+        }
+
+    target_norm = target.get('normalized') or {}
+    current_norm = current.get('normalized') or {}
+    matched_fields: list[str] = []
+
+    if target_norm.get('app_name') and target_norm.get('app_name') == current_norm.get('active_app'):
+        matched_fields.append('app_name')
+    elif target_norm.get('app_name') and current_norm.get('active_app'):
+        return {
+            'result': 'drifted',
+            'safe_to_paste': False,
+            'reason': 'active_app_changed',
+            'context_drift_reason': 'active_app_changed',
+            'matched_fields': matched_fields,
+        }
+
+    if target_norm.get('browser_url') and target_norm.get('browser_url') == current_norm.get('browser_url'):
+        matched_fields.append('browser_url')
+    elif target_norm.get('browser_domain') and current_norm.get('browser_domain'):
+        if target_norm.get('browser_domain') == current_norm.get('browser_domain'):
+            matched_fields.append('browser_domain')
+        else:
+            return {
+                'result': 'drifted',
+                'safe_to_paste': False,
+                'reason': 'browser_domain_changed',
+                'context_drift_reason': 'browser_domain_changed',
+                'matched_fields': matched_fields,
+            }
+
+    target_window = target_norm.get('window_title', '')
+    current_window = current_norm.get('window_title', '')
+    if target_window and current_window:
+        if target_window == current_window:
+            matched_fields.append('window_title')
+        else:
+            prefix = _common_prefix(target_window, current_window)
+            if prefix >= min(18, len(target_window), len(current_window)):
+                matched_fields.append('window_title_prefix')
+            elif strict:
+                return {
+                    'result': 'drifted',
+                    'safe_to_paste': False,
+                    'reason': 'window_title_changed',
+                    'context_drift_reason': 'window_title_changed',
+                    'matched_fields': matched_fields,
+                }
+
+    target_browser_title = target_norm.get('browser_title', '')
+    current_browser_title = current_norm.get('browser_title', '')
+    if target_browser_title and current_browser_title:
+        if target_browser_title == current_browser_title:
+            matched_fields.append('browser_title')
+        else:
+            prefix = _common_prefix(target_browser_title, current_browser_title)
+            if prefix >= min(18, len(target_browser_title), len(current_browser_title)):
+                matched_fields.append('browser_title_prefix')
+            elif strict and 'browser_domain' in matched_fields:
+                return {
+                    'result': 'drifted',
+                    'safe_to_paste': False,
+                    'reason': 'browser_title_changed',
+                    'context_drift_reason': 'browser_title_changed',
+                    'matched_fields': matched_fields,
+                }
+
+    if {'app_name', 'browser_url'} <= set(matched_fields) or {'app_name', 'window_title'} <= set(matched_fields):
+        return {
+            'result': 'exact_match',
+            'safe_to_paste': True,
+            'reason': 'exact_match',
+            'context_drift_reason': None,
+            'matched_fields': matched_fields,
+        }
+
+    acceptable = 'app_name' in matched_fields and ({'browser_domain'} & set(matched_fields) or {'window_title_prefix', 'browser_title_prefix'} & set(matched_fields))
+    if acceptable:
+        return {
+            'result': 'acceptable_match',
+            'safe_to_paste': not (strict or cautious),
+            'reason': 'acceptable_match_requires_caution' if strict or cautious else 'acceptable_match',
+            'context_drift_reason': None if not (strict or cautious) else 'acceptable_match_requires_caution',
+            'matched_fields': matched_fields,
+        }
+
+    return {
+        'result': 'unknown',
+        'safe_to_paste': False,
+        'reason': 'insufficient_target_context',
+        'context_drift_reason': None,
+        'matched_fields': matched_fields,
+    }
 
 
-def restore_target_and_paste(text: str, target: dict | None, strict: bool = False) -> dict:
+def restore_target_and_paste(text: str, target: dict | None, strict: bool = False, cautious: bool = False) -> dict:
     target = target or {}
     app_name = target.get('app_name') or ''
+    activation = None
     if app_name and SYSTEM == 'darwin':
-        activate_app(app_name)
+        activation = activate_app(app_name)
         time.sleep(0.12)
-    current = capture_context()
-    valid, reason = validate_target(target, current, strict=strict)
-    if not valid:
-        return failure('OS_PASTE', error='paste_target_changed', observation={**current, 'failure_class': 'paste_target_changed', 'failure_detail': reason, 'strict_validation': strict}, requires_user=True, retryable=True, result={'pasted': 0})
+
+    current = active_context()
+    validation = validate_target(target, current, strict=strict, cautious=cautious)
+    observation = {
+        **current,
+        'target_fingerprint': target,
+        'target_validation_result': validation['result'],
+        'target_validation': validation['reason'],
+        'matched_fields': validation.get('matched_fields', []),
+        'context_drift_reason': validation.get('context_drift_reason'),
+        'paste_attempted': False,
+        'paste_blocked_reason': None,
+        'strict_validation': strict,
+        'cautious_validation': cautious,
+        'activation_ok': None if activation is None else activation.get('ok', False),
+    }
+    if not validation['safe_to_paste']:
+        blocked_reason = validation['reason'] if validation['result'] != 'drifted' else 'target_drift_detected'
+        observation['paste_blocked_reason'] = blocked_reason
+        return failure(
+            'OS_PASTE',
+            error='paste_target_changed' if validation['result'] == 'drifted' else 'paste_target_uncertain',
+            observation={**observation, 'failure_class': 'paste_target_changed' if validation['result'] == 'drifted' else 'paste_target_uncertain', 'failure_detail': validation['reason']},
+            requires_user=True,
+            retryable=True,
+            result={'pasted': 0},
+        )
+
     pasted = paste_to_active_app(text, preserve_clipboard=True)
-    pasted['observation'] = {**(pasted.get('observation') or {}), 'target_validation': reason, 'browser_url': current.get('browser_url'), 'window_title': current.get('window_title'), 'strict_validation': strict}
+    pasted['observation'] = {
+        **(pasted.get('observation') or {}),
+        **observation,
+        'paste_attempted': True,
+        'paste_blocked_reason': None,
+    }
     return pasted
 
 
@@ -365,7 +668,7 @@ def handle_os_action(step) -> dict:
         return write_clipboard(args.get('text', ''))
     if action == 'OS_PASTE':
         if args.get('target'):
-            return restore_target_and_paste(args.get('text', ''), args.get('target'), strict=bool(args.get('strict')))
+            return restore_target_and_paste(args.get('text', ''), args.get('target'), strict=bool(args.get('strict')), cautious=bool(args.get('cautious')))
         return paste_to_active_app(args.get('text', ''))
     if action == 'OS_COPY_SELECTION':
         return copy_selected_text()

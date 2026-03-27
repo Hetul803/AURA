@@ -139,7 +139,18 @@ def _update_assist_context(run_id: str, step, result: dict):
         payload['captured_context'] = captured
         intent = {**(assist_state.get('intent') or {})}
         intent['source_text_present'] = bool(captured.get('input_text'))
-        assist_state.update({'captured_context': captured, 'intent': intent, 'capture_path': captured.get('input_source')})
+        assist_state.update({
+            'captured_context': captured,
+            'intent': intent,
+            'capture_path': captured.get('capture_path_used') or captured.get('input_source'),
+            'capture': {
+                'capture_path_used': captured.get('capture_path_used') or captured.get('input_source'),
+                'clipboard_preserved': ((captured.get('capture_method') or {}).get('clipboard_preserved')),
+                'clipboard_restored_after_capture': ((captured.get('capture_method') or {}).get('clipboard_restored_after_capture')),
+                'capture_failure_reason': ((captured.get('capture_method') or {}).get('capture_failure_reason')),
+            },
+            'target_fingerprint': captured.get('target_fingerprint') or captured.get('paste_target') or {},
+        })
         payload['assist'] = assist_state
     elif step.action_type == ASSIST_RESEARCH:
         research = result.get('result', {}).get('research_context') or {}
@@ -176,17 +187,28 @@ def _update_assist_context(run_id: str, step, result: dict):
         })
         payload['assist'] = assist_state
     elif step.action_type == ASSIST_PASTE:
+        observation = result.get('observation') or {}
         paste_state = {
             'status': 'pasted' if result.get('ok') else 'failed',
             'pasted_length': result.get('result', {}).get('pasted', result.get('pasted', 0)),
-            'target_validation': (result.get('observation') or {}).get('target_validation'),
-            'strict_validation': (result.get('observation') or {}).get('strict_validation', False),
+            'target_validation': observation.get('target_validation'),
+            'target_validation_result': observation.get('target_validation_result'),
+            'strict_validation': observation.get('strict_validation', False),
+            'cautious_validation': observation.get('cautious_validation', False),
+            'clipboard_preserved': observation.get('clipboard_preserved'),
+            'clipboard_restored_after_paste': observation.get('clipboard_restored_after_paste'),
+            'clipboard_restore_error_after_paste': observation.get('clipboard_restore_error_after_paste'),
+            'paste_attempted': observation.get('paste_attempted', False),
+            'paste_blocked_reason': observation.get('paste_blocked_reason'),
+            'context_drift_reason': observation.get('context_drift_reason'),
+            'target_fingerprint': observation.get('target_fingerprint') or (current.get('captured_context') or {}).get('target_fingerprint') or {},
         }
         payload['pasteback_state'] = paste_state
         approval_state = {**(current.get('approval_state') or {})}
         approval_state['status'] = 'pasted' if result.get('ok') else approval_state.get('status', 'approved')
         payload['approval_state'] = approval_state
         assist_state['paste_validation'] = paste_state
+        assist_state['final_outcome'] = 'pasted' if result.get('ok') else 'paste_blocked'
         payload['assist'] = assist_state
     if payload:
         update_run_context(run_id, payload)

@@ -41,6 +41,11 @@ def _domain_from_context(ctx: dict) -> str | None:
     domain = _domain_from_url(last_observation.get('url'))
     if domain:
         return domain
+    fingerprint = ((ctx.get('captured_context') or {}).get('target_fingerprint') or {})
+    if fingerprint.get('browser_domain'):
+        return fingerprint.get('browser_domain')
+    if fingerprint.get('browser_url'):
+        return _domain_from_url(fingerprint.get('browser_url'))
     for step in plan.get('steps', []):
         url = (step.get('args') or {}).get('url')
         domain = _domain_from_url(url)
@@ -224,6 +229,7 @@ def _candidate_site_memory(ctx: dict, outcome: str) -> list[dict]:
     if _task_type(ctx) == 'assist:writing':
         approval = ctx.get('approval_state') or {}
         captured = ctx.get('captured_context') or {}
+        pasteback = ctx.get('pasteback_state') or {}
         if captured.get('active_app'):
             candidates.append({
                 'domain': domain,
@@ -236,6 +242,20 @@ def _candidate_site_memory(ctx: dict, outcome: str) -> list[dict]:
                 'domain': domain,
                 'memory_key': 'assist.pasteback',
                 'value': 'success',
+                'outcome': outcome,
+            })
+        if captured.get('capture_path_used'):
+            candidates.append({
+                'domain': domain,
+                'memory_key': 'assist.capture_path',
+                'value': captured.get('capture_path_used'),
+                'outcome': outcome,
+            })
+        if pasteback.get('target_validation_result'):
+            candidates.append({
+                'domain': domain,
+                'memory_key': 'assist.pasteback.validation',
+                'value': pasteback.get('target_validation_result'),
                 'outcome': outcome,
             })
     return candidates
@@ -260,6 +280,8 @@ def _candidate_safety_memory(ctx: dict) -> list[dict]:
     if _task_type(ctx) == 'assist:writing':
         candidates.append({'scope': scope, 'action_key': 'ASSIST_PASTE_BACK', 'policy': 'require_confirmation'})
         if (ctx.get('pasteback_state') or {}).get('status') == 'failed':
+            candidates.append({'scope': scope, 'action_key': 'ASSIST_PASTE_BACK', 'policy': 'revalidate_target'})
+        if (ctx.get('pasteback_state') or {}).get('target_validation_result') == 'drifted':
             candidates.append({'scope': scope, 'action_key': 'ASSIST_PASTE_BACK', 'policy': 'revalidate_target'})
     return candidates
 
@@ -287,6 +309,7 @@ def _candidate_workflow_patterns(ctx: dict, outcome: str) -> list[dict]:
         approval = ctx.get('approval_state') or {}
         captured = ctx.get('captured_context') or {}
         research = ctx.get('research_context') or {}
+        pasteback = ctx.get('pasteback_state') or {}
         candidates.append({
             'task_type': task_type,
             'pattern_key': f"task_kind:{(ctx.get('plan') or {}).get('assist', {}).get('task_kind', 'unknown')}",
@@ -294,6 +317,14 @@ def _candidate_workflow_patterns(ctx: dict, outcome: str) -> list[dict]:
             'outcome': 'success' if approval.get('status') == 'pasted' else approval.get('status') or outcome,
             'notes': captured.get('input_source') or '',
         })
+        if captured.get('capture_path_used'):
+            candidates.append({
+                'task_type': task_type,
+                'pattern_key': f"capture_path:{captured.get('capture_path_used')}",
+                'strategy': 'capture_context',
+                'outcome': outcome,
+                'notes': (captured.get('capture_method') or {}).get('capture_failure_reason') or '',
+            })
         if research.get('sources'):
             candidates.append({
                 'task_type': task_type,
@@ -309,6 +340,22 @@ def _candidate_workflow_patterns(ctx: dict, outcome: str) -> list[dict]:
                 'strategy': 'regenerate_before_paste',
                 'outcome': 'failure',
                 'notes': approval.get('decision_reason') or '',
+            })
+        if pasteback.get('target_validation_result'):
+            candidates.append({
+                'task_type': task_type,
+                'pattern_key': f"paste_validation:{pasteback.get('target_validation_result')}",
+                'strategy': 'reactivate_revalidate_paste',
+                'outcome': 'success' if pasteback.get('status') == 'pasted' else outcome,
+                'notes': pasteback.get('context_drift_reason') or pasteback.get('paste_blocked_reason') or '',
+            })
+        if pasteback.get('context_drift_reason'):
+            candidates.append({
+                'task_type': task_type,
+                'pattern_key': f"failure_class:{pasteback.get('context_drift_reason')}",
+                'strategy': 'revalidate_before_paste',
+                'outcome': 'failure',
+                'notes': pasteback.get('paste_blocked_reason') or '',
             })
     return candidates
 
@@ -338,10 +385,14 @@ def _useful_observations(ctx: dict) -> list[dict]:
         observations.append({'type': 'url', 'value': last_observation.get('url')})
     if (ctx.get('captured_context') or {}).get('input_source'):
         observations.append({'type': 'input_source', 'value': (ctx.get('captured_context') or {}).get('input_source')})
+    if (ctx.get('captured_context') or {}).get('capture_path_used'):
+        observations.append({'type': 'capture_path_used', 'value': (ctx.get('captured_context') or {}).get('capture_path_used')})
     if (ctx.get('approval_state') or {}).get('status'):
         observations.append({'type': 'approval_status', 'value': (ctx.get('approval_state') or {}).get('status')})
     if ((ctx.get('assist') or {}).get('generation') or {}).get('provider'):
         observations.append({'type': 'generation_provider', 'value': ((ctx.get('assist') or {}).get('generation') or {}).get('provider')})
+    if (ctx.get('pasteback_state') or {}).get('target_validation_result'):
+        observations.append({'type': 'target_validation_result', 'value': (ctx.get('pasteback_state') or {}).get('target_validation_result')})
     return observations
 
 
@@ -355,6 +406,11 @@ def _future_hints(ctx: dict, outcome: str) -> list[str]:
         hints.append(f"avoid:{repairs_failed[-1]['strategy']}")
     if ctx.get('user_intervention_required'):
         hints.append('escalate_to_user_earlier')
+    pasteback = ctx.get('pasteback_state') or {}
+    if pasteback.get('target_validation_result') == 'drifted':
+        hints.append('revalidate_before_paste')
+    if (ctx.get('captured_context') or {}).get('capture_path_used') == 'clipboard_fallback':
+        hints.append('prefer_clipboard_fallback_when_selection_fails')
     return hints
 
 

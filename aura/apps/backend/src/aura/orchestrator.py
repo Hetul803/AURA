@@ -164,6 +164,7 @@ def approve_assist_run(run_id: str, approved_text: str | None = None, event_cb=l
         write_memory(f'assist.{task_kind}.research', 'prefer', tags=['preference', 'assist', 'research'], importance=4)
     approval.update({'status': 'approved', 'final_text': final_text, 'approved_by_user': True, 'decided_at': time.time()})
     update_run_context(run_id, {'approval_state': approval, 'status': 'approved_pending_paste', 'paused': False, 'user_intervention_required': False})
+    update_run_context(run_id, {'assist': {**(ctx.get('assist') or {}), 'final_outcome': 'approved_pending_paste'}})
     event_cb({'type': 'approval_received', 'run_id': run_id, 'status': 'approved', 'message': 'Draft approved for paste-back.'})
     return resume_run(run_id, event_cb)
 
@@ -182,7 +183,7 @@ def retry_assist_run(run_id: str, feedback: str | None = None, event_cb=lambda e
         return {'ok': False, 'run_id': run_id, 'status': 'needs_user', 'run_state': get_run_context(run_id)}
     approval = {**(ctx.get('approval_state') or {})}
     approval.update({'status': 'pending', 'draft_text': draft['draft_text'], 'edited_text': '', 'final_text': '', 'feedback': feedback or '', 'approved_by_user': False, 'requested_at': time.time()})
-    update_run_context(run_id, {'draft_state': draft, 'approval_state': approval, 'status': 'awaiting_approval', 'paused': True, 'assist': {**(ctx.get('assist') or {}), 'learning_signals': {'feedback_preferences': learned}}})
+    update_run_context(run_id, {'draft_state': draft, 'approval_state': approval, 'status': 'awaiting_approval', 'paused': True, 'assist': {**(ctx.get('assist') or {}), 'learning_signals': {'feedback_preferences': learned}, 'final_outcome': 'awaiting_approval'}})
     event_cb({'type': 'draft_regenerated', 'run_id': run_id, 'status': 'awaiting_approval', 'message': 'Draft regenerated for review.'})
     learning = record_run_learning(run_id, get_run_context(run_id) or {})
     update_run_context(run_id, {'learning': learning})
@@ -200,7 +201,7 @@ def reject_assist_run(run_id: str, reason: str | None = None, event_cb=lambda e:
         write_memory(f'assist.{task_kind}.research', 'avoid', tags=['preference', 'assist', 'research'], importance=4)
     approval = {**(ctx.get('approval_state') or {})}
     approval.update({'status': 'rejected', 'decision_reason': reason or '', 'decided_at': time.time(), 'approved_by_user': False})
-    update_run_context(run_id, {'approval_state': approval, 'status': 'rejected', 'terminal_outcome': 'rejected', 'paused': False, 'pasteback_state': {'status': 'skipped'}, 'assist': {**(ctx.get('assist') or {}), 'learning_signals': {'feedback_preferences': learned}}})
+    update_run_context(run_id, {'approval_state': approval, 'status': 'rejected', 'terminal_outcome': 'rejected', 'paused': False, 'pasteback_state': {'status': 'skipped', 'paste_attempted': False, 'paste_blocked_reason': 'draft_rejected'}, 'assist': {**(ctx.get('assist') or {}), 'learning_signals': {'feedback_preferences': learned}, 'final_outcome': 'rejected'}})
     event_cb({'type': 'draft_rejected', 'run_id': run_id, 'status': 'rejected', 'message': 'Draft rejected; paste-back skipped.'})
     learning = record_run_learning(run_id, get_run_context(run_id) or {})
     update_run_context(run_id, {'learning': learning})

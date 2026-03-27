@@ -11,13 +11,13 @@ function setupFetch(commandResponses: any[]) {
   let i = 0;
   vi.stubGlobal('fetch', vi.fn(async (url: string, options?: any) => {
     if (url.includes('/health')) return { ok: true, json: async () => ({ ok: true }) } as any;
-    if (url.includes('/assist/context')) return { ok: true, json: async () => ({ active_app: 'Notes', input_text: 'Captured text', input_source: 'clipboard' }) } as any;
+    if (url.includes('/assist/context')) return { ok: true, json: async () => ({ active_app: 'Notes', input_text: 'Captured text', input_source: 'clipboard_fallback', capture_path_used: 'clipboard_fallback', capture_method: { clipboard_preserved: true, clipboard_restored_after_capture: true } }) } as any;
     if (url.includes('/preferences')) return { ok: true, json: async () => [] } as any;
     if (url.includes('/memories')) return { ok: true, json: async () => [] } as any;
     if (url.includes('/browser/sessions')) return { ok: true, json: async () => [] } as any;
     if (url.includes('/storage/stats')) return { ok: true, json: async () => ({}) } as any;
     if (url.includes('/safety/events')) return { ok: true, json: async () => [] } as any;
-    if (url.match(/\/runs\/[^/]+$/)) return { ok: true, json: async () => ({ approval_state: { status: 'pending', draft_text: 'Draft response' }, captured_context: { input_text: 'Captured text', active_app: 'Notes', input_source: 'clipboard' } }) } as any;
+    if (url.match(/\/runs\/[^/]+$/)) return { ok: true, json: async () => ({ approval_state: { status: 'pending', draft_text: 'Draft response' }, captured_context: { input_text: 'Captured text', active_app: 'Notes', input_source: 'clipboard_fallback', capture_path_used: 'clipboard_fallback', capture_method: { clipboard_preserved: true, clipboard_restored_after_capture: true } }, pasteback_state: { target_validation_result: 'exact_match', paste_blocked_reason: null } }) } as any;
     if (url.includes('/approve')) return { ok: true, json: async () => ({ ok: true, status: 'done' }) } as any;
     if (url.includes('/retry')) return { ok: true, json: async () => ({ ok: true, status: 'awaiting_approval' }) } as any;
     if (url.includes('/reject')) return { ok: true, json: async () => ({ ok: true, status: 'rejected' }) } as any;
@@ -36,6 +36,7 @@ describe('renderer', () => {
     expect(screen.getByText(/Connected/)).toBeTruthy();
     expect(screen.getByText(/Captured Context/)).toBeTruthy();
     expect(screen.getByText(/Captured text/)).toBeTruthy();
+    expect(screen.getByText(/clipboard_fallback/)).toBeTruthy();
   });
 
   it('renders approval ui and can approve draft', async () => {
