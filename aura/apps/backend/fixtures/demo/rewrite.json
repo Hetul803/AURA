@@ -1,0 +1,52 @@
+{
+  "id": "rewrite",
+  "label": "Rewrite",
+  "description": "Load a rough paragraph and rewrite it into a clearer polished version.",
+  "command": "Rewrite this better",
+  "task_kind": "rewrite",
+  "captured_context": {
+    "ok": true,
+    "active_app": "Notes",
+    "window_title": "Draft paragraph",
+    "browser_url": "https://docs.demo.local/notes/draft-paragraph",
+    "browser_title": "Draft paragraph",
+    "selected_text": "",
+    "clipboard_text": "the rollout has been kind of messy and people are confused about timing. we should probably send something clearer so the team knows what changed and what they need to do this week.",
+    "input_text": "the rollout has been kind of messy and people are confused about timing. we should probably send something clearer so the team knows what changed and what they need to do this week.",
+    "input_source": "demo_fixture",
+    "capture_path_used": "demo_fixture",
+    "target_fingerprint": {
+      "app_name": "Notes",
+      "window_title": "Draft paragraph",
+      "browser_url": "https://docs.demo.local/notes/draft-paragraph",
+      "browser_domain": "docs.demo.local",
+      "browser_title": "Draft paragraph",
+      "captured_at": "2026-03-19T00:00:00Z",
+      "capture_path_used": "demo_fixture",
+      "normalized": {
+        "app_name": "notes",
+        "window_title": "draft paragraph",
+        "browser_url": "https://docs.demo.local/notes/draft-paragraph",
+        "browser_domain": "docs.demo.local",
+        "browser_title": "draft paragraph"
+      }
+    },
+    "paste_target": {
+      "app_name": "Notes",
+      "window_title": "Draft paragraph",
+      "browser_url": "https://docs.demo.local/notes/draft-paragraph",
+      "browser_domain": "docs.demo.local",
+      "browser_title": "Draft paragraph",
+      "captured_at": "2026-03-19T00:00:00Z",
+      "capture_path_used": "demo_fixture",
+      "normalized": {
+        "app_name": "notes",
+        "window_title": "draft paragraph",
+        "browser_url": "https://docs.demo.local/notes/draft-paragraph",
+        "browser_domain": "docs.demo.local",
+        "browser_title": "draft paragraph"
+      }
+    },
+    "warnings": []
+  }
+}

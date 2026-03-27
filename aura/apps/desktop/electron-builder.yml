@@ -1,0 +1,25 @@
+appId: com.aura.desktop
+productName: AURA
+artifactName: AURA-${version}-${os}-${arch}.${ext}
+asar: true
+directories:
+  output: release
+  buildResources: build-resources
+files:
+  - dist/**
+  - dist-electron/**
+  - package.json
+extraResources:
+  - from: build-resources/backend
+    to: backend
+    filter:
+      - '**/*'
+mac:
+  category: public.app-category.productivity
+  target:
+    - dmg
+    - zip
+  artifactName: AURA-${version}-mac-${arch}.${ext}
+  darkModeSupport: true
+  hardenedRuntime: false
+  gatekeeperAssess: false

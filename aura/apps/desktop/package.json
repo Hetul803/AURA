@@ -1,0 +1,42 @@
+{
+  "name": "aura-desktop",
+  "version": "1.0.0",
+  "private": true,
+  "description": "AURA Mac private-alpha desktop app",
+  "author": "AURA",
+  "main": "dist-electron/main/index.js",
+  "type": "module",
+  "scripts": {
+    "dev": "concurrently -k \"vite\" \"wait-on tcp:5173 && cross-env ELECTRON_DEV_URL=http://localhost:5173 electron ./dist-electron/main/index.js\" \"tsc -p tsconfig.electron.json --watch\"",
+    "stage:backend": "node ./scripts/stage-backend.mjs",
+    "build:renderer": "vite build",
+    "build:main": "tsc -p tsconfig.electron.json",
+    "build": "npm run stage:backend && npm run build:renderer && npm run build:main",
+    "package:mac": "npm run build && electron-builder --mac --dir --publish never --config electron-builder.yml",
+    "dist:mac": "npm run build && electron-builder --mac --publish never --config electron-builder.yml",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@testing-library/react": "^16.0.0",
+    "@types/node": "^22.10.2",
+    "@types/react": "^18.3.3",
+    "@types/react-dom": "^18.3.0",
+    "@vitejs/plugin-react": "^4.3.1",
+    "concurrently": "^9.0.1",
+    "cross-env": "^7.0.3",
+    "electron": "^31.2.1",
+    "electron-builder": "^24.13.3",
+    "jsdom": "^24.1.1",
+    "typescript": "^5.5.4",
+    "vite": "^5.4.8",
+    "vitest": "^2.0.5",
+    "wait-on": "^8.0.1"
+  },
+  "optionalDependencies": {
+    "dmg-license": "^1.0.11"
+  }
+}

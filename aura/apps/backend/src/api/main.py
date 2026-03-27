@@ -1,0 +1,433 @@
+from __future__ import annotations
+
+import json
+import queue
+
+from fastapi import FastAPI, HTTPException
+from fastapi.responses import StreamingResponse
+from pydantic import BaseModel
+
+from aura.assist import capture_structured_context
+from aura.demo import demo_mode_enabled, demo_run_payload, demo_scenarios
+from aura.learning import (
+    consolidate_learning,
+    list_preference_memory,
+    list_reflection_records,
+    list_safety_memory,
+    list_site_memory,
+    list_workflow_memory,
+    query_relevant_memory,
+    resolve_assist_profile,
+    suggest_assist_actions,
+)
+from aura.macros import list_macros
+from aura.memory import delete_memory, list_memories, update_memory
+from aura.models import available_models, model_runtime_status
+from aura.orchestrator import approve_assist_run, reject_assist_run, resume_run, retry_assist_run, run_command
+from aura.planner import plan_from_text
+from aura.prefs import get_prefs, reset_all, reset_pref, set_pref
+from aura.proactive import proactive_suggestions_for_context
+from aura.state import cancel_run, db_conn, get_run_context, list_guardian_events, list_safety_events, set_panic
+from storage.export_import import export_profile, import_profile
+from storage.migrations import run_migrations
+from storage.profile_paths import profile_dir
+from storage.retention import enforce_retention
+from storage.snapshots import create_snapshot
+from tools.browser_runtime import browser_manager
+
+run_migrations()
+app = FastAPI(title='AURA Backend')
+EVENTS: dict[str, queue.Queue[str]] = {}
+
+
+def _emit(run_id: str, e: dict):
+    EVENTS.setdefault(run_id, queue.Queue()).put(json.dumps(e))
+
+
+class Cmd(BaseModel):
+    text: str
+    choices: dict = {}
+    use_macro: bool = False
+    proactive: dict | None = None
+
+
+class PanicBody(BaseModel):
+    run_id: str | None = None
+
+
+class MemoryPatch(BaseModel):
+    value: str | None = None
+    pinned: int | None = None
+
+
+class LearningQuery(BaseModel):
+    task_type: str | None = None
+    domain: str | None = None
+    failure_class: str | None = None
+    action_key: str | None = None
+    limit: int = 5
+
+
+class ApprovalBody(BaseModel):
+    text: str | None = None
+
+
+class RetryBody(BaseModel):
+    feedback: str | None = None
+
+
+class RejectBody(BaseModel):
+    reason: str | None = None
+
+
+class AssistContextBody(BaseModel):
+    captured_context: dict | None = None
+    task_kind: str = 'summarize'
+
+
+class DemoStartBody(BaseModel):
+    scenario_id: str
+    hero_timing: dict | None = None
+
+
+@app.get('/health')
+def health():
+    return {'ok': True}
+
+
+@app.get('/models')
+def models():
+    return available_models()
+
+
+@app.get('/models/status')
+def model_status():
+    return {**model_runtime_status(), 'demo_mode': demo_mode_enabled()}
+
+
+@app.get('/demo/status')
+def demo_status():
+    return {
+        'enabled': demo_mode_enabled(),
+        'scenarios': demo_scenarios(),
+    }
+
+
+@app.post('/demo/start')
+def demo_start(body: DemoStartBody):
+    try:
+        payload = demo_run_payload(body.scenario_id)
+    except KeyError as exc:
+        raise HTTPException(404, f'demo scenario not found: {body.scenario_id}') from exc
+    proactive = payload.get('proactive') or {}
+    if body.hero_timing:
+        proactive = {**proactive, 'hero_timing': body.hero_timing}
+    return run_command(payload['text'], lambda e: _emit(e.get('run_id', 'pending'), e), proactive=proactive)
+
+
+@app.post('/models/select')
+def set_model(model_id: str):
+    with db_conn() as conn:
+        conn.execute("INSERT INTO profile_meta(key,value) VALUES('selected_model',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value", (model_id,))
+    return {'ok': True, 'model_id': model_id}
+
+
+@app.get('/models/select')
+def get_model():
+    row = db_conn().execute("SELECT value FROM profile_meta WHERE key='selected_model'").fetchone()
+    return {'model_id': row['value'] if row else 'simple'}
+
+
+@app.post('/plan')
+def plan(cmd: Cmd):
+    planned = plan_from_text(cmd.text, cmd.choices)
+    return {**planned, 'steps': [s.model_dump() for s in planned.get('steps', [])]}
+
+
+@app.post('/command')
+def command(cmd: Cmd):
+    run_id = 'pending'
+
+    def emit(e):
+        rid = e.get('run_id', run_id)
+        _emit(rid, e)
+
+    return run_command(cmd.text, emit, cmd.choices, cmd.use_macro, proactive=cmd.proactive)
+
+
+@app.post('/assist/context')
+def assist_context_capture():
+    result = capture_structured_context()
+    return result.get('result', {}).get('captured_context') or result
+
+
+@app.post('/assist/personalization')
+def assist_personalization(body: AssistContextBody):
+    context = body.captured_context or {}
+    browser_url = context.get('browser_url') or ((context.get('target_fingerprint') or {}).get('browser_url'))
+    domain = None
+    if browser_url:
+        from urllib.parse import urlparse
+        domain = urlparse(browser_url).netloc or None
+    return resolve_assist_profile(
+        task_kind=body.task_kind,
+        active_app=context.get('active_app'),
+        domain=domain or ((context.get('target_fingerprint') or {}).get('browser_domain')),
+    )
+
+
+@app.post('/assist/suggestions')
+def assist_suggestions(body: AssistContextBody):
+    context = body.captured_context or {}
+    if not context:
+        result = capture_structured_context()
+        context = result.get('result', {}).get('captured_context') or {}
+    proactive = proactive_suggestions_for_context(context)
+    return {
+        'captured_context': context,
+        'suggestions': proactive.get('suggestions', []),
+        'profile': assist_personalization(AssistContextBody(captured_context=context, task_kind=body.task_kind)),
+    }
+
+
+@app.get('/proactive/suggestions')
+def proactive_suggestions():
+    result = capture_structured_context()
+    context = result.get('result', {}).get('captured_context') or {}
+    return proactive_suggestions_for_context(context)
+
+
+@app.post('/panic')
+def panic(body: PanicBody):
+    set_panic(True)
+    if body.run_id:
+        cancel_run(body.run_id)
+        _emit(body.run_id, {'type': 'run_cancelled', 'run_id': body.run_id, 'status': 'cancelled', 'message': 'panic stop'})
+    return {'panic': True, 'run_id': body.run_id}
+
+
+@app.post('/panic/{run_id}')
+def panic_run(run_id: str):
+    cancel_run(run_id)
+    _emit(run_id, {'type': 'run_cancelled', 'run_id': run_id, 'status': 'cancelled', 'message': 'panic stop'})
+    return {'panic': True, 'run_id': run_id}
+
+
+@app.post('/panic/reset')
+def panic_reset():
+    set_panic(False)
+    return {'panic': False}
+
+
+@app.post('/runs/{run_id}/resume')
+def resume(run_id: str):
+    def emit(e):
+        _emit(run_id, e)
+
+    return resume_run(run_id, emit)
+
+
+@app.post('/runs/{run_id}/approve')
+def approve(run_id: str, body: ApprovalBody):
+    def emit(e):
+        _emit(run_id, e)
+
+    return approve_assist_run(run_id, body.text, emit)
+
+
+@app.post('/runs/{run_id}/retry')
+def retry(run_id: str, body: RetryBody):
+    def emit(e):
+        _emit(run_id, e)
+
+    return retry_assist_run(run_id, body.feedback, emit)
+
+
+@app.post('/runs/{run_id}/reject')
+def reject(run_id: str, body: RejectBody):
+    def emit(e):
+        _emit(run_id, e)
+
+    return reject_assist_run(run_id, body.reason, emit)
+
+
+@app.get('/runs/{run_id}')
+def run_state(run_id: str):
+    state = get_run_context(run_id)
+    if not state:
+        raise HTTPException(404, 'run not found')
+    return state
+
+
+@app.get('/guardian/events')
+def guardian_events(run_id: str | None = None, limit: int = 20):
+    return list_guardian_events(run_id=run_id, limit=limit)
+
+
+@app.get('/events/stream/{run_id}')
+def stream(run_id: str):
+    q = EVENTS.setdefault(run_id, queue.Queue())
+
+    def gen():
+        idle = 0
+        while idle < 75:
+            try:
+                item = q.get(timeout=0.2)
+                idle = 0
+                yield f"data: {item}\n\n"
+            except Exception:
+                idle += 1
+
+    return StreamingResponse(gen(), media_type='text/event-stream')
+
+
+@app.delete('/browser/session/{domain}')
+def clear_browser_session(domain: str):
+    browser_manager.clear_session(domain)
+    return {'ok': True, 'domain': domain}
+
+
+@app.get('/browser/sessions')
+def list_browser_sessions():
+    state_dir = profile_dir() / 'browser_state'
+    sessions = []
+    for f in state_dir.glob('*.json'):
+        sessions.append({'domain': f.stem, 'path': str(f), 'size': f.stat().st_size})
+    return sessions
+
+
+@app.delete('/browser/sessions')
+def clear_all_browser_sessions():
+    state_dir = profile_dir() / 'browser_state'
+    for f in state_dir.glob('*.json'):
+        f.unlink(missing_ok=True)
+    return {'ok': True}
+
+
+@app.get('/safety/events')
+def safety_events():
+    return list_safety_events()
+
+
+@app.get('/storage/stats')
+def storage_stats():
+    base = profile_dir()
+
+    def dir_size(p):
+        return sum(f.stat().st_size for f in p.rglob('*') if f.is_file())
+
+    return {
+        'profile_dir': str(base),
+        'db_size': (base / 'aura.sqlite3').stat().st_size if (base / 'aura.sqlite3').exists() else 0,
+        'artifacts_size': dir_size(base / 'artifacts'),
+        'sessions_size': dir_size(base / 'browser_state'),
+        'snapshots_size': dir_size(base / 'snapshots'),
+    }
+
+
+@app.get('/preferences')
+def prefs_list():
+    return get_prefs()
+
+
+@app.post('/preferences/{key}')
+def prefs_set(key: str, value: str):
+    set_pref(key, value)
+    return {'ok': True}
+
+
+@app.delete('/preferences/{key}')
+def prefs_del(key: str):
+    reset_pref(key)
+    return {'ok': True}
+
+
+@app.delete('/preferences')
+def prefs_reset():
+    reset_all()
+    return {'ok': True}
+
+
+@app.get('/macros')
+def macros_list():
+    return list_macros()
+
+
+@app.get('/memories')
+def memories(q: str | None = None):
+    return list_memories(q)
+
+
+@app.patch('/memories/{mid}')
+def memories_patch(mid: int, patch: MemoryPatch):
+    if not update_memory(mid, patch.value, patch.pinned):
+        raise HTTPException(404, 'not found')
+    return {'ok': True}
+
+
+@app.delete('/memories/{mid}')
+def memories_delete(mid: int):
+    delete_memory(mid)
+    return {'ok': True}
+
+
+@app.post('/retention/sweep')
+def retention_sweep():
+    return enforce_retention()
+
+
+@app.post('/profile/export')
+def profile_export(path: str):
+    return {'path': export_profile(path)}
+
+
+@app.post('/profile/import')
+def profile_import(path: str):
+    import_profile(path)
+    return {'ok': True}
+
+
+@app.post('/profile/snapshot')
+def snapshot():
+    return {'snapshot': create_snapshot()}
+
+
+@app.get('/learning/reflections')
+def learning_reflections(limit: int = 100):
+    return list_reflection_records(limit=limit)
+
+
+@app.get('/learning/memory/workflow')
+def learning_workflow_memory():
+    return list_workflow_memory()
+
+
+@app.get('/learning/memory/preference')
+def learning_preference_memory():
+    return list_preference_memory()
+
+
+@app.get('/learning/memory/site')
+def learning_site_memory():
+    return list_site_memory()
+
+
+@app.get('/learning/memory/safety')
+def learning_safety_memory():
+    return list_safety_memory()
+
+
+@app.post('/learning/query')
+def learning_query(body: LearningQuery):
+    return query_relevant_memory(
+        task_type=body.task_type,
+        domain=body.domain,
+        failure_class=body.failure_class,
+        action_key=body.action_key,
+        limit=body.limit,
+    )
+
+
+@app.post('/learning/consolidate')
+def learning_consolidate():
+    return consolidate_learning()

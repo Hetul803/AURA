@@ -1,0 +1,17 @@
+node_modules
+__pycache__
+.pytest_cache
+*.pyc
+*.pyo
+*.log
+.env
+coverage
+apps/backend/.venv
+apps/backend/profile
+apps/web/dist
+apps/desktop/dist
+apps/desktop/dist-electron
+apps/desktop/release
+apps/desktop/build-resources
+test_runs/*
+!test_runs/.keep
