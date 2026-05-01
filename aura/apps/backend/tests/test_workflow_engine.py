@@ -91,3 +91,27 @@ def test_workflow_api_contracts():
     assert client.get('/workflows', params={'include_disabled': True}).json()[0]['workflow_id'] == workflow_id
     assert client.delete(f'/workflows/{workflow_id}').status_code == 200
     assert client.get(f'/workflows/{workflow_id}').status_code == 404
+
+
+def test_workflow_run_replays_rendered_command():
+    _clear_workflows()
+    created = client.post('/workflows', json={
+        'name': 'Reply workflow',
+        'command_template': 'Reply to this email',
+        'trigger_type': 'manual',
+        'trigger_value': 'reply',
+    }).json()
+
+    replay = client.post(f"/workflows/{created['workflow_id']}/run", json={
+        'context': {
+            'active_app': 'Chrome',
+            'browser_url': 'https://mail.google.com/mail/u/0/#inbox/abc',
+            'selected_text': 'Can you send the report by 5 PM today?',
+        },
+    })
+
+    assert replay.status_code == 200
+    body = replay.json()
+    assert body['rendered_command'] == 'Reply to this email'
+    assert body['workflow']['workflow_id'] == created['workflow_id']
+    assert body['status'] == 'awaiting_approval'

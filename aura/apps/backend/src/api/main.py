@@ -216,6 +216,13 @@ class WorkflowRenderBody(BaseModel):
     variables: dict = {}
 
 
+class WorkflowRunBody(BaseModel):
+    variables: dict = {}
+    context: dict | None = None
+    choices: dict = {}
+    use_macro: bool = False
+
+
 class HandoffCreateBody(BaseModel):
     source_device: str
     target_device: str
@@ -620,6 +627,22 @@ def workflows_render(workflow_id: str, body: WorkflowRenderBody):
     if not rendered:
         raise HTTPException(404, 'workflow not found')
     return rendered
+
+
+@app.post('/workflows/{workflow_id}/run')
+def workflows_run(workflow_id: str, body: WorkflowRunBody):
+    rendered = render_workflow_command(workflow_id, body.variables)
+    if not rendered:
+        raise HTTPException(404, 'workflow not found')
+    run_id = 'pending'
+
+    def emit(e):
+        rid = e.get('run_id', run_id)
+        _emit(rid, e)
+
+    result = run_command(rendered['command'], emit, body.choices, body.use_macro, context=body.context)
+    run_id = result.get('run_id', run_id)
+    return {**result, 'workflow': rendered['workflow'], 'rendered_command': rendered['command']}
 
 
 @app.delete('/workflows/{workflow_id}')

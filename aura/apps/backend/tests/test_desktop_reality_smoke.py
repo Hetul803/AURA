@@ -82,6 +82,10 @@ def test_saas_landing_page_entrypoint_routes_to_coding_agent_not_noop():
 
 
 def test_user_subscription_handoff_prepares_prompt_and_stops_before_paste():
+    with db_conn() as conn:
+        conn.execute('DELETE FROM safety_memory')
+        conn.execute('DELETE FROM macros')
+
     body = client.post('/command', json={
         'text': 'Use my ChatGPT subscription to write a reply to this email',
         'context': {'selected_text': 'Can you send the report today?', 'active_app': 'Chrome'},
