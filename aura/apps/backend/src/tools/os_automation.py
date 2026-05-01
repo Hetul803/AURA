@@ -15,11 +15,15 @@ SYSTEM = platform.system().lower()
 
 def _run(cmd: list[str]) -> tuple[bool, str]:
     try:
-        p = subprocess.run(cmd, capture_output=True, text=True, timeout=20)
+        p = subprocess.run(cmd, capture_output=True, text=True, encoding='utf-8', errors='replace', timeout=20)
         out = (p.stdout or p.stderr or '').strip()
         return p.returncode == 0, out
     except Exception as e:
         return False, str(e)
+
+
+def _powershell(script: str) -> tuple[bool, str]:
+    return _run(['powershell', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', script])
 
 
 def _osascript(script: str) -> tuple[bool, str]:
@@ -64,7 +68,25 @@ def _now_iso() -> str:
 
 def get_browser_context(active_app: str | None = None) -> dict:
     app = active_app or (get_active_app().get('result') or {}).get('active_app')
-    if SYSTEM != 'darwin' or not app:
+    if not app:
+        return {}
+    if SYSTEM == 'windows':
+        if not any(token in app.lower() for token in ['chrome', 'edge', 'firefox', 'brave', 'opera']):
+            return {}
+        preserved = _preserve_clipboard()
+        original = preserved.get('text', '')
+        press_keys('ctrl+l')
+        time.sleep(0.08)
+        press_keys('ctrl+c')
+        time.sleep(0.08)
+        captured = read_clipboard()
+        if preserved.get('preserved'):
+            _restore_clipboard_text(original, reason='after_url_capture')
+        url = (captured.get('result') or {}).get('text', '').strip()
+        if url.startswith(('http://', 'https://')):
+            return {'browser_url': url, 'browser_title': get_active_window_title().get('result', {}).get('window_title', '')}
+        return {}
+    if SYSTEM != 'darwin':
         return {}
     scripts = {
         'Google Chrome': 'tell application "Google Chrome" to if (count of windows) > 0 then return {URL of active tab of front window, title of active tab of front window}',
@@ -127,6 +149,26 @@ def get_active_app() -> dict:
         if ok:
             return success('OS_GET_ACTIVE_CONTEXT', result={'active_app': out}, observation={'active_app': out})
         return failure('OS_GET_ACTIVE_CONTEXT', error=out or 'active_app_failed', observation={'active_app': out})
+    if SYSTEM == 'windows':
+        ok, out = _powershell(r'''
+Add-Type @"
+using System;
+using System.Runtime.InteropServices;
+public class Win32 {
+  [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
+  [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint processId);
+}
+"@
+$hwnd = [Win32]::GetForegroundWindow()
+$processId = 0
+[Win32]::GetWindowThreadProcessId($hwnd, [ref]$processId) | Out-Null
+$p = Get-Process -Id $processId
+$p.ProcessName
+''')
+        if ok:
+            app_name = out.splitlines()[-1].strip() if out.splitlines() else out.strip()
+            return success('OS_GET_ACTIVE_CONTEXT', result={'active_app': app_name}, observation={'active_app': app_name})
+        return failure('OS_GET_ACTIVE_CONTEXT', error=out or 'active_app_failed', observation={'active_app': ''})
     return _not_supported('OS_GET_ACTIVE_CONTEXT')
 
 
@@ -136,6 +178,25 @@ def get_active_window_title() -> dict:
         if ok:
             return success('OS_GET_ACTIVE_CONTEXT', result={'window_title': out}, observation={'window_title': out})
         return failure('OS_GET_ACTIVE_CONTEXT', error=out or 'window_title_failed', observation={'window_title': out})
+    if SYSTEM == 'windows':
+        ok, out = _powershell(r'''
+Add-Type @"
+using System;
+using System.Runtime.InteropServices;
+using System.Text;
+public class Win32 {
+  [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
+  [DllImport("user32.dll")] public static extern int GetWindowText(IntPtr hWnd, StringBuilder text, int count);
+}
+"@
+$hwnd = [Win32]::GetForegroundWindow()
+$sb = New-Object System.Text.StringBuilder 1024
+[Win32]::GetWindowText($hwnd, $sb, $sb.Capacity) | Out-Null
+$sb.ToString()
+''')
+        if ok:
+            return success('OS_GET_ACTIVE_CONTEXT', result={'window_title': out}, observation={'window_title': out})
+        return failure('OS_GET_ACTIVE_CONTEXT', error=out or 'window_title_failed', observation={'window_title': ''})
     return _not_supported('OS_GET_ACTIVE_CONTEXT')
 
 
@@ -211,16 +272,30 @@ def press_keys(keys: str) -> dict:
         if ok:
             return success('OS_PRESS_KEYS', result={'keys': keys}, observation={'detail': out})
         return failure('OS_PRESS_KEYS', error=out or 'keypress_failed', observation={'detail': out})
+    if SYSTEM == 'windows':
+        mapping = {
+            'ctrl+c': '^c',
+            'ctrl+v': '^v',
+            'ctrl+l': '^l',
+            'enter': '{ENTER}',
+            'tab': '{TAB}',
+            'esc': '{ESC}',
+        }
+        sequence = mapping.get(keys.lower(), keys)
+        ok, out = _powershell(f"Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.SendKeys]::SendWait('{sequence}')")
+        if ok:
+            return success('OS_PRESS_KEYS', result={'keys': keys}, observation={'detail': out})
+        return failure('OS_PRESS_KEYS', error=out or 'keypress_failed', observation={'detail': out})
     return _not_supported('OS_PRESS_KEYS')
 
 
 def copy_selected_text() -> dict:
-    if SYSTEM != 'darwin':
+    if SYSTEM not in {'darwin', 'windows'}:
         return _not_supported('OS_COPY_SELECTION')
 
     preserved = _preserve_clipboard()
     original_clipboard = preserved['text'] if preserved['preserved'] else ''
-    key_result = press_keys('cmd+c')
+    key_result = press_keys('cmd+c' if SYSTEM == 'darwin' else 'ctrl+c')
     if not key_result.get('ok'):
         return failure(
             'OS_COPY_SELECTION',
