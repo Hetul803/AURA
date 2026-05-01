@@ -43,6 +43,38 @@ def test_export_profile_includes_learning_tables(tmp_path):
         )
         conn.execute(
             """
+            INSERT OR REPLACE INTO workflow_templates(
+                workflow_id, name, command_template, active_version
+            ) VALUES (?, ?, ?, ?)
+            """,
+            ('wf-export', 'Export Workflow', 'Summarize this', 1),
+        )
+        conn.execute(
+            """
+            INSERT OR REPLACE INTO workflow_versions(
+                version_id, workflow_id, version, command_template
+            ) VALUES (?, ?, ?, ?)
+            """,
+            ('wfv-export', 'wf-export', 1, 'Summarize this'),
+        )
+        conn.execute(
+            """
+            INSERT OR REPLACE INTO workflow_repair_records(
+                repair_id, workflow_id, version, failure_reason
+            ) VALUES (?, ?, ?, ?)
+            """,
+            ('wfr-export', 'wf-export', 1, 'target drift'),
+        )
+        conn.execute(
+            """
+            INSERT OR REPLACE INTO local_profile_account(
+                profile_id, display_name, local_user_id
+            ) VALUES (?, ?, ?)
+            """,
+            ('profile-export', 'Local AURA User', 'local-export'),
+        )
+        conn.execute(
+            """
             INSERT OR REPLACE INTO safety_memory(
                 scope, action_key, policy, last_seen
             ) VALUES (?, ?, ?, ?)
@@ -59,3 +91,7 @@ def test_export_profile_includes_learning_tables(tmp_path):
     assert any(row['memory_key'] == 'tone' for row in data['preference_memory'])
     assert any(row['pattern_key'] == 'search-first' for row in data['workflow_memory'])
     assert any(row['action_key'] == 'dangerous-write' for row in data['safety_memory'])
+    assert any(row['workflow_id'] == 'wf-export' for row in data['workflow_templates'])
+    assert any(row['version_id'] == 'wfv-export' for row in data['workflow_versions'])
+    assert any(row['repair_id'] == 'wfr-export' for row in data['workflow_repair_records'])
+    assert any(row['profile_id'] == 'profile-export' for row in data['local_profile_account'])

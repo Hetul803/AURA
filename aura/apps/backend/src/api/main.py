@@ -43,9 +43,12 @@ from aura.macros import list_macros
 from aura.memory import delete_memory, list_memories, update_memory
 from aura.memory_engine import (
     archive_memory_item,
+    compact_memory_items,
     delete_memory_item,
     list_memory_items,
+    memory_lifecycle_sweep,
     remember_item,
+    reinforce_memory_item,
     search_memory_items,
     update_memory_item,
 )
@@ -63,16 +66,23 @@ from aura.mobile_companion import (
 from aura.orchestrator import approve_run, reject_run, resume_run, retry_assist_run, run_command
 from aura.planner import plan_from_text
 from aura.prefs import get_prefs, reset_all, reset_pref, set_pref
+from aura.profile_account import ensure_local_profile, get_profile_status, update_profile_status
 from aura.state import cancel_run, db_conn, get_run_context, list_audit_log, list_run_events, list_safety_events, record_run_event, set_panic
 from aura.user_tools import build_user_ai_prompt, get_user_web_tool, list_user_web_tools
 from aura.workflow_engine import (
     create_workflow,
+    create_workflow_version,
     delete_workflow,
     get_workflow,
+    list_workflow_repairs,
+    list_workflow_versions,
     list_workflows,
+    record_workflow_result,
+    record_workflow_repair,
     render_workflow_command,
     suggested_workflow_templates,
     update_workflow,
+    workflow_update_suggestions,
 )
 from storage.export_import import export_profile, import_profile
 from storage.migrations import run_migrations
@@ -117,6 +127,8 @@ class MemoryItemCreate(BaseModel):
     confidence: float = 0.5
     source: str = 'manual'
     pinned: bool = False
+    provenance: dict = {}
+    user_notes: str = ''
     metadata: dict = {}
 
 
@@ -131,6 +143,10 @@ class MemoryItemPatch(BaseModel):
     source: str | None = None
     pinned: bool | None = None
     archived: bool | None = None
+    user_notes: str | None = None
+    usage_count: int | None = None
+    last_used_at: str | None = None
+    provenance: dict | None = None
     metadata: dict | None = None
 
 
@@ -138,7 +154,27 @@ class MemorySearchBody(BaseModel):
     query: str
     kind: str | None = None
     scope: str | None = None
+    task_type: str | None = None
+    permission: str | None = None
     limit: int = 10
+
+
+class MemoryReinforceBody(BaseModel):
+    evidence: str | None = None
+    confidence_delta: float = 0.06
+    source: str | None = None
+
+
+class MemoryCompactBody(BaseModel):
+    scope: str | None = None
+    kind: str | None = None
+    older_than_days: int = 30
+    limit: int = 200
+
+
+class MemoryLifecycleBody(BaseModel):
+    stale_after_days: int = 180
+    low_confidence: float = 0.25
 
 
 class AgentRouteBody(BaseModel):
@@ -196,6 +232,10 @@ class WorkflowCreateBody(BaseModel):
     approval_policy: str = 'ask_for_risky_actions'
     source: str = 'manual'
     confidence: float = 0.5
+    required_context: list[str] = []
+    safety_class: str = 'medium'
+    repair_strategy: str = 'retry_then_escalate'
+    linked_memories: list[str] = []
     metadata: dict = {}
 
 
@@ -209,6 +249,10 @@ class WorkflowPatchBody(BaseModel):
     approval_policy: str | None = None
     source: str | None = None
     confidence: float | None = None
+    required_context: list[str] | None = None
+    safety_class: str | None = None
+    repair_strategy: str | None = None
+    changelog: str | None = None
     metadata: dict | None = None
 
 
@@ -221,6 +265,43 @@ class WorkflowRunBody(BaseModel):
     context: dict | None = None
     choices: dict = {}
     use_macro: bool = False
+
+
+class WorkflowRepairBody(BaseModel):
+    run_id: str | None = None
+    version: int | None = None
+    failed_step: str = ''
+    failure_reason: str = ''
+    repair_summary: str = ''
+    repair_succeeded: bool = False
+    update_recommended: bool | None = None
+    metadata: dict = {}
+
+
+class WorkflowVersionBody(BaseModel):
+    command_template: str
+    steps: list[dict] = []
+    required_context: list[str] = []
+    approval_requirements: list[str] = []
+    safety_class: str = 'medium'
+    repair_strategy: str = 'retry_then_escalate'
+    linked_memories: list[str] = []
+    changelog: str = ''
+
+
+class ProfilePatchBody(BaseModel):
+    display_name: str | None = None
+    cloud_account_id: str | None = None
+    subscription_tier: str | None = None
+    trial_state: str | None = None
+    billing_status: str | None = None
+    usage_limits: dict | None = None
+    model_cost_limits: dict | None = None
+    device_limit: int | None = None
+    cloud_sync_enabled: bool | None = None
+    memory_sync_identity: str | None = None
+    cloud_storage_target: dict | None = None
+    metadata: dict | None = None
 
 
 class HandoffCreateBody(BaseModel):
@@ -629,6 +710,43 @@ def workflows_render(workflow_id: str, body: WorkflowRenderBody):
     return rendered
 
 
+@app.get('/workflows/{workflow_id}/versions')
+def workflows_versions(workflow_id: str):
+    if not get_workflow(workflow_id):
+        raise HTTPException(404, 'workflow not found')
+    return list_workflow_versions(workflow_id)
+
+
+@app.post('/workflows/{workflow_id}/versions')
+def workflows_create_version(workflow_id: str, body: WorkflowVersionBody):
+    try:
+        return create_workflow_version(workflow_id, **body.model_dump())
+    except KeyError:
+        raise HTTPException(404, 'workflow not found')
+
+
+@app.get('/workflows/{workflow_id}/repairs')
+def workflows_repairs(workflow_id: str):
+    if not get_workflow(workflow_id):
+        raise HTTPException(404, 'workflow not found')
+    return list_workflow_repairs(workflow_id)
+
+
+@app.post('/workflows/{workflow_id}/repairs')
+def workflows_record_repair(workflow_id: str, body: WorkflowRepairBody):
+    try:
+        return record_workflow_repair(workflow_id, **body.model_dump())
+    except KeyError:
+        raise HTTPException(404, 'workflow not found')
+
+
+@app.get('/workflows/{workflow_id}/update-suggestions')
+def workflows_update_suggestions(workflow_id: str):
+    if not get_workflow(workflow_id):
+        raise HTTPException(404, 'workflow not found')
+    return workflow_update_suggestions(workflow_id)
+
+
 @app.post('/workflows/{workflow_id}/run')
 def workflows_run(workflow_id: str, body: WorkflowRunBody):
     rendered = render_workflow_command(workflow_id, body.variables)
@@ -642,6 +760,7 @@ def workflows_run(workflow_id: str, body: WorkflowRunBody):
 
     result = run_command(rendered['command'], emit, body.choices, body.use_macro, context=body.context)
     run_id = result.get('run_id', run_id)
+    record_workflow_result(workflow_id, ok=bool(result.get('ok')), failure_reason=(result.get('status') or result.get('error')))
     return {**result, 'workflow': rendered['workflow'], 'rendered_command': rendered['command']}
 
 
@@ -898,6 +1017,8 @@ def memory_items_create(body: MemoryItemCreate):
         confidence=body.confidence,
         source=body.source,
         pinned=body.pinned,
+        provenance=body.provenance,
+        user_notes=body.user_notes,
         metadata=body.metadata,
     )
 
@@ -920,7 +1041,25 @@ def memory_items_delete(memory_id: str, archive: bool = True):
 
 @app.post('/memory/search')
 def memory_search(body: MemorySearchBody):
-    return search_memory_items(body.query, kind=body.kind, scope=body.scope, limit=body.limit)
+    return search_memory_items(body.query, kind=body.kind, scope=body.scope, task_type=body.task_type, permission=body.permission, limit=body.limit)
+
+
+@app.post('/memory/items/{memory_id}/reinforce')
+def memory_items_reinforce(memory_id: str, body: MemoryReinforceBody):
+    updated = reinforce_memory_item(memory_id, evidence=body.evidence, confidence_delta=body.confidence_delta, source=body.source)
+    if not updated:
+        raise HTTPException(404, 'memory item not found')
+    return updated
+
+
+@app.post('/memory/compact')
+def memory_compact(body: MemoryCompactBody):
+    return compact_memory_items(scope=body.scope, kind=body.kind, older_than_days=body.older_than_days, limit=body.limit)
+
+
+@app.post('/memory/lifecycle-sweep')
+def memory_lifecycle(body: MemoryLifecycleBody):
+    return memory_lifecycle_sweep(stale_after_days=body.stale_after_days, low_confidence=body.low_confidence)
 
 
 @app.post('/retention/sweep')
@@ -937,6 +1076,16 @@ def profile_export(path: str):
 def profile_import(path: str):
     import_profile(path)
     return {'ok': True}
+
+
+@app.get('/profile/status')
+def profile_status():
+    return ensure_local_profile()
+
+
+@app.patch('/profile/status')
+def profile_status_patch(body: ProfilePatchBody):
+    return update_profile_status(**body.model_dump(exclude_unset=True))
 
 
 @app.post('/profile/snapshot')

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { approveRun, captureAssistContext, createWorkflow, getCurrentContext, getDevices, getMemoryItems, getRunState, getTools, getWorkflowSuggestions, getWorkflows, healthcheck, panicStop, rejectRun, resumeRun, retryRun, runWorkflow, sendCommand, subscribeRun } from './state/api';
+import { approveRun, captureAssistContext, compactMemory, createWorkflow, getCurrentContext, getDevices, getMemoryItems, getProfileStatus, getRunState, getTools, getWorkflowSuggestions, getWorkflows, healthcheck, panicStop, rejectRun, resumeRun, retryRun, runWorkflow, sendCommand, subscribeRun } from './state/api';
 import ActionPanel from './ui/ActionPanel';
 import { pushEvent, store } from './state/store';
 import { BACKEND_URL } from '../shared/constants';
@@ -48,9 +48,10 @@ export default function App() {
   const [memoryItems, setMemoryItems] = useState<any[]>([]);
   const [workflows, setWorkflows] = useState<any[]>([]);
   const [workflowSuggestions, setWorkflowSuggestions] = useState<any[]>([]);
+  const [profileStatus, setProfileStatus] = useState<any>(null);
 
   async function refreshKnowledge() {
-    const [p, m, ss, st, se, ts, ds, mi, wf, ws] = await Promise.all([
+    const [p, m, ss, st, se, ts, ds, mi, wf, ws, profile] = await Promise.all([
       fetch(`${BACKEND_URL}/preferences`).then(r => r.json()),
       fetch(`${BACKEND_URL}/memories`).then(r => r.json()),
       fetch(`${BACKEND_URL}/browser/sessions`).then(r => r.json()),
@@ -61,12 +62,14 @@ export default function App() {
       getMemoryItems(),
       getWorkflows(),
       getWorkflowSuggestions(),
+      getProfileStatus(),
     ]);
     setPrefs(p); setMemories(m); setSessions(ss); setStorage(st); setSafety(se);
     setTools(ts); setDevices(ds);
     setMemoryItems(mi);
     setWorkflows(wf);
     setWorkflowSuggestions(ws);
+    setProfileStatus(profile);
   }
 
   async function refreshRunState(targetRunId = runId) {
@@ -267,6 +270,7 @@ export default function App() {
           <h4>Saved</h4>
           <ul>{workflows.map((workflow: any) => <li key={workflow.workflow_id}>
             <strong>{workflow.name}</strong> / {workflow.command_template}
+            <div>v{workflow.active_version || 1} / success {workflow.success_count || 0} / failure {workflow.failure_count || 0}{workflow.last_failure_reason ? ` / last: ${workflow.last_failure_reason}` : ''}</div>
             <button style={{ marginLeft: 8 }} onClick={async () => {
               const context = previewContext || await getCurrentContext().catch(() => null);
               const r = await runWorkflow(workflow.workflow_id, context);
@@ -306,6 +310,16 @@ export default function App() {
       <h3>What AURA Knows</h3>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
       <div><h4>Personal Memory</h4><ul>{memoryItems.slice(0,20).map((m: any) => <li key={m.memory_id}>{m.kind} / {m.memory_key}: {m.value}</li>)}</ul></div>
+      <div><h4>Memory Quality</h4>
+        <div>Items: {memoryItems.length}</div>
+        <div>Avg confidence: {memoryItems.length ? Math.round((memoryItems.reduce((sum: number, m: any) => sum + (m.confidence || 0), 0) / memoryItems.length) * 100) : 0}%</div>
+        <div>Storage: {storage.db_size || 0} bytes</div>
+        <button onClick={async () => {
+          const r = await compactMemory('personal');
+          setOut(JSON.stringify(r, null, 2));
+          await refreshKnowledge();
+        }}>Compact personal memory</button>
+      </div>
       <div><h4>Preferences</h4><ul>{prefs.map((p: any) => <li key={p.decision_key}>{p.decision_key}: {p.value} ({Math.round((p.confidence||0)*100)}%)</li>)}</ul></div>
       <div><h4>Memories</h4><ul>{memories.slice(0,20).map((m: any) => <li key={m.id}>{m.key}: {m.value}</li>)}</ul></div>
       <div><h4>Sessions</h4><ul>{sessions.map((s: any) => <li key={s.domain}>{s.domain}</li>)}</ul></div>
@@ -323,6 +337,8 @@ export default function App() {
       </div>
       <h3>Device Adapters</h3>
       <ul>{devices.map((device: any) => <li key={device.adapter_id}><strong>{device.name}</strong>: {device.surface} / {device.status}</li>)}</ul>
+      <h3>Local Profile</h3>
+      <pre>{JSON.stringify(profileStatus, null, 2)}</pre>
     </section>}
 
     <pre>{out}</pre>

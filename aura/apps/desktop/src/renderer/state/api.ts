@@ -52,6 +52,18 @@ export async function getWorkflowSuggestions() {
   return r.json();
 }
 
+export async function getProfileStatus() {
+  const r = await fetch(`${BACKEND_URL}/profile/status`);
+  return r.json();
+}
+
+export async function compactMemory(scope?: string) {
+  const r = await fetch(`${BACKEND_URL}/memory/compact`, {
+    method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ scope, older_than_days: 30 })
+  });
+  return r.json();
+}
+
 export async function createWorkflow(body: any) {
   const r = await fetch(`${BACKEND_URL}/workflows`, {
     method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body)

@@ -134,6 +134,10 @@ SCHEMA = [
   permission TEXT DEFAULT 'private',
   pinned INTEGER DEFAULT 0,
   archived INTEGER DEFAULT 0,
+  provenance_json TEXT DEFAULT '{}',
+  user_notes TEXT DEFAULT '',
+  last_used_at TEXT,
+  usage_count INTEGER DEFAULT 0,
   metadata_json TEXT DEFAULT '{}',
   created_at TEXT DEFAULT CURRENT_TIMESTAMP,
   updated_at TEXT DEFAULT CURRENT_TIMESTAMP
@@ -176,10 +180,68 @@ SCHEMA = [
   trigger_type TEXT,
   trigger_value TEXT,
   command_template TEXT,
+  required_context_json TEXT DEFAULT '[]',
+  safety_class TEXT DEFAULT 'medium',
+  repair_strategy TEXT DEFAULT 'retry_then_escalate',
+  active_version INTEGER DEFAULT 1,
+  success_count INTEGER DEFAULT 0,
+  failure_count INTEGER DEFAULT 0,
+  last_failure_reason TEXT,
   enabled INTEGER DEFAULT 1,
   approval_policy TEXT DEFAULT 'ask_for_risky_actions',
   source TEXT DEFAULT 'manual',
   confidence REAL DEFAULT 0.5,
+  metadata_json TEXT DEFAULT '{}',
+  created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+);""",
+"""CREATE TABLE IF NOT EXISTS workflow_versions(
+  version_id TEXT PRIMARY KEY,
+  workflow_id TEXT,
+  version INTEGER,
+  command_template TEXT,
+  steps_json TEXT DEFAULT '[]',
+  required_context_json TEXT DEFAULT '[]',
+  approval_requirements_json TEXT DEFAULT '[]',
+  safety_class TEXT DEFAULT 'medium',
+  repair_strategy TEXT DEFAULT 'retry_then_escalate',
+  linked_memories_json TEXT DEFAULT '[]',
+  changelog TEXT DEFAULT '',
+  archived INTEGER DEFAULT 0,
+  success_count INTEGER DEFAULT 0,
+  failure_count INTEGER DEFAULT 0,
+  last_failure_reason TEXT,
+  created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE(workflow_id, version)
+);""",
+"""CREATE TABLE IF NOT EXISTS workflow_repair_records(
+  repair_id TEXT PRIMARY KEY,
+  workflow_id TEXT,
+  version INTEGER,
+  run_id TEXT,
+  failed_step TEXT,
+  failure_reason TEXT,
+  repair_summary TEXT,
+  repair_succeeded INTEGER DEFAULT 0,
+  update_recommended INTEGER DEFAULT 0,
+  revised_workflow_id TEXT,
+  metadata_json TEXT DEFAULT '{}',
+  created_at TEXT DEFAULT CURRENT_TIMESTAMP
+);""",
+"""CREATE TABLE IF NOT EXISTS local_profile_account(
+  profile_id TEXT PRIMARY KEY,
+  display_name TEXT,
+  local_user_id TEXT,
+  cloud_account_id TEXT,
+  subscription_tier TEXT DEFAULT 'local_free',
+  trial_state TEXT DEFAULT 'not_started',
+  billing_status TEXT DEFAULT 'local_only',
+  usage_limits_json TEXT DEFAULT '{}',
+  model_cost_limits_json TEXT DEFAULT '{}',
+  device_limit INTEGER DEFAULT 1,
+  cloud_sync_enabled INTEGER DEFAULT 0,
+  memory_sync_identity TEXT,
+  cloud_storage_target_json TEXT DEFAULT '{}',
   metadata_json TEXT DEFAULT '{}',
   created_at TEXT DEFAULT CURRENT_TIMESTAMP,
   updated_at TEXT DEFAULT CURRENT_TIMESTAMP
@@ -306,3 +368,24 @@ def init_db() -> None:
         reflection_cols = [r[1] for r in conn.execute('PRAGMA table_info(reflection_records)').fetchall()]
         if 'confidence_signals' not in reflection_cols:
             conn.execute("ALTER TABLE reflection_records ADD COLUMN confidence_signals TEXT DEFAULT ''")
+        def ensure_cols(table: str, columns: dict[str, str]):
+            existing = [r[1] for r in conn.execute(f'PRAGMA table_info({table})').fetchall()]
+            for name, ddl in columns.items():
+                if name not in existing:
+                    conn.execute(f'ALTER TABLE {table} ADD COLUMN {name} {ddl}')
+
+        ensure_cols('memory_items', {
+            'provenance_json': "TEXT DEFAULT '{}'",
+            'user_notes': "TEXT DEFAULT ''",
+            'last_used_at': 'TEXT',
+            'usage_count': 'INTEGER DEFAULT 0',
+        })
+        ensure_cols('workflow_templates', {
+            'required_context_json': "TEXT DEFAULT '[]'",
+            'safety_class': "TEXT DEFAULT 'medium'",
+            'repair_strategy': "TEXT DEFAULT 'retry_then_escalate'",
+            'active_version': 'INTEGER DEFAULT 1',
+            'success_count': 'INTEGER DEFAULT 0',
+            'failure_count': 'INTEGER DEFAULT 0',
+            'last_failure_reason': 'TEXT',
+        })
