@@ -19,6 +19,7 @@ from aura.cost_router import (
     set_budget,
     usage_summary,
 )
+from aura.device_handoff import create_handoff, get_handoff, list_handoffs, update_handoff
 from devices.adapters import get_device_adapter, list_device_adapters
 from aura.learning import (
     consolidate_learning,
@@ -196,6 +197,20 @@ class WorkflowRenderBody(BaseModel):
     variables: dict = {}
 
 
+class HandoffCreateBody(BaseModel):
+    source_device: str
+    target_device: str
+    payload: dict
+    run_id: str | None = None
+    approval_required: bool = False
+    status: str = 'pending'
+
+
+class HandoffPatchBody(BaseModel):
+    status: str | None = None
+    payload: dict | None = None
+
+
 class LearningQuery(BaseModel):
     task_type: str | None = None
     domain: str | None = None
@@ -257,6 +272,39 @@ def tools_get(action_type: str):
 @app.get('/devices')
 def devices_list():
     return list_device_adapters()
+
+
+@app.get('/devices/handoffs')
+def device_handoffs_list(status: str | None = None, target_device: str | None = None, limit: int = 100):
+    return list_handoffs(status=status, target_device=target_device, limit=limit)
+
+
+@app.post('/devices/handoffs')
+def device_handoffs_create(body: HandoffCreateBody):
+    return create_handoff(
+        source_device=body.source_device,
+        target_device=body.target_device,
+        payload=body.payload,
+        run_id=body.run_id,
+        approval_required=body.approval_required,
+        status=body.status,
+    )
+
+
+@app.get('/devices/handoffs/{handoff_id}')
+def device_handoffs_get(handoff_id: str):
+    handoff = get_handoff(handoff_id)
+    if not handoff:
+        raise HTTPException(404, 'handoff not found')
+    return handoff
+
+
+@app.patch('/devices/handoffs/{handoff_id}')
+def device_handoffs_patch(handoff_id: str, body: HandoffPatchBody):
+    handoff = update_handoff(handoff_id, **body.model_dump(exclude_unset=True))
+    if not handoff:
+        raise HTTPException(404, 'handoff not found')
+    return handoff
 
 
 @app.get('/devices/{adapter_id}')

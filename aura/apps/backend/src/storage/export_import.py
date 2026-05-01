@@ -10,6 +10,7 @@ PROFILE_TABLES = [
     'model_response_cache',
     'cost_budgets',
     'workflow_templates',
+    'device_handoffs',
     'preferences',
     'macros',
     'actions_log',
