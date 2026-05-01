@@ -1,3 +1,19 @@
 appId: com.aura.desktop
+productName: AURA
+artifactName: AURA-${version}-${os}-${arch}.${ext}
+directories:
+  output: release
 files:
   - dist/**
+extraMetadata:
+  description: Private, local-first personal AI operating layer.
+asar: true
+win:
+  target:
+    - nsis
+mac:
+  target:
+    - dmg
+linux:
+  target:
+    - AppImage

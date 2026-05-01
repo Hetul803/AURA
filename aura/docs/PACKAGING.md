@@ -1,7 +1,27 @@
-# PACKAGING
+# Packaging
 
-AURA v1 documentation for PACKAGING.
+AURA private alpha packaging is desktop-first and local-first.
 
-- Local-first profile storage.
-- Deterministic execution runtime.
-- Safety confirmations for sensitive operations.
+## Targets
+
+- Windows: NSIS installer.
+- macOS: DMG.
+- Linux: AppImage.
+
+## Readiness
+
+Before shipping a private alpha build, run:
+
+```bash
+python infra/scripts/private_alpha_check.py
+```
+
+Then run the available test suites for the current machine. If desktop tests cannot run because Node or pnpm is unavailable, record that as a release limitation.
+
+## Alpha Guarantees
+
+- Local profile storage remains the default.
+- Risky actions still go through approval.
+- Logs and audit records must be available for debugging.
+- User web subscriptions are used only through user-controlled browser sessions.
+- Release notes must include known limitations and rollback steps.
