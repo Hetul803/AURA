@@ -11,8 +11,13 @@ from .macros import match_macro, record_macro, render_macro_steps, touch_macro
 from .memory import remember_execution, write_memory
 from .planner import plan_from_text
 from .prefs import set_pref
-from .state import get_run_context, set_run_context, update_run_context
+from .state import decide_approval, get_run_context, record_run_event, set_run_context, update_run_context
 from .steps import Step
+
+
+def _send_event(event_cb, event: dict):
+    record_run_event(event)
+    event_cb(event)
 
 
 def _materialize_steps(plan: dict, use_macro: bool = False):
@@ -42,7 +47,7 @@ def _status_from_result(result: list[dict]) -> str:
 
 def run_command(text: str, event_cb=lambda e: None, choices: dict | None = None, use_macro: bool = False, run_id: str | None = None):
     run_id = run_id or str(uuid.uuid4())
-    event_cb({'type': 'run_start', 'run_id': run_id, 'status': 'running', 'message': text})
+    _send_event(event_cb, {'type': 'run_start', 'run_id': run_id, 'status': 'running', 'message': text})
     plan = plan_from_text(text, choices)
 
     if plan['clarifications']:
@@ -55,7 +60,7 @@ def run_command(text: str, event_cb=lambda e: None, choices: dict | None = None,
 
     steps, macro = _materialize_steps(plan, use_macro)
     if macro and not use_macro:
-        event_cb({'type': 'macro_suggested', 'run_id': run_id, 'status': 'clarification', 'message': f"Use saved workflow {macro['name']}?"})
+        _send_event(event_cb, {'type': 'macro_suggested', 'run_id': run_id, 'status': 'clarification', 'message': f"Use saved workflow {macro['name']}?"})
         set_run_context(run_id, {'text': text, 'choices': choices or {}, 'use_macro': False, 'status': 'macro_suggested', 'plan': {**plan, 'steps': [s.model_dump() for s in steps]}})
         return {'ok': False, 'run_id': run_id, 'macro_suggestion': {'id': macro['id'], 'name': macro['name']}, 'plan_signature': plan['signature'], 'plan': {k: v for k, v in plan.items() if k != 'steps'}}
 
@@ -96,7 +101,7 @@ def run_command(text: str, event_cb=lambda e: None, choices: dict | None = None,
     status = _status_from_result(result)
 
     ctx = get_run_context(run_id) or {}
-    terminal_outcome = ctx.get('terminal_outcome') or ('success' if status == 'done' else ('needs_user' if status == 'awaiting_approval' else 'failed'))
+    terminal_outcome = 'success' if status == 'done' else ('needs_user' if status == 'awaiting_approval' else (ctx.get('terminal_outcome') or 'failed'))
     update_run_context(run_id, {'status': status, 'current_step_index': last.get('step_index', 0), 'terminal_outcome': terminal_outcome})
     learning = record_run_learning(run_id, get_run_context(run_id) or {})
     update_run_context(run_id, {'learning': learning})
@@ -125,7 +130,7 @@ def resume_run(run_id: str, event_cb=lambda e: None):
 
     steps = [Step(**s) for s in ctx.get('steps', [])]
     start_index = int(ctx.get('paused_step_index', ctx.get('current_step_index', 0)))
-    event_cb({'type': 'resumed', 'run_id': run_id, 'status': 'running', 'message': 'Run resumed by user', 'url': (ctx.get('last_observation') or {}).get('url', '')})
+    _send_event(event_cb, {'type': 'resumed', 'run_id': run_id, 'status': 'running', 'message': 'Run resumed by user', 'url': (ctx.get('last_observation') or {}).get('url', '')})
 
     result = execute_steps(run_id, steps, event_cb, start_index=start_index)
     if result and result[-1]['status'] == 'needs_user':
@@ -165,7 +170,31 @@ def approve_assist_run(run_id: str, approved_text: str | None = None, event_cb=l
     approval.update({'status': 'approved', 'final_text': final_text, 'approved_by_user': True, 'decided_at': time.time()})
     update_run_context(run_id, {'approval_state': approval, 'status': 'approved_pending_paste', 'paused': False, 'user_intervention_required': False})
     update_run_context(run_id, {'assist': {**(ctx.get('assist') or {}), 'final_outcome': 'approved_pending_paste'}})
-    event_cb({'type': 'approval_received', 'run_id': run_id, 'status': 'approved', 'message': 'Draft approved for paste-back.'})
+    _send_event(event_cb, {'type': 'approval_received', 'run_id': run_id, 'status': 'approved', 'message': 'Draft approved for paste-back.'})
+    return resume_run(run_id, event_cb)
+
+
+def approve_run(run_id: str, approved_text: str | None = None, event_cb=lambda e: None):
+    ctx = get_run_context(run_id)
+    if not ctx:
+        return {'ok': False, 'error': 'run_not_found', 'run_id': run_id}
+    approval = ctx.get('approval_state') or {}
+    if approval.get('kind') != 'tool_confirmation':
+        return approve_assist_run(run_id, approved_text, event_cb)
+
+    decision = decide_approval(run_id, True, {'approved_by_user': True, 'approved_text': approved_text or ''})
+    if not decision:
+        return {'ok': False, 'error': 'approval_not_found', 'run_id': run_id}
+    approval.update({'status': 'approved', 'approved_by_user': True, 'decided_at': time.time()})
+    update_run_context(run_id, {'approval_state': approval, 'status': 'approved_pending_resume', 'paused': False, 'user_intervention_required': False})
+    _send_event(event_cb, {
+        'type': 'approval_received',
+        'run_id': run_id,
+        'status': 'approved',
+        'approval_id': decision.get('approval_id'),
+        'step_id': decision.get('step_id'),
+        'message': 'Risky action approved; resuming run.',
+    })
     return resume_run(run_id, event_cb)
 
 
@@ -179,12 +208,12 @@ def retry_assist_run(run_id: str, feedback: str | None = None, event_cb=lambda e
         draft = draft_from_state(ctx, feedback=feedback)
     except RuntimeError as exc:
         update_run_context(run_id, {'status': 'needs_user', 'last_failure_class': 'assist_model_unavailable', 'assist': {**(ctx.get('assist') or {}), 'learning_signals': {'feedback_preferences': learned}}})
-        event_cb({'type': 'needs_user', 'run_id': run_id, 'status': 'needs_user', 'message': str(exc)})
+        _send_event(event_cb, {'type': 'needs_user', 'run_id': run_id, 'status': 'needs_user', 'message': str(exc)})
         return {'ok': False, 'run_id': run_id, 'status': 'needs_user', 'run_state': get_run_context(run_id)}
     approval = {**(ctx.get('approval_state') or {})}
     approval.update({'status': 'pending', 'draft_text': draft['draft_text'], 'edited_text': '', 'final_text': '', 'feedback': feedback or '', 'approved_by_user': False, 'requested_at': time.time()})
     update_run_context(run_id, {'draft_state': draft, 'approval_state': approval, 'status': 'awaiting_approval', 'paused': True, 'assist': {**(ctx.get('assist') or {}), 'learning_signals': {'feedback_preferences': learned}, 'final_outcome': 'awaiting_approval'}})
-    event_cb({'type': 'draft_regenerated', 'run_id': run_id, 'status': 'awaiting_approval', 'message': 'Draft regenerated for review.'})
+    _send_event(event_cb, {'type': 'draft_regenerated', 'run_id': run_id, 'status': 'awaiting_approval', 'message': 'Draft regenerated for review.'})
     learning = record_run_learning(run_id, get_run_context(run_id) or {})
     update_run_context(run_id, {'learning': learning})
     return {'ok': True, 'run_id': run_id, 'status': 'awaiting_approval', 'run_state': get_run_context(run_id)}
@@ -202,7 +231,39 @@ def reject_assist_run(run_id: str, reason: str | None = None, event_cb=lambda e:
     approval = {**(ctx.get('approval_state') or {})}
     approval.update({'status': 'rejected', 'decision_reason': reason or '', 'decided_at': time.time(), 'approved_by_user': False})
     update_run_context(run_id, {'approval_state': approval, 'status': 'rejected', 'terminal_outcome': 'rejected', 'paused': False, 'pasteback_state': {'status': 'skipped', 'paste_attempted': False, 'paste_blocked_reason': 'draft_rejected'}, 'assist': {**(ctx.get('assist') or {}), 'learning_signals': {'feedback_preferences': learned}, 'final_outcome': 'rejected'}})
-    event_cb({'type': 'draft_rejected', 'run_id': run_id, 'status': 'rejected', 'message': 'Draft rejected; paste-back skipped.'})
+    _send_event(event_cb, {'type': 'draft_rejected', 'run_id': run_id, 'status': 'rejected', 'message': 'Draft rejected; paste-back skipped.'})
+    learning = record_run_learning(run_id, get_run_context(run_id) or {})
+    update_run_context(run_id, {'learning': learning})
+    return {'ok': True, 'run_id': run_id, 'status': 'rejected', 'run_state': get_run_context(run_id)}
+
+
+def reject_run(run_id: str, reason: str | None = None, event_cb=lambda e: None):
+    ctx = get_run_context(run_id)
+    if not ctx:
+        return {'ok': False, 'error': 'run_not_found', 'run_id': run_id}
+    approval = ctx.get('approval_state') or {}
+    if approval.get('kind') != 'tool_confirmation':
+        return reject_assist_run(run_id, reason, event_cb)
+
+    decision = decide_approval(run_id, False, {'approved_by_user': False, 'reason': reason or ''})
+    if not decision:
+        return {'ok': False, 'error': 'approval_not_found', 'run_id': run_id}
+    approval.update({'status': 'rejected', 'approved_by_user': False, 'decision_reason': reason or '', 'decided_at': time.time()})
+    update_run_context(run_id, {
+        'approval_state': approval,
+        'status': 'rejected',
+        'terminal_outcome': 'rejected',
+        'paused': False,
+        'user_intervention_required': False,
+    })
+    _send_event(event_cb, {
+        'type': 'approval_rejected',
+        'run_id': run_id,
+        'status': 'rejected',
+        'approval_id': decision.get('approval_id'),
+        'step_id': decision.get('step_id'),
+        'message': 'Risky action rejected; run stopped.',
+    })
     learning = record_run_learning(run_id, get_run_context(run_id) or {})
     update_run_context(run_id, {'learning': learning})
     return {'ok': True, 'run_id': run_id, 'status': 'rejected', 'run_state': get_run_context(run_id)}

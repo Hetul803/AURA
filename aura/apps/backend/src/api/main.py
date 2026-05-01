@@ -20,10 +20,10 @@ from aura.learning import (
 from aura.macros import list_macros
 from aura.memory import delete_memory, list_memories, update_memory
 from aura.models import available_models
-from aura.orchestrator import approve_assist_run, reject_assist_run, resume_run, retry_assist_run, run_command
+from aura.orchestrator import approve_run, reject_run, resume_run, retry_assist_run, run_command
 from aura.planner import plan_from_text
 from aura.prefs import get_prefs, reset_all, reset_pref, set_pref
-from aura.state import cancel_run, db_conn, get_run_context, list_safety_events, set_panic
+from aura.state import cancel_run, db_conn, get_run_context, list_audit_log, list_run_events, list_safety_events, record_run_event, set_panic
 from storage.export_import import export_profile, import_profile
 from storage.migrations import run_migrations
 from storage.profile_paths import profile_dir
@@ -126,14 +126,18 @@ def panic(body: PanicBody):
     set_panic(True)
     if body.run_id:
         cancel_run(body.run_id)
-        _emit(body.run_id, {'type': 'run_cancelled', 'run_id': body.run_id, 'status': 'cancelled', 'message': 'panic stop'})
+        event = {'type': 'run_cancelled', 'run_id': body.run_id, 'status': 'cancelled', 'message': 'panic stop'}
+        record_run_event(event)
+        _emit(body.run_id, event)
     return {'panic': True, 'run_id': body.run_id}
 
 
 @app.post('/panic/{run_id}')
 def panic_run(run_id: str):
     cancel_run(run_id)
-    _emit(run_id, {'type': 'run_cancelled', 'run_id': run_id, 'status': 'cancelled', 'message': 'panic stop'})
+    event = {'type': 'run_cancelled', 'run_id': run_id, 'status': 'cancelled', 'message': 'panic stop'}
+    record_run_event(event)
+    _emit(run_id, event)
     return {'panic': True, 'run_id': run_id}
 
 
@@ -156,7 +160,7 @@ def approve(run_id: str, body: ApprovalBody):
     def emit(e):
         _emit(run_id, e)
 
-    return approve_assist_run(run_id, body.text, emit)
+    return approve_run(run_id, body.text, emit)
 
 
 @app.post('/runs/{run_id}/retry')
@@ -172,7 +176,7 @@ def reject(run_id: str, body: RejectBody):
     def emit(e):
         _emit(run_id, e)
 
-    return reject_assist_run(run_id, body.reason, emit)
+    return reject_run(run_id, body.reason, emit)
 
 
 @app.get('/runs/{run_id}')
@@ -181,6 +185,21 @@ def run_state(run_id: str):
     if not state:
         raise HTTPException(404, 'run not found')
     return state
+
+
+@app.get('/runs/{run_id}/events')
+def run_events(run_id: str):
+    return list_run_events(run_id)
+
+
+@app.get('/audit')
+def audit(limit: int = 100):
+    return list_audit_log(limit=limit)
+
+
+@app.get('/runs/{run_id}/audit')
+def run_audit(run_id: str, limit: int = 100):
+    return list_audit_log(run_id=run_id, limit=limit)
 
 
 @app.get('/events/stream/{run_id}')

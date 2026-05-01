@@ -105,6 +105,46 @@ SCHEMA = [
   last_seen TEXT,
   UNIQUE(scope, action_key, policy)
 );""",
+"""CREATE TABLE IF NOT EXISTS run_records(
+  run_id TEXT PRIMARY KEY,
+  text TEXT,
+  status TEXT,
+  context_json TEXT,
+  created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+);""",
+"""CREATE TABLE IF NOT EXISTS run_events(
+  id INTEGER PRIMARY KEY,
+  run_id TEXT,
+  event_type TEXT,
+  status TEXT,
+  step_id TEXT,
+  payload_json TEXT,
+  created_at TEXT DEFAULT CURRENT_TIMESTAMP
+);""",
+"""CREATE TABLE IF NOT EXISTS approval_records(
+  approval_id TEXT PRIMARY KEY,
+  run_id TEXT,
+  step_id TEXT,
+  action_type TEXT,
+  risk_reason TEXT,
+  status TEXT,
+  requested_payload_json TEXT,
+  decision_payload_json TEXT,
+  requested_at TEXT DEFAULT CURRENT_TIMESTAMP,
+  decided_at TEXT
+);""",
+"""CREATE TABLE IF NOT EXISTS audit_log(
+  id INTEGER PRIMARY KEY,
+  run_id TEXT,
+  step_id TEXT,
+  event_type TEXT,
+  action_type TEXT,
+  risk_level TEXT,
+  message TEXT,
+  payload_json TEXT,
+  created_at TEXT DEFAULT CURRENT_TIMESTAMP
+);""",
 ]
 
 

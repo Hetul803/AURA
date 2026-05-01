@@ -54,8 +54,8 @@ def test_export_profile_includes_learning_tables(tmp_path):
     export_profile(str(out))
     data = json.loads(out.read_text(encoding='utf-8'))
 
-    assert data['reflection_records'][0]['run_id'] == 'run-1'
-    assert data['site_memory'][0]['domain'] == 'example.com'
-    assert data['preference_memory'][0]['memory_key'] == 'tone'
-    assert data['workflow_memory'][0]['pattern_key'] == 'search-first'
-    assert data['safety_memory'][0]['action_key'] == 'dangerous-write'
+    assert any(row['run_id'] == 'run-1' for row in data['reflection_records'])
+    assert any(row['domain'] == 'example.com' for row in data['site_memory'])
+    assert any(row['memory_key'] == 'tone' for row in data['preference_memory'])
+    assert any(row['pattern_key'] == 'search-first' for row in data['workflow_memory'])
+    assert any(row['action_key'] == 'dangerous-write' for row in data['safety_memory'])

@@ -750,7 +750,7 @@ def query_relevant_memory(
             score += 4
         if domain and row['scope'] == domain:
             score += 2
-        if row['scope'] == 'global':
+        if row['scope'] == 'global' and (not action_key or row['action_key'] == action_key):
             score += 1
         if score:
             safety.append({**row, 'score': score})

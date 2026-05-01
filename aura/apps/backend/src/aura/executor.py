@@ -9,9 +9,12 @@ from .repair import build_repair_step, strategy_for_failure
 from .safety import guard_step
 from .state import (
     append_run_history,
+    create_approval_request,
     get_run_context,
     increment_run_counter,
+    is_step_approved,
     is_run_cancelled,
+    record_run_event,
     record_safety_event,
     update_run_context,
 )
@@ -61,6 +64,7 @@ def _emit_step(event_cb, run_id: str, step, status: str, **extra):
         'timestamp': time.time(),
     }
     payload.update(extra)
+    record_run_event(payload)
     event_cb(payload)
 
 
@@ -218,6 +222,7 @@ def execute_steps(run_id: str, steps, event_cb, wait_poll_ms: int = 100, start_i
     out = []
     for idx, step in enumerate(steps[start_index:], start=start_index):
         if is_run_cancelled(run_id):
+            record_run_event({'type': 'run_cancelled', 'run_id': run_id, 'status': 'cancelled'})
             event_cb({'type': 'run_cancelled', 'run_id': run_id, 'status': 'cancelled'})
             update_run_context(run_id, {'terminal_outcome': 'cancelled', 'status': 'cancelled'})
             return out + [{'step': step.id, 'status': 'cancelled', 'step_index': idx}]
@@ -240,13 +245,46 @@ def execute_steps(run_id: str, steps, event_cb, wait_poll_ms: int = 100, start_i
             update_run_context(run_id, {'terminal_outcome': 'blocked', 'status': 'blocked'})
             _emit_step(event_cb, run_id, step, 'failed', message='blocked by safety', url=last_obs.get('url', ''))
             continue
-        if guard == 'confirm' and step.action_type not in (ASSIST_APPROVAL, ASSIST_PASTE):
-            out.append({'step': step.id, 'status': 'needs_confirmation', 'step_index': idx})
-            event = {'kind': 'confirmation', 'run_id': run_id, 'step_id': step.id, 'action': step.action_type}
+        if guard == 'confirm' and step.action_type not in (ASSIST_APPROVAL, ASSIST_PASTE) and not is_step_approved(run_id, step.id):
+            approval = create_approval_request(run_id, step, 'confirmation_required')
+            out.append({'step': step.id, 'status': 'awaiting_approval', 'step_index': idx, 'approval': approval})
+            event = {'kind': 'confirmation', 'run_id': run_id, 'step_id': step.id, 'action': step.action_type, 'risk_level': step.safety_level, 'approval_id': approval['approval_id']}
             _record_safety_history(run_id, event)
             _record_step_history(run_id, step, 'needs_confirmation')
-            _emit_step(event_cb, run_id, step, 'clarification', message='confirmation required', url=last_obs.get('url', ''))
-            continue
+            update_run_context(run_id, {
+                'paused': True,
+                'paused_step_index': idx,
+                'status': 'awaiting_approval',
+                'terminal_outcome': 'needs_approval',
+                'user_intervention_required': True,
+                'approval_state': {
+                    'kind': 'tool_confirmation',
+                    'required': True,
+                    'status': 'pending',
+                    'approval_id': approval['approval_id'],
+                    'step_id': step.id,
+                    'step_name': step.name,
+                    'action_type': step.action_type,
+                    'tool': step.tool,
+                    'risk_reason': approval['risk_reason'],
+                    'requested_args': step.args,
+                },
+            })
+            payload = {
+                'type': 'approval_required',
+                'run_id': run_id,
+                'status': 'awaiting_approval',
+                'step_id': step.id,
+                'step_index': idx,
+                'approval_id': approval['approval_id'],
+                'message': 'Confirmation required before AURA can continue.',
+                'action_type': step.action_type,
+                'risk_reason': approval['risk_reason'],
+                'url': last_obs.get('url', ''),
+            }
+            record_run_event(payload)
+            event_cb(payload)
+            return out
 
         _emit_step(event_cb, run_id, step, 'planned')
         attempts = 0
@@ -256,6 +294,7 @@ def execute_steps(run_id: str, steps, event_cb, wait_poll_ms: int = 100, start_i
 
         while attempts < max_attempts:
             if is_run_cancelled(run_id):
+                record_run_event({'type': 'run_cancelled', 'run_id': run_id, 'status': 'cancelled'})
                 event_cb({'type': 'run_cancelled', 'run_id': run_id, 'status': 'cancelled'})
                 update_run_context(run_id, {'terminal_outcome': 'cancelled', 'status': 'cancelled'})
                 return out + [{'step': step.id, 'status': 'cancelled', 'step_index': idx}]
@@ -267,6 +306,7 @@ def execute_steps(run_id: str, steps, event_cb, wait_poll_ms: int = 100, start_i
                 elapsed = 0
                 while elapsed < target_ms:
                     if is_run_cancelled(run_id):
+                        record_run_event({'type': 'run_cancelled', 'run_id': run_id, 'status': 'cancelled'})
                         event_cb({'type': 'run_cancelled', 'run_id': run_id, 'status': 'cancelled'})
                         update_run_context(run_id, {'terminal_outcome': 'cancelled', 'status': 'cancelled'})
                         return out + [{'step': step.id, 'status': 'cancelled', 'step_index': idx}]
@@ -317,7 +357,9 @@ def execute_steps(run_id: str, steps, event_cb, wait_poll_ms: int = 100, start_i
                     event_type = 'approval_required'
                     message = 'Draft ready for approval.'
                 update_run_context(run_id, paused_patch)
-                event_cb({'type': event_type, 'run_id': run_id, 'status': paused_patch.get('status', 'needs_user'), 'step_id': step.id, 'step_index': idx, 'message': message, 'url': observation_map.get('url', ''), 'session': 'login_required', 'failure_class': decision.get('failure_class')})
+                payload = {'type': event_type, 'run_id': run_id, 'status': paused_patch.get('status', 'needs_user'), 'step_id': step.id, 'step_index': idx, 'message': message, 'url': observation_map.get('url', ''), 'session': 'login_required', 'failure_class': decision.get('failure_class')}
+                record_run_event(payload)
+                event_cb(payload)
                 return out + [{'step': step.id, 'status': paused_patch.get('status', 'needs_user'), 'result': result, 'step_index': idx}]
 
             if decision['outcome'] == 'repair':

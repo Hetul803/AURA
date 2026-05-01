@@ -15,6 +15,10 @@ PROFILE_TABLES = [
     'preference_memory',
     'workflow_memory',
     'safety_memory',
+    'run_records',
+    'run_events',
+    'approval_records',
+    'audit_log',
 ]
 
 def export_profile(path: str) -> str:
