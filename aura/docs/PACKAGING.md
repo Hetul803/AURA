@@ -18,6 +18,20 @@ python infra/scripts/private_alpha_check.py
 
 Then run the available test suites for the current machine. If desktop tests cannot run because Node or pnpm is unavailable, record that as a release limitation.
 
+On Windows, run the packaging smoke check:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File infra/scripts/package_smoke.ps1
+```
+
+The smoke check runs private-alpha readiness first, verifies Node/pnpm availability, and runs desktop test/build/package steps when pnpm is installed.
+
+On macOS/Linux, run:
+
+```bash
+bash infra/scripts/build_desktop.sh
+```
+
 ## Alpha Guarantees
 
 - Local profile storage remains the default.
