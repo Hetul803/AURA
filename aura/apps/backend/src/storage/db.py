@@ -195,6 +195,29 @@ SCHEMA = [
   created_at TEXT DEFAULT CURRENT_TIMESTAMP,
   updated_at TEXT DEFAULT CURRENT_TIMESTAMP
 );""",
+"""CREATE TABLE IF NOT EXISTS aura_identities(
+  identity_id TEXT PRIMARY KEY,
+  name TEXT,
+  identity_type TEXT,
+  owner TEXT,
+  memory_scope TEXT,
+  policy_scope TEXT,
+  metadata_json TEXT DEFAULT '{}',
+  created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+);""",
+"""CREATE TABLE IF NOT EXISTS boundary_policies(
+  policy_id TEXT PRIMARY KEY,
+  source_identity TEXT,
+  target_identity TEXT,
+  data_class TEXT,
+  action TEXT,
+  decision TEXT,
+  reason TEXT,
+  metadata_json TEXT DEFAULT '{}',
+  created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+);""",
 """CREATE TABLE IF NOT EXISTS approval_records(
   approval_id TEXT PRIMARY KEY,
   run_id TEXT,

@@ -11,6 +11,8 @@ PROFILE_TABLES = [
     'cost_budgets',
     'workflow_templates',
     'device_handoffs',
+    'aura_identities',
+    'boundary_policies',
     'preferences',
     'macros',
     'actions_log',

@@ -20,6 +20,14 @@ from aura.cost_router import (
     usage_summary,
 )
 from aura.device_handoff import create_handoff, get_handoff, list_handoffs, update_handoff
+from aura.identity_boundary import (
+    check_boundary,
+    create_identity,
+    ensure_default_identities,
+    list_boundary_policies,
+    list_identities,
+    upsert_boundary_policy,
+)
 from devices.adapters import get_device_adapter, list_device_adapters
 from aura.learning import (
     consolidate_learning,
@@ -211,6 +219,34 @@ class HandoffPatchBody(BaseModel):
     payload: dict | None = None
 
 
+class IdentityCreateBody(BaseModel):
+    name: str
+    identity_type: str
+    owner: str
+    memory_scope: str
+    policy_scope: str
+    identity_id: str | None = None
+    metadata: dict = {}
+
+
+class BoundaryPolicyBody(BaseModel):
+    source_identity: str
+    target_identity: str
+    data_class: str
+    action: str
+    decision: str
+    reason: str
+    policy_id: str | None = None
+    metadata: dict = {}
+
+
+class BoundaryCheckBody(BaseModel):
+    source_identity: str
+    target_identity: str
+    data_class: str
+    action: str
+
+
 class LearningQuery(BaseModel):
     task_type: str | None = None
     domain: str | None = None
@@ -336,6 +372,38 @@ def agents_get(agent_id: str):
     if not agent:
         raise HTTPException(404, 'agent not registered')
     return agent
+
+
+@app.get('/identities')
+def identities_list():
+    ensure_default_identities()
+    return list_identities()
+
+
+@app.post('/identities')
+def identities_create(body: IdentityCreateBody):
+    return create_identity(**body.model_dump())
+
+
+@app.get('/boundaries/policies')
+def boundaries_policies():
+    ensure_default_identities()
+    return list_boundary_policies()
+
+
+@app.post('/boundaries/policies')
+def boundaries_policy_upsert(body: BoundaryPolicyBody):
+    return upsert_boundary_policy(**body.model_dump())
+
+
+@app.post('/boundaries/check')
+def boundaries_check(body: BoundaryCheckBody):
+    return check_boundary(
+        source_identity=body.source_identity,
+        target_identity=body.target_identity,
+        data_class=body.data_class,
+        action=body.action,
+    )
 
 
 @app.get('/cost/models')
