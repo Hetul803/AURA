@@ -45,6 +45,15 @@ from aura.planner import plan_from_text
 from aura.prefs import get_prefs, reset_all, reset_pref, set_pref
 from aura.state import cancel_run, db_conn, get_run_context, list_audit_log, list_run_events, list_safety_events, record_run_event, set_panic
 from aura.user_tools import build_user_ai_prompt, get_user_web_tool, list_user_web_tools
+from aura.workflow_engine import (
+    create_workflow,
+    delete_workflow,
+    get_workflow,
+    list_workflows,
+    render_workflow_command,
+    suggested_workflow_templates,
+    update_workflow,
+)
 from storage.export_import import export_profile, import_profile
 from storage.migrations import run_migrations
 from storage.profile_paths import profile_dir
@@ -155,6 +164,36 @@ class UserToolPromptBody(BaseModel):
     tool_id: str = 'chatgpt'
     mode: str = 'general'
     context: dict | None = None
+
+
+class WorkflowCreateBody(BaseModel):
+    name: str
+    command_template: str
+    description: str = ''
+    trigger_type: str = 'manual'
+    trigger_value: str = ''
+    enabled: bool = True
+    approval_policy: str = 'ask_for_risky_actions'
+    source: str = 'manual'
+    confidence: float = 0.5
+    metadata: dict = {}
+
+
+class WorkflowPatchBody(BaseModel):
+    name: str | None = None
+    command_template: str | None = None
+    description: str | None = None
+    trigger_type: str | None = None
+    trigger_value: str | None = None
+    enabled: bool | None = None
+    approval_policy: str | None = None
+    source: str | None = None
+    confidence: float | None = None
+    metadata: dict | None = None
+
+
+class WorkflowRenderBody(BaseModel):
+    variables: dict = {}
 
 
 class LearningQuery(BaseModel):
@@ -309,6 +348,52 @@ def user_tools_get(tool_id: str):
 @app.post('/user-tools/prompt')
 def user_tools_prompt(body: UserToolPromptBody):
     return build_user_ai_prompt(task=body.task, tool_id=body.tool_id, context=body.context, mode=body.mode)
+
+
+@app.get('/workflows')
+def workflows_list(include_disabled: bool = False, trigger_type: str | None = None):
+    return list_workflows(include_disabled=include_disabled, trigger_type=trigger_type)
+
+
+@app.post('/workflows')
+def workflows_create(body: WorkflowCreateBody):
+    return create_workflow(**body.model_dump())
+
+
+@app.get('/workflows/suggestions')
+def workflows_suggestions(limit: int = 10):
+    return suggested_workflow_templates(limit=limit)
+
+
+@app.get('/workflows/{workflow_id}')
+def workflows_get(workflow_id: str):
+    workflow = get_workflow(workflow_id)
+    if not workflow:
+        raise HTTPException(404, 'workflow not found')
+    return workflow
+
+
+@app.patch('/workflows/{workflow_id}')
+def workflows_patch(workflow_id: str, body: WorkflowPatchBody):
+    workflow = update_workflow(workflow_id, **body.model_dump(exclude_unset=True))
+    if not workflow:
+        raise HTTPException(404, 'workflow not found')
+    return workflow
+
+
+@app.post('/workflows/{workflow_id}/render')
+def workflows_render(workflow_id: str, body: WorkflowRenderBody):
+    rendered = render_workflow_command(workflow_id, body.variables)
+    if not rendered:
+        raise HTTPException(404, 'workflow not found')
+    return rendered
+
+
+@app.delete('/workflows/{workflow_id}')
+def workflows_delete(workflow_id: str):
+    if not delete_workflow(workflow_id):
+        raise HTTPException(404, 'workflow not found')
+    return {'ok': True}
 
 
 @app.post('/plan')

@@ -169,6 +169,21 @@ SCHEMA = [
   warn_at_usd REAL,
   updated_at TEXT DEFAULT CURRENT_TIMESTAMP
 );""",
+"""CREATE TABLE IF NOT EXISTS workflow_templates(
+  workflow_id TEXT PRIMARY KEY,
+  name TEXT,
+  description TEXT,
+  trigger_type TEXT,
+  trigger_value TEXT,
+  command_template TEXT,
+  enabled INTEGER DEFAULT 1,
+  approval_policy TEXT DEFAULT 'ask_for_risky_actions',
+  source TEXT DEFAULT 'manual',
+  confidence REAL DEFAULT 0.5,
+  metadata_json TEXT DEFAULT '{}',
+  created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+);""",
 """CREATE TABLE IF NOT EXISTS approval_records(
   approval_id TEXT PRIMARY KEY,
   run_id TEXT,

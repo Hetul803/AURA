@@ -9,6 +9,7 @@ PROFILE_TABLES = [
     'model_usage_events',
     'model_response_cache',
     'cost_budgets',
+    'workflow_templates',
     'preferences',
     'macros',
     'actions_log',
