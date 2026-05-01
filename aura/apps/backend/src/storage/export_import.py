@@ -14,6 +14,7 @@ PROFILE_TABLES = [
     'aura_identities',
     'boundary_policies',
     'mobile_devices',
+    'ambient_routines',
     'preferences',
     'macros',
     'actions_log',

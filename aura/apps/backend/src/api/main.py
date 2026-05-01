@@ -9,6 +9,7 @@ from pydantic import BaseModel
 
 from aura.assist import capture_structured_context
 from aura.agent_router import get_agent, list_agents, route_agent, workflow_suggestions
+from aura.ambient_adapters import adapter_contracts, classify_ambient_action, create_ambient_routine, get_ambient_routine, list_ambient_routines
 from aura.context_engine import capture_current_context, latest_context_snapshot, list_context_snapshots
 from aura.cost_router import (
     list_usage_events,
@@ -277,6 +278,21 @@ class MobileDecisionBody(BaseModel):
     decision: str
 
 
+class AmbientSafetyBody(BaseModel):
+    surface: str
+    action: str
+    driving: bool = False
+
+
+class AmbientRoutineBody(BaseModel):
+    surface: str
+    name: str
+    trigger_value: str
+    action_summary: str
+    enabled: bool = False
+    metadata: dict = {}
+
+
 class LearningQuery(BaseModel):
     task_type: str | None = None
     domain: str | None = None
@@ -477,6 +493,34 @@ def mobile_handoff_decision(handoff_id: str, body: MobileDecisionBody):
 @app.get('/mobile/runs/{run_id}')
 def mobile_runs_get(run_id: str):
     return mobile_run_summary(run_id)
+
+
+@app.get('/ambient/adapters')
+def ambient_adapters_list():
+    return adapter_contracts()
+
+
+@app.post('/ambient/safety-check')
+def ambient_safety_check(body: AmbientSafetyBody):
+    return classify_ambient_action(surface=body.surface, action=body.action, driving=body.driving)
+
+
+@app.get('/ambient/routines')
+def ambient_routines_list(surface: str | None = None, include_disabled: bool = False):
+    return list_ambient_routines(surface=surface, include_disabled=include_disabled)
+
+
+@app.post('/ambient/routines')
+def ambient_routines_create(body: AmbientRoutineBody):
+    return create_ambient_routine(**body.model_dump())
+
+
+@app.get('/ambient/routines/{routine_id}')
+def ambient_routines_get(routine_id: str):
+    routine = get_ambient_routine(routine_id)
+    if not routine:
+        raise HTTPException(404, 'ambient routine not found')
+    return routine
 
 
 @app.get('/cost/models')

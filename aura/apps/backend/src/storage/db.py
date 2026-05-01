@@ -228,6 +228,19 @@ SCHEMA = [
   created_at TEXT DEFAULT CURRENT_TIMESTAMP,
   last_seen TEXT DEFAULT CURRENT_TIMESTAMP
 );""",
+"""CREATE TABLE IF NOT EXISTS ambient_routines(
+  routine_id TEXT PRIMARY KEY,
+  surface TEXT,
+  name TEXT,
+  trigger_value TEXT,
+  action_summary TEXT,
+  safety_class TEXT,
+  approval_required INTEGER DEFAULT 1,
+  enabled INTEGER DEFAULT 0,
+  metadata_json TEXT DEFAULT '{}',
+  created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+);""",
 """CREATE TABLE IF NOT EXISTS approval_records(
   approval_id TEXT PRIMARY KEY,
   run_id TEXT,
