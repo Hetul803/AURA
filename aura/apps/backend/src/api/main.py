@@ -49,6 +49,16 @@ from aura.memory_engine import (
     update_memory_item,
 )
 from aura.models import available_models
+from aura.mobile_companion import (
+    create_mobile_approval_card,
+    create_pairing_code,
+    decide_mobile_handoff,
+    list_mobile_devices,
+    mobile_inbox,
+    mobile_run_summary,
+    mobile_status,
+    register_mobile_device,
+)
 from aura.orchestrator import approve_run, reject_run, resume_run, retry_assist_run, run_command
 from aura.planner import plan_from_text
 from aura.prefs import get_prefs, reset_all, reset_pref, set_pref
@@ -247,6 +257,26 @@ class BoundaryCheckBody(BaseModel):
     action: str
 
 
+class MobileDeviceBody(BaseModel):
+    device_name: str
+    pairing_code: str
+    capabilities: list[str] = []
+    metadata: dict = {}
+    device_id: str | None = None
+
+
+class MobileApprovalCardBody(BaseModel):
+    run_id: str
+    title: str
+    body: str
+    action: str
+    payload: dict = {}
+
+
+class MobileDecisionBody(BaseModel):
+    decision: str
+
+
 class LearningQuery(BaseModel):
     task_type: str | None = None
     domain: str | None = None
@@ -404,6 +434,49 @@ def boundaries_check(body: BoundaryCheckBody):
         data_class=body.data_class,
         action=body.action,
     )
+
+
+@app.post('/mobile/pairing-code')
+def mobile_pairing_code():
+    return create_pairing_code()
+
+
+@app.post('/mobile/devices')
+def mobile_devices_create(body: MobileDeviceBody):
+    return register_mobile_device(**body.model_dump())
+
+
+@app.get('/mobile/devices')
+def mobile_devices_list():
+    return list_mobile_devices()
+
+
+@app.get('/mobile/status')
+def mobile_status_get(device_id: str | None = None):
+    return mobile_status(device_id=device_id)
+
+
+@app.get('/mobile/inbox')
+def mobile_inbox_get(device_id: str | None = None):
+    return mobile_inbox(device_id=device_id)
+
+
+@app.post('/mobile/approval-cards')
+def mobile_approval_cards_create(body: MobileApprovalCardBody):
+    return create_mobile_approval_card(run_id=body.run_id, title=body.title, body=body.body, action=body.action, payload=body.payload)
+
+
+@app.post('/mobile/handoffs/{handoff_id}/decision')
+def mobile_handoff_decision(handoff_id: str, body: MobileDecisionBody):
+    handoff = decide_mobile_handoff(handoff_id, body.decision)
+    if not handoff:
+        raise HTTPException(404, 'handoff not found')
+    return handoff
+
+
+@app.get('/mobile/runs/{run_id}')
+def mobile_runs_get(run_id: str):
+    return mobile_run_summary(run_id)
 
 
 @app.get('/cost/models')

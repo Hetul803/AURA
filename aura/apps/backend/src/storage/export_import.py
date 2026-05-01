@@ -13,6 +13,7 @@ PROFILE_TABLES = [
     'device_handoffs',
     'aura_identities',
     'boundary_policies',
+    'mobile_devices',
     'preferences',
     'macros',
     'actions_log',

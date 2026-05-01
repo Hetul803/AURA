@@ -218,6 +218,16 @@ SCHEMA = [
   created_at TEXT DEFAULT CURRENT_TIMESTAMP,
   updated_at TEXT DEFAULT CURRENT_TIMESTAMP
 );""",
+"""CREATE TABLE IF NOT EXISTS mobile_devices(
+  device_id TEXT PRIMARY KEY,
+  device_name TEXT,
+  pairing_code TEXT,
+  status TEXT DEFAULT 'paired',
+  capabilities_json TEXT DEFAULT '[]',
+  metadata_json TEXT DEFAULT '{}',
+  created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+  last_seen TEXT DEFAULT CURRENT_TIMESTAMP
+);""",
 """CREATE TABLE IF NOT EXISTS approval_records(
   approval_id TEXT PRIMARY KEY,
   run_id TEXT,
