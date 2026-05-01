@@ -3,6 +3,7 @@ from __future__ import annotations
 from aura.assist import handle_assist_action
 from tools.code_runner import handle_code_action
 from tools.filesystem_tool import handle_filesystem_action
+from tools.registry import is_registered_action
 from tools.os_automation import handle_os_action
 from tools.tool_result import failure
 from tools.web_playwright import handle_web_action
@@ -19,6 +20,8 @@ ASSIST_ACTIONS = {'ASSIST_CAPTURE_CONTEXT', 'ASSIST_RESEARCH_CONTEXT', 'ASSIST_D
 
 
 def dispatch_tool_action(step, run_context: dict | None = None) -> dict:
+    if not is_registered_action(step.action_type):
+        return failure(step.action_type, error='unsupported_action', observation={'registered': False})
     if step.action_type in ASSIST_ACTIONS:
         return handle_assist_action(step, run_context)
     if step.action_type in OS_ACTIONS:

@@ -9,6 +9,7 @@ from pydantic import BaseModel
 
 from aura.assist import capture_structured_context
 from aura.context_engine import capture_current_context, latest_context_snapshot, list_context_snapshots
+from devices.adapters import get_device_adapter, list_device_adapters
 from aura.learning import (
     consolidate_learning,
     list_preference_memory,
@@ -31,6 +32,7 @@ from storage.profile_paths import profile_dir
 from storage.retention import enforce_retention
 from storage.snapshots import create_snapshot
 from tools.browser_runtime import browser_manager
+from tools.registry import actions_for_device, get_tool_spec, list_tool_specs
 
 run_migrations()
 app = FastAPI(title='AURA Backend')
@@ -98,6 +100,34 @@ def set_model(model_id: str):
 def get_model():
     row = db_conn().execute("SELECT value FROM profile_meta WHERE key='selected_model'").fetchone()
     return {'model_id': row['value'] if row else 'simple'}
+
+
+@app.get('/tools')
+def tools_list(device_adapter: str | None = None):
+    if device_adapter:
+        return actions_for_device(device_adapter)
+    return list_tool_specs()
+
+
+@app.get('/tools/{action_type}')
+def tools_get(action_type: str):
+    spec = get_tool_spec(action_type)
+    if not spec:
+        raise HTTPException(404, 'tool not registered')
+    return spec
+
+
+@app.get('/devices')
+def devices_list():
+    return list_device_adapters()
+
+
+@app.get('/devices/{adapter_id}')
+def devices_get(adapter_id: str):
+    adapter = get_device_adapter(adapter_id)
+    if not adapter:
+        raise HTTPException(404, 'device adapter not registered')
+    return adapter
 
 
 @app.post('/plan')
