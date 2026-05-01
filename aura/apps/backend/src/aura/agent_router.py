@@ -4,6 +4,7 @@ import os
 from dataclasses import asdict, dataclass, field
 from typing import Any
 
+from .cost_router import route_model
 from .learning import list_workflow_memory
 from .memory_engine import search_memory_items
 
@@ -195,6 +196,14 @@ def route_agent(
         'diagnosis': diagnosis,
         'approval_required_for': agent.get('approval_required_for', []),
         'status': agent.get('status'),
+        'model_route': route_model(
+            purpose='coding' if agent_id in {'local-code-worker', 'codex-coding-agent'} else 'planning',
+            prompt=task,
+            privacy='normal',
+            complexity='hard' if agent_id == 'codex-coding-agent' else 'simple',
+            allow_cloud=False,
+            prefer_user_subscription=agent_id == 'browser-agent',
+        ),
     }
     route['agent_prompt'] = build_agent_prompt(task=task, route=route, context=context, diagnosis=diagnosis)
     return route

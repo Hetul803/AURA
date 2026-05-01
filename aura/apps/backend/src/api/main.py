@@ -10,6 +10,15 @@ from pydantic import BaseModel
 from aura.assist import capture_structured_context
 from aura.agent_router import get_agent, list_agents, route_agent, workflow_suggestions
 from aura.context_engine import capture_current_context, latest_context_snapshot, list_context_snapshots
+from aura.cost_router import (
+    list_usage_events,
+    model_candidates,
+    put_cached_response,
+    record_model_usage,
+    route_model,
+    set_budget,
+    usage_summary,
+)
 from devices.adapters import get_device_adapter, list_device_adapters
 from aura.learning import (
     consolidate_learning,
@@ -109,6 +118,37 @@ class AgentRouteBody(BaseModel):
     observation: dict | None = None
 
 
+class CostRouteBody(BaseModel):
+    purpose: str = 'planning'
+    prompt: str = ''
+    privacy: str = 'normal'
+    complexity: str = 'simple'
+    allow_cloud: bool = False
+    prefer_user_subscription: bool = False
+
+
+class CostUsageBody(BaseModel):
+    run_id: str | None = None
+    route: dict
+    prompt_tokens: int | None = None
+    completion_tokens: int | None = None
+    metadata: dict = {}
+
+
+class CostBudgetBody(BaseModel):
+    scope: str = 'personal'
+    monthly_limit_usd: float | None = None
+    warn_at_usd: float | None = None
+
+
+class CostCacheBody(BaseModel):
+    purpose: str
+    prompt: str
+    provider: str
+    model: str
+    response: dict
+
+
 class LearningQuery(BaseModel):
     task_type: str | None = None
     domain: str | None = None
@@ -201,6 +241,48 @@ def agents_get(agent_id: str):
     if not agent:
         raise HTTPException(404, 'agent not registered')
     return agent
+
+
+@app.get('/cost/models')
+def cost_models():
+    return model_candidates()
+
+
+@app.post('/cost/route')
+def cost_route(body: CostRouteBody):
+    return route_model(
+        purpose=body.purpose,
+        prompt=body.prompt,
+        privacy=body.privacy,
+        complexity=body.complexity,
+        allow_cloud=body.allow_cloud,
+        prefer_user_subscription=body.prefer_user_subscription,
+    )
+
+
+@app.post('/cost/usage')
+def cost_usage(body: CostUsageBody):
+    return record_model_usage(run_id=body.run_id, route=body.route, prompt_tokens=body.prompt_tokens, completion_tokens=body.completion_tokens, metadata=body.metadata)
+
+
+@app.get('/cost/usage')
+def cost_usage_list(limit: int = 100):
+    return list_usage_events(limit=limit)
+
+
+@app.get('/cost/summary')
+def cost_summary():
+    return usage_summary()
+
+
+@app.post('/cost/budget')
+def cost_budget(body: CostBudgetBody):
+    return set_budget(scope=body.scope, monthly_limit_usd=body.monthly_limit_usd, warn_at_usd=body.warn_at_usd)
+
+
+@app.post('/cost/cache')
+def cost_cache_put(body: CostCacheBody):
+    return put_cached_response(body.purpose, body.prompt, body.provider, body.model, body.response)
 
 
 @app.post('/plan')

@@ -6,6 +6,9 @@ from .db import get_conn
 PROFILE_TABLES = [
     'memories',
     'memory_items',
+    'model_usage_events',
+    'model_response_cache',
+    'cost_budgets',
     'preferences',
     'macros',
     'actions_log',

@@ -138,6 +138,37 @@ SCHEMA = [
   created_at TEXT DEFAULT CURRENT_TIMESTAMP,
   updated_at TEXT DEFAULT CURRENT_TIMESTAMP
 );""",
+"""CREATE TABLE IF NOT EXISTS model_usage_events(
+  id INTEGER PRIMARY KEY,
+  run_id TEXT,
+  purpose TEXT,
+  provider TEXT,
+  model TEXT,
+  route_reason TEXT,
+  prompt_tokens INTEGER DEFAULT 0,
+  completion_tokens INTEGER DEFAULT 0,
+  estimated_cost_usd REAL DEFAULT 0.0,
+  saved_cost_usd REAL DEFAULT 0.0,
+  metadata_json TEXT DEFAULT '{}',
+  created_at TEXT DEFAULT CURRENT_TIMESTAMP
+);""",
+"""CREATE TABLE IF NOT EXISTS model_response_cache(
+  cache_key TEXT PRIMARY KEY,
+  purpose TEXT,
+  provider TEXT,
+  model TEXT,
+  prompt_hash TEXT,
+  response_json TEXT,
+  hit_count INTEGER DEFAULT 0,
+  created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+);""",
+"""CREATE TABLE IF NOT EXISTS cost_budgets(
+  scope TEXT PRIMARY KEY,
+  monthly_limit_usd REAL,
+  warn_at_usd REAL,
+  updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+);""",
 """CREATE TABLE IF NOT EXISTS approval_records(
   approval_id TEXT PRIMARY KEY,
   run_id TEXT,

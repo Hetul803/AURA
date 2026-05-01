@@ -83,6 +83,8 @@ def test_planner_routes_app_creation_to_agent_delegate(monkeypatch):
 
 
 def test_command_executes_agent_route_and_learning():
+    with db_conn() as conn:
+        conn.execute('DELETE FROM macros')
     result = run_command('Create a full app for this idea', context={'workspace_hint': 'C:/demo'})
 
     assert result['ok'] is True
