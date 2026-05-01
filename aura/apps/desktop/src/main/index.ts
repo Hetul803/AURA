@@ -1,7 +1,7 @@
 import { app, BrowserWindow, Tray } from 'electron';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { waitForBackend } from './backendManager.js';
+import { stopManagedBackend, waitForBackend } from './backendManager.js';
 import { registerIpcHandlers } from './ipc.js';
 import { registerHotkeys, unregisterHotkeys } from './hotkeys.js';
 import { createTray } from './tray.js';
@@ -29,7 +29,7 @@ function createWindow() {
 
 app.whenReady().then(async () => {
   registerIpcHandlers();
-  await waitForBackend();
+  await waitForBackend(12);
   const win = createWindow();
   registerHotkeys(win);
   tray = createTray(win);
@@ -45,7 +45,10 @@ app.on('activate', () => {
   }
 });
 
-app.on('will-quit', unregisterHotkeys);
+app.on('will-quit', () => {
+  unregisterHotkeys();
+  stopManagedBackend();
+});
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();
