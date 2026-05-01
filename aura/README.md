@@ -2,6 +2,10 @@
 
 Local-first AI computer operator monorepo for desktop (Electron + Python backend).
 
+## Source of truth
+
+Read [docs/AURA_VISION_AND_BUILD_CONSTITUTION.md](docs/AURA_VISION_AND_BUILD_CONSTITUTION.md) before planning or implementing any AURA task. It defines the long-term product vision, platform primitives, safety rules, memory boundaries, cost philosophy, cross-device future, enterprise direction, and required development workflow.
+
 ## Quick start
 ```bash
 pnpm -w install
