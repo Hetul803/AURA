@@ -181,8 +181,9 @@ def gather_context(*, request_text: str, captured_context: dict, research_mode: 
     return {**page_context, 'query': query, 'search_used': True, 'warnings': [search.get('error') or 'research_unavailable']}
 
 
-def capture_structured_context() -> dict:
-    captured = legacy_assist_context(persist_context_snapshot(normalize_context(capture_context(), source='assist')))
+def capture_structured_context(raw_context: dict | None = None) -> dict:
+    source = 'assist-provided' if raw_context else 'assist'
+    captured = legacy_assist_context(persist_context_snapshot(normalize_context(raw_context or capture_context(), source=source)))
     if not captured.get('ok'):
         return failure(
             'ASSIST_CAPTURE_CONTEXT',
@@ -299,7 +300,8 @@ def paste_back_step(run_context: dict | None = None) -> dict:
 
 def handle_assist_action(step, run_context: dict | None = None) -> dict:
     if step.action_type == 'ASSIST_CAPTURE_CONTEXT':
-        return capture_structured_context()
+        planning_context = (run_context or {}).get('planning_context') or {}
+        return capture_structured_context(planning_context if planning_context.get('client_supplied') else None)
     if step.action_type == 'ASSIST_RESEARCH_CONTEXT':
         return gather_structured_context(step, run_context)
     if step.action_type == 'ASSIST_DRAFT':

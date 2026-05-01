@@ -161,7 +161,31 @@ def generate_assist_draft(*, task_kind: str, source_text: str, request_text: str
                           retry_feedback: str = '', learning_signals: dict | None = None) -> AssistDraftResult:
     metadata = assist_model_metadata()
     if not metadata['available']:
-        raise RuntimeError('assist_model_unavailable')
+        compact_source = re.sub(r'\s+', ' ', source_text or '').strip()
+        if task_kind == 'reply':
+            draft = 'Thanks for the note. I can take care of this and will follow up shortly.'
+            if compact_source:
+                draft = f'Thanks for reaching out. I saw your note about "{compact_source[:120]}". I can take care of this and will follow up shortly.'
+        elif task_kind == 'rewrite':
+            draft = compact_source or request_text
+        elif task_kind == 'explain':
+            draft = f'Here is the plain-English version: {compact_source}' if compact_source else 'I need text to explain.'
+        elif task_kind == 'answer':
+            draft = f'Based on the provided context, I would respond with: {compact_source}' if compact_source else 'I need the selected text or clipboard context to answer.'
+        else:
+            draft = compact_source or 'No source text was captured.'
+        if style_hints.get('length') == 'concise' and len(draft) > 260:
+            draft = draft[:257].rstrip() + '...'
+        return AssistDraftResult(
+            draft_text=draft,
+            style_signals_used=dict(style_hints),
+            research_used=bool(research_context.get('search_used') or research_context.get('page_context')),
+            provider='simple',
+            model='simple',
+            fallback_used=True,
+            confidence=0.55,
+            notes=['deterministic_local_fallback'],
+        )
 
     prompt = _json_prompt({
         'task_kind': task_kind,

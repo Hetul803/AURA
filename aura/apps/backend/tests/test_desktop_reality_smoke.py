@@ -43,6 +43,27 @@ def test_email_reply_entrypoint_plans_approval_and_pasteback():
     assert actions[-1] == 'ASSIST_PASTE_BACK'
 
 
+def test_email_reply_command_uses_supplied_desktop_context_for_draft():
+    body = client.post('/command', json={
+        'text': 'Reply to this email',
+        'context': {
+            'active_app': 'Chrome',
+            'browser_url': 'https://mail.google.com/mail/u/0/#inbox/abc',
+            'browser_title': 'Question from Professor - Gmail',
+            'selected_text': 'Can you send the report by 5 PM today?',
+            'input_source': 'selected_text',
+        },
+    }).json()
+
+    assert body['ok'] is False
+    assert body['status'] == 'awaiting_approval'
+    state = body['run_state']
+    assert state['captured_context']['input_text'] == 'Can you send the report by 5 PM today?'
+    assert state['captured_context']['browser_domain'] == 'mail.google.com'
+    assert state['draft_state']['task_kind'] == 'reply'
+    assert state['approval_state']['draft_text']
+
+
 def test_saas_landing_page_entrypoint_routes_to_coding_agent_not_noop():
     with db_conn() as conn:
         conn.execute('DELETE FROM macros')

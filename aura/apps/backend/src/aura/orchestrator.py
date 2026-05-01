@@ -56,7 +56,7 @@ def _capture_planning_context() -> dict:
 def run_command(text: str, event_cb=lambda e: None, choices: dict | None = None, use_macro: bool = False, run_id: str | None = None, context: dict | None = None):
     run_id = run_id or str(uuid.uuid4())
     _send_event(event_cb, {'type': 'run_start', 'run_id': run_id, 'status': 'running', 'message': text})
-    planning_context = context or _capture_planning_context()
+    planning_context = {**context, 'client_supplied': True} if context is not None else _capture_planning_context()
     _send_event(event_cb, {'type': 'context_captured', 'run_id': run_id, 'status': 'running', 'message': 'Context snapshot captured.', 'context_snapshot_id': planning_context.get('snapshot_id')})
     plan = plan_from_text(text, choices, planning_context)
 

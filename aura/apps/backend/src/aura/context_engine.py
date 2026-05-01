@@ -213,6 +213,7 @@ def legacy_assist_context(snapshot: dict) -> dict:
         'active_app': snapshot.get('active_app'),
         'window_title': snapshot.get('window_title'),
         'browser_url': snapshot.get('browser_url'),
+        'browser_domain': snapshot.get('browser_domain'),
         'browser_title': snapshot.get('browser_title'),
         'selected_text': snapshot.get('selected_text', ''),
         'clipboard_text': snapshot.get('clipboard_text', ''),
