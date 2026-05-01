@@ -15,6 +15,7 @@ function setupFetch(commandResponses: any[]) {
     if (url.includes('/assist/context')) return { ok: true, json: async () => ({ active_app: 'Notes', input_text: 'Captured text', input_source: 'clipboard_fallback', capture_path_used: 'clipboard_fallback', capture_method: { clipboard_preserved: true, clipboard_restored_after_capture: true } }) } as any;
     if (url.includes('/tools')) return { ok: true, json: async () => [{ action_type: 'OS_PASTE', tool: 'os', risk_level: 'high', requires_approval: true }] } as any;
     if (url.includes('/devices')) return { ok: true, json: async () => [{ adapter_id: 'desktop-local', name: 'Local Desktop', surface: 'desktop', status: 'available' }] } as any;
+    if (url.includes('/memory/items')) return { ok: true, json: async () => [] } as any;
     if (url.includes('/preferences')) return { ok: true, json: async () => [] } as any;
     if (url.includes('/memories')) return { ok: true, json: async () => [] } as any;
     if (url.includes('/browser/sessions')) return { ok: true, json: async () => [] } as any;

@@ -5,6 +5,7 @@ from .db import get_conn
 
 PROFILE_TABLES = [
     'memories',
+    'memory_items',
     'preferences',
     'macros',
     'actions_log',

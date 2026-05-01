@@ -13,6 +13,21 @@ def write_memory(key: str, value: str, tags: list[str] | None = None, importance
             'INSERT INTO memories(key,value,tags,importance,pinned) VALUES(?,?,?,?,?)',
             (key, value, ','.join(tags or []), importance, pinned),
         )
+    try:
+        from .memory_engine import remember_item
+
+        remember_item(
+            kind=(tags or ['legacy'])[0],
+            key=key,
+            value=value,
+            tags=tags or [],
+            confidence=min(1.0, max(0.1, importance / 5)),
+            source='legacy_memory',
+            pinned=bool(pinned),
+            metadata={'legacy_key': key, 'legacy_importance': importance},
+        )
+    except Exception:
+        pass
 
 
 

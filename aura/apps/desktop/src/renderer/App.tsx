@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { approveRun, captureAssistContext, getCurrentContext, getDevices, getRunState, getTools, healthcheck, panicStop, rejectRun, resumeRun, retryRun, sendCommand, subscribeRun } from './state/api';
+import { approveRun, captureAssistContext, getCurrentContext, getDevices, getMemoryItems, getRunState, getTools, healthcheck, panicStop, rejectRun, resumeRun, retryRun, sendCommand, subscribeRun } from './state/api';
 import ActionPanel from './ui/ActionPanel';
 import { pushEvent, store } from './state/store';
 import { BACKEND_URL } from '../shared/constants';
@@ -46,9 +46,10 @@ export default function App() {
   const [safety, setSafety] = useState<any[]>([]);
   const [tools, setTools] = useState<any[]>([]);
   const [devices, setDevices] = useState<any[]>([]);
+  const [memoryItems, setMemoryItems] = useState<any[]>([]);
 
   async function refreshKnowledge() {
-    const [p, m, ss, st, se, ts, ds] = await Promise.all([
+    const [p, m, ss, st, se, ts, ds, mi] = await Promise.all([
       fetch(`${BACKEND_URL}/preferences`).then(r => r.json()),
       fetch(`${BACKEND_URL}/memories`).then(r => r.json()),
       fetch(`${BACKEND_URL}/browser/sessions`).then(r => r.json()),
@@ -56,9 +57,11 @@ export default function App() {
       fetch(`${BACKEND_URL}/safety/events`).then(r => r.json()),
       getTools(),
       getDevices(),
+      getMemoryItems(),
     ]);
     setPrefs(p); setMemories(m); setSessions(ss); setStorage(st); setSafety(se);
     setTools(ts); setDevices(ds);
+    setMemoryItems(mi);
   }
 
   async function refreshRunState(targetRunId = runId) {
@@ -251,6 +254,7 @@ export default function App() {
     {activePanel === 'Memory' && <section style={chrome}>
       <h3>What AURA Knows</h3>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+      <div><h4>Personal Memory</h4><ul>{memoryItems.slice(0,20).map((m: any) => <li key={m.memory_id}>{m.kind} / {m.memory_key}: {m.value}</li>)}</ul></div>
       <div><h4>Preferences</h4><ul>{prefs.map((p: any) => <li key={p.decision_key}>{p.decision_key}: {p.value} ({Math.round((p.confidence||0)*100)}%)</li>)}</ul></div>
       <div><h4>Memories</h4><ul>{memories.slice(0,20).map((m: any) => <li key={m.id}>{m.key}: {m.value}</li>)}</ul></div>
       <div><h4>Sessions</h4><ul>{sessions.map((s: any) => <li key={s.domain}>{s.domain}</li>)}</ul></div>

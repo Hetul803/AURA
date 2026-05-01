@@ -122,6 +122,22 @@ SCHEMA = [
   payload_json TEXT,
   created_at TEXT DEFAULT CURRENT_TIMESTAMP
 );""",
+"""CREATE TABLE IF NOT EXISTS memory_items(
+  memory_id TEXT PRIMARY KEY,
+  scope TEXT DEFAULT 'personal',
+  kind TEXT DEFAULT 'note',
+  memory_key TEXT,
+  value TEXT,
+  tags_json TEXT DEFAULT '[]',
+  confidence REAL DEFAULT 0.5,
+  source TEXT DEFAULT 'manual',
+  permission TEXT DEFAULT 'private',
+  pinned INTEGER DEFAULT 0,
+  archived INTEGER DEFAULT 0,
+  metadata_json TEXT DEFAULT '{}',
+  created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+);""",
 """CREATE TABLE IF NOT EXISTS approval_records(
   approval_id TEXT PRIMARY KEY,
   run_id TEXT,

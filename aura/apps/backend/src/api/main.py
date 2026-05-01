@@ -21,6 +21,14 @@ from aura.learning import (
 )
 from aura.macros import list_macros
 from aura.memory import delete_memory, list_memories, update_memory
+from aura.memory_engine import (
+    archive_memory_item,
+    delete_memory_item,
+    list_memory_items,
+    remember_item,
+    search_memory_items,
+    update_memory_item,
+)
 from aura.models import available_models
 from aura.orchestrator import approve_run, reject_run, resume_run, retry_assist_run, run_command
 from aura.planner import plan_from_text
@@ -57,6 +65,40 @@ class PanicBody(BaseModel):
 class MemoryPatch(BaseModel):
     value: str | None = None
     pinned: int | None = None
+
+
+class MemoryItemCreate(BaseModel):
+    kind: str = 'note'
+    key: str
+    value: str
+    scope: str = 'personal'
+    permission: str = 'private'
+    tags: list[str] = []
+    confidence: float = 0.5
+    source: str = 'manual'
+    pinned: bool = False
+    metadata: dict = {}
+
+
+class MemoryItemPatch(BaseModel):
+    kind: str | None = None
+    key: str | None = None
+    value: str | None = None
+    scope: str | None = None
+    permission: str | None = None
+    tags: list[str] | None = None
+    confidence: float | None = None
+    source: str | None = None
+    pinned: bool | None = None
+    archived: bool | None = None
+    metadata: dict | None = None
+
+
+class MemorySearchBody(BaseModel):
+    query: str
+    kind: str | None = None
+    scope: str | None = None
+    limit: int = 10
 
 
 class LearningQuery(BaseModel):
@@ -357,6 +399,48 @@ def memories_patch(mid: int, patch: MemoryPatch):
 def memories_delete(mid: int):
     delete_memory(mid)
     return {'ok': True}
+
+
+@app.get('/memory/items')
+def memory_items_list(q: str | None = None, kind: str | None = None, scope: str | None = None, include_archived: bool = False, limit: int = 100):
+    return list_memory_items(q=q, kind=kind, scope=scope, include_archived=include_archived, limit=limit)
+
+
+@app.post('/memory/items')
+def memory_items_create(body: MemoryItemCreate):
+    return remember_item(
+        kind=body.kind,
+        key=body.key,
+        value=body.value,
+        scope=body.scope,
+        permission=body.permission,
+        tags=body.tags,
+        confidence=body.confidence,
+        source=body.source,
+        pinned=body.pinned,
+        metadata=body.metadata,
+    )
+
+
+@app.patch('/memory/items/{memory_id}')
+def memory_items_patch(memory_id: str, patch: MemoryItemPatch):
+    updated = update_memory_item(memory_id, **patch.model_dump(exclude_unset=True))
+    if not updated:
+        raise HTTPException(404, 'memory item not found')
+    return updated
+
+
+@app.delete('/memory/items/{memory_id}')
+def memory_items_delete(memory_id: str, archive: bool = True):
+    ok = archive_memory_item(memory_id) if archive else delete_memory_item(memory_id)
+    if not ok:
+        raise HTTPException(404, 'memory item not found')
+    return {'ok': True, 'archived': archive}
+
+
+@app.post('/memory/search')
+def memory_search(body: MemorySearchBody):
+    return search_memory_items(body.query, kind=body.kind, scope=body.scope, limit=body.limit)
 
 
 @app.post('/retention/sweep')

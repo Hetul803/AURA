@@ -37,6 +37,11 @@ export async function getDevices() {
   return r.json();
 }
 
+export async function getMemoryItems() {
+  const r = await fetch(`${BACKEND_URL}/memory/items`);
+  return r.json();
+}
+
 export function subscribeRun(runId: string, onEvent: (e: any) => void) {
   const es = new EventSource(`${BACKEND_URL}/events/stream/${runId}`);
   es.onmessage = (msg) => onEvent(JSON.parse(msg.data));
