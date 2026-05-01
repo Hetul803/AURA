@@ -69,6 +69,9 @@ def test_agent_delegate_tool_returns_prompt(monkeypatch):
     assert result['ok'] is True
     assert result['observation']['agent_id'] == 'local-code-worker'
     assert result['result']['agent_prompt']
+    assert result['result']['agent_job']['job_id'].startswith('job_')
+    assert result['result']['agent_job']['prompt_path']
+    assert result['result']['execution']['executed'] is False
 
 
 def test_planner_routes_app_creation_to_agent_delegate(monkeypatch):
@@ -91,6 +94,7 @@ def test_command_executes_agent_route_and_learning():
     assert result['steps'][0]['status'] == 'success'
     route = result['steps'][0]['result']['result']['route']
     assert route['agent_prompt']
+    assert result['steps'][0]['result']['result']['agent_job']['metadata']['task'] == 'Create a full app for this idea'
     assert result['run_state']['plan']['signature'] == 'agent:coding'
 
 
