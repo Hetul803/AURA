@@ -20,7 +20,11 @@ def intent_signature(text: str) -> str:
         return 'github:clone'
     if t.startswith('fix and run python script at') or t.startswith('run python script at'):
         return 'code:python_script'
-    if any(phrase in t for phrase in ['use codex', 'ask codex', 'delegate to codex', 'build me an app', 'create a full app', 'repair aura', 'fix aura']):
+    if 'open cursor' in t:
+        return 'cursor:os'
+    coding_build_signal = any(phrase in t for phrase in ['build', 'create', 'make', 'implement', 'scaffold'])
+    coding_artifact_signal = any(token in t for token in ['app', 'saas', 'landing page', 'website', 'frontend', 'backend', 'repo', 'codebase'])
+    if any(phrase in t for phrase in ['use codex', 'ask codex', 'delegate to codex', 'create a full app', 'repair aura', 'fix aura']) or (coding_build_signal and coding_artifact_signal):
         return 'agent:coding'
     if any(token in t for token in ['chatgpt', 'claude']) or 'use my ai subscription' in t:
         return 'user_ai:web'
@@ -32,8 +36,6 @@ def intent_signature(text: str) -> str:
         return 'flights:web'
     if looks_like_assist_request(text):
         return 'assist:writing'
-    if 'open cursor' in t:
-        return 'cursor:os'
     if 'open this folder' in t or 'open this file' in t:
         return 'open_path:os'
     return 'generic:noop'

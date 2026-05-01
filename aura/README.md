@@ -42,6 +42,12 @@ bash infra/scripts/run_tests.sh
 ```
 Writes `test_runs/<timestamp>/results.json`.
 
+On Windows, the local reality-check runner is:
+```powershell
+powershell -ExecutionPolicy Bypass -File infra/scripts/run_tests.ps1
+```
+It runs backend tests, backend compile checks, and private-alpha readiness. Desktop/web tests run when `pnpm` is installed.
+
 ## Known intentional stubs
 - Voice transcription
 - Final purchase/checkout completion (confirmation-gated)
