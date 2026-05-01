@@ -8,6 +8,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from aura.assist import capture_structured_context
+from aura.agent_router import get_agent, list_agents, route_agent, workflow_suggestions
 from aura.context_engine import capture_current_context, latest_context_snapshot, list_context_snapshots
 from devices.adapters import get_device_adapter, list_device_adapters
 from aura.learning import (
@@ -101,6 +102,13 @@ class MemorySearchBody(BaseModel):
     limit: int = 10
 
 
+class AgentRouteBody(BaseModel):
+    task: str
+    task_type: str | None = None
+    context: dict | None = None
+    observation: dict | None = None
+
+
 class LearningQuery(BaseModel):
     task_type: str | None = None
     domain: str | None = None
@@ -170,6 +178,29 @@ def devices_get(adapter_id: str):
     if not adapter:
         raise HTTPException(404, 'device adapter not registered')
     return adapter
+
+
+@app.get('/agents')
+def agents_list():
+    return list_agents()
+
+
+@app.post('/agents/route')
+def agents_route(body: AgentRouteBody):
+    return route_agent(task=body.task, task_type=body.task_type, context=body.context, observation=body.observation)
+
+
+@app.get('/agents/workflow-suggestions')
+def agents_workflow_suggestions(limit: int = 10):
+    return workflow_suggestions(limit=limit)
+
+
+@app.get('/agents/{agent_id}')
+def agents_get(agent_id: str):
+    agent = get_agent(agent_id)
+    if not agent:
+        raise HTTPException(404, 'agent not registered')
+    return agent
 
 
 @app.post('/plan')

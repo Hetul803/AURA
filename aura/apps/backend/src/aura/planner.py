@@ -4,6 +4,7 @@ import re
 from pathlib import Path
 from urllib.parse import urlparse
 
+from .agent_router import route_agent
 from .assist import classify_assist_task, looks_like_assist_request, research_mode_for, style_hints_for
 from .context_engine import default_workspace_root, github_repo_from_url
 from .learning import query_relevant_memory
@@ -18,6 +19,8 @@ def intent_signature(text: str) -> str:
         return 'github:clone'
     if t.startswith('fix and run python script at') or t.startswith('run python script at'):
         return 'code:python_script'
+    if any(phrase in t for phrase in ['use codex', 'ask codex', 'delegate to codex', 'build me an app', 'create a full app', 'repair aura', 'fix aura']):
+        return 'agent:coding'
     if t.startswith('search '):
         return 'search:web'
     if 'gmail' in t:
@@ -117,6 +120,7 @@ def _code_plan(text: str) -> dict:
         'workspace': workspace,
         'last_success_hint': last_success['value'] if last_success else None,
     }
+    context['agent_route'] = route_agent(task=text, task_type=signature, context=context)
     success_criteria = [{'type': 'exit_code', 'expected': 0}, {'type': 'artifact_exists', 'expected': path}]
     return _build_plan(
         goal=f'Execute and, if needed, repair the Python script at {path}',
@@ -125,6 +129,29 @@ def _code_plan(text: str) -> dict:
         context=context,
         success_criteria=success_criteria,
         memory_scope=f'script:{path}',
+    )
+
+
+def _agent_coding_plan(text: str, context: dict | None = None) -> dict:
+    route = route_agent(task=text, task_type='agent:coding', context=context or {})
+    steps = [
+        Step(
+            id='s1',
+            name='Route coding work to best agent',
+            action_type='AGENT_DELEGATE',
+            tool='agent',
+            args={'task': text, 'task_type': 'agent:coding', 'context': context or {}},
+            expected_outcome={'ok': True},
+        ),
+    ]
+    return _build_plan(
+        goal='Route coding or self-repair work to the best available agent',
+        signature='agent:coding',
+        steps=steps,
+        context={'request_text': text, 'agent_route': route, 'context_snapshot': context or {}},
+        success_criteria=[{'type': 'agent_route_ready', 'expected': True}],
+        memory_scope='agent:coding',
+        slots={'agent_id': route['agent_id']},
     )
 
 
@@ -258,6 +285,9 @@ def plan_from_text(text: str, choices: dict | None = None, context: dict | None 
 
     if t.startswith('fix and run python script at') or t.startswith('run python script at'):
         return _code_plan(text)
+
+    if intent_signature(text) == 'agent:coding':
+        return _agent_coding_plan(text, context)
 
     if t.startswith('take the selected text, search it'):
         return _build_plan(

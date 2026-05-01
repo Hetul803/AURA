@@ -357,6 +357,16 @@ def _candidate_workflow_patterns(ctx: dict, outcome: str) -> list[dict]:
                 'outcome': 'failure',
                 'notes': pasteback.get('paste_blocked_reason') or '',
             })
+    if task_type == 'agent:coding':
+        agent_route = ((ctx.get('plan') or {}).get('context') or {}).get('agent_route') or {}
+        if agent_route.get('agent_id'):
+            candidates.append({
+                'task_type': task_type,
+                'pattern_key': f"agent:{agent_route.get('agent_id')}",
+                'strategy': 'route_agent_and_prompt_worker',
+                'outcome': 'success' if outcome == 'success' else outcome,
+                'notes': agent_route.get('reason') or '',
+            })
     return candidates
 
 

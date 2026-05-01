@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from aura.assist import handle_assist_action
+from tools.agent_worker import handle_agent_action
 from tools.code_runner import handle_code_action
 from tools.filesystem_tool import handle_filesystem_action
 from tools.registry import is_registered_action
@@ -16,6 +17,7 @@ OS_ACTIONS = {
 WEB_ACTIONS = {'OS_OPEN_URL', 'WEB_NAVIGATE', 'WEB_CLICK', 'WEB_TYPE', 'WEB_READ', 'WEB_UPLOAD', 'NOOP'}
 FILESYSTEM_ACTIONS = {'FS_EXISTS', 'FS_READ_TEXT', 'FS_WRITE_TEXT'}
 CODE_ACTIONS = {'CODE_RUN', 'CODE_REPAIR'}
+AGENT_ACTIONS = {'AGENT_DELEGATE'}
 ASSIST_ACTIONS = {'ASSIST_CAPTURE_CONTEXT', 'ASSIST_RESEARCH_CONTEXT', 'ASSIST_DRAFT', 'ASSIST_WAIT_APPROVAL', 'ASSIST_PASTE_BACK'}
 
 
@@ -32,6 +34,8 @@ def dispatch_tool_action(step, run_context: dict | None = None) -> dict:
         return handle_filesystem_action(step)
     if step.action_type in CODE_ACTIONS:
         return handle_code_action(step)
+    if step.action_type in AGENT_ACTIONS:
+        return handle_agent_action(step, run_context)
     if step.action_type == 'WAIT_FOR':
         return {'ok': True, 'status': 'success', 'action': 'WAIT_FOR', 'result': {}, 'observation': {}, 'error': None, 'retryable': False, 'requires_user': False, 'safety_flags': [], 'artifacts': []}
     return failure(step.action_type, error='unsupported_action')
