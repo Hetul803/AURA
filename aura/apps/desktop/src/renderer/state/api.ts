@@ -9,9 +9,9 @@ export async function healthcheck() {
   }
 }
 
-export async function sendCommand(text: string, choices: Record<string, string> = {}, useMacro = false) {
+export async function sendCommand(text: string, choices: Record<string, string> = {}, useMacro = false, context?: any) {
   const r = await fetch(`${BACKEND_URL}/command`, {
-    method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ text, choices, use_macro: useMacro })
+    method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ text, choices, use_macro: useMacro, context })
   });
   return r.json();
 }
@@ -23,6 +23,17 @@ export async function captureAssistContext() {
 
 export async function getCurrentContext() {
   const r = await fetch(`${BACKEND_URL}/context/current`);
+  return r.json();
+}
+
+export async function getTools(deviceAdapter?: string) {
+  const qs = deviceAdapter ? `?device_adapter=${encodeURIComponent(deviceAdapter)}` : '';
+  const r = await fetch(`${BACKEND_URL}/tools${qs}`);
+  return r.json();
+}
+
+export async function getDevices() {
+  const r = await fetch(`${BACKEND_URL}/devices`);
   return r.json();
 }
 

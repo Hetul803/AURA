@@ -11,7 +11,10 @@ function setupFetch(commandResponses: any[]) {
   let i = 0;
   vi.stubGlobal('fetch', vi.fn(async (url: string, options?: any) => {
     if (url.includes('/health')) return { ok: true, json: async () => ({ ok: true }) } as any;
+    if (url.includes('/context/current')) return { ok: true, json: async () => ({ active_app: 'Notes', input_text: 'Captured text', input_source: 'clipboard_fallback', capture_path_used: 'clipboard_fallback', capture_method: { clipboard_preserved: true, clipboard_restored_after_capture: true } }) } as any;
     if (url.includes('/assist/context')) return { ok: true, json: async () => ({ active_app: 'Notes', input_text: 'Captured text', input_source: 'clipboard_fallback', capture_path_used: 'clipboard_fallback', capture_method: { clipboard_preserved: true, clipboard_restored_after_capture: true } }) } as any;
+    if (url.includes('/tools')) return { ok: true, json: async () => [{ action_type: 'OS_PASTE', tool: 'os', risk_level: 'high', requires_approval: true }] } as any;
+    if (url.includes('/devices')) return { ok: true, json: async () => [{ adapter_id: 'desktop-local', name: 'Local Desktop', surface: 'desktop', status: 'available' }] } as any;
     if (url.includes('/preferences')) return { ok: true, json: async () => [] } as any;
     if (url.includes('/memories')) return { ok: true, json: async () => [] } as any;
     if (url.includes('/browser/sessions')) return { ok: true, json: async () => [] } as any;
@@ -32,7 +35,7 @@ describe('renderer', () => {
     setupFetch([{ ok: true, run_id: 'r1' }]);
     vi.stubGlobal('EventSource', class { onmessage: any; close() {} } as any);
     render(<App />);
-    await waitFor(() => expect(screen.getByText(/Backend:/)).toBeTruthy());
+    await waitFor(() => expect(screen.getByText(/Personal AI operating layer/)).toBeTruthy());
     expect(screen.getByText(/Connected/)).toBeTruthy();
     expect(screen.getByText(/Captured Context/)).toBeTruthy();
     expect(screen.getByText(/Captured text/)).toBeTruthy();

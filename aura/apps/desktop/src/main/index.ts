@@ -1,11 +1,15 @@
-import { app, BrowserWindow } from 'electron';
+import { app, BrowserWindow, Tray } from 'electron';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { waitForBackend } from './backendManager.js';
 import { registerIpcHandlers } from './ipc.js';
+import { registerHotkeys, unregisterHotkeys } from './hotkeys.js';
+import { createTray } from './tray.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+let mainWindow: BrowserWindow | null = null;
+let tray: Tray | null = null;
 
 function createWindow() {
   const win = new BrowserWindow({
@@ -19,13 +23,29 @@ function createWindow() {
   const devUrl = process.env.ELECTRON_DEV_URL;
   if (devUrl) win.loadURL(devUrl);
   else win.loadFile(path.join(__dirname, '../renderer/index.html'));
+  mainWindow = win;
+  return win;
 }
 
 app.whenReady().then(async () => {
   registerIpcHandlers();
   await waitForBackend();
-  createWindow();
+  const win = createWindow();
+  registerHotkeys(win);
+  tray = createTray(win);
 });
+
+app.on('activate', () => {
+  if (BrowserWindow.getAllWindows().length === 0) {
+    const win = createWindow();
+    registerHotkeys(win);
+    tray = tray || createTray(win);
+  } else {
+    mainWindow?.show();
+  }
+});
+
+app.on('will-quit', unregisterHotkeys);
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();
