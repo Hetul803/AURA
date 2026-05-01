@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { approveRun, captureAssistContext, getCurrentContext, getDevices, getMemoryItems, getRunState, getTools, healthcheck, panicStop, rejectRun, resumeRun, retryRun, sendCommand, subscribeRun } from './state/api';
+import { approveRun, captureAssistContext, createWorkflow, getCurrentContext, getDevices, getMemoryItems, getRunState, getTools, getWorkflowSuggestions, getWorkflows, healthcheck, panicStop, rejectRun, resumeRun, retryRun, runWorkflow, sendCommand, subscribeRun } from './state/api';
 import ActionPanel from './ui/ActionPanel';
 import { pushEvent, store } from './state/store';
 import { BACKEND_URL } from '../shared/constants';
@@ -9,15 +9,14 @@ declare global {
 }
 
 const QUICK_ACTIONS = [
-  'Summarize this',
   'Clone this repo locally',
-  'Explain this',
-  'Draft a reply to this',
-  'Rewrite this better',
-  'Research this and answer',
+  'Reply to this email',
+  'Build me a SaaS landing page for this idea',
+  'Use my ChatGPT subscription to write a reply to this email',
+  'Create a reusable workflow from this',
 ];
 
-const PANELS = ['Run', 'Memory', 'Safety', 'System'];
+const PANELS = ['Run', 'Workflows', 'Memory', 'Safety', 'System'];
 
 export default function App() {
   const [input, setInput] = useState('Summarize this');
@@ -47,9 +46,11 @@ export default function App() {
   const [tools, setTools] = useState<any[]>([]);
   const [devices, setDevices] = useState<any[]>([]);
   const [memoryItems, setMemoryItems] = useState<any[]>([]);
+  const [workflows, setWorkflows] = useState<any[]>([]);
+  const [workflowSuggestions, setWorkflowSuggestions] = useState<any[]>([]);
 
   async function refreshKnowledge() {
-    const [p, m, ss, st, se, ts, ds, mi] = await Promise.all([
+    const [p, m, ss, st, se, ts, ds, mi, wf, ws] = await Promise.all([
       fetch(`${BACKEND_URL}/preferences`).then(r => r.json()),
       fetch(`${BACKEND_URL}/memories`).then(r => r.json()),
       fetch(`${BACKEND_URL}/browser/sessions`).then(r => r.json()),
@@ -58,10 +59,14 @@ export default function App() {
       getTools(),
       getDevices(),
       getMemoryItems(),
+      getWorkflows(),
+      getWorkflowSuggestions(),
     ]);
     setPrefs(p); setMemories(m); setSessions(ss); setStorage(st); setSafety(se);
     setTools(ts); setDevices(ds);
     setMemoryItems(mi);
+    setWorkflows(wf);
+    setWorkflowSuggestions(ws);
   }
 
   async function refreshRunState(targetRunId = runId) {
@@ -131,6 +136,10 @@ export default function App() {
   const captureMethod = capturedContext?.capture_method || {};
   const pasteState = runState?.pasteback_state || {};
   const pendingRisk = approvalState.risk_reason || approvalState.action_type || '';
+  const approvalMessage = toolApproval
+    ? `Approve ${approvalState.step_name || approvalState.action_type || 'this action'}`
+    : 'Review the draft, edit if needed, then approve paste-back.';
+  const launchFlow = runState?.plan?.signature || (capturedContext?.browser_url?.includes('github.com') ? 'github:clone' : 'desktop');
   const commandPlaceholder = capturedContext?.browser_url?.includes('github.com')
     ? 'Try: Clone this repo locally'
     : 'Tell AURA what to do with the current app, page, file, or selection';
@@ -159,12 +168,12 @@ export default function App() {
       <div>
         <strong>Run Timeline</strong>
         <div style={{ marginTop: 6 }}>Run: {runId || '-'} / Status: {runStatus} / Elapsed: {elapsed}s</div>
-        <div style={{ color: '#526173' }}>Session: {sessionState}</div>
+        <div style={{ color: '#526173' }}>Flow: {launchFlow} / Session: {sessionState}</div>
       </div>
     </div>
 
     {needsUser && <div role='alert' style={{ background: '#fff4db', border: '1px solid #f0c36d', padding: 12, borderRadius: 8, marginBottom: 10 }}>
-      <strong>{pendingApproval ? 'Approval needed:' : 'Action needed:'}</strong> {needsUser}{pendingRisk ? ` (${pendingRisk})` : ''}
+      <strong>{pendingApproval ? 'Approval needed:' : 'Action needed:'}</strong> {pendingApproval ? approvalMessage : needsUser}{pendingRisk ? ` (${pendingRisk})` : ''}
       {!pendingApproval && <div style={{ marginTop: 8 }}><button onClick={async () => {
         const r = await resumeRun(runId);
         setOut(JSON.stringify(r, null, 2));
@@ -174,7 +183,7 @@ export default function App() {
 
     <div style={{ ...chrome, marginBottom: 10 }}>
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 8 }}>
-      {QUICK_ACTIONS.map(action => <button key={action} onClick={() => setInput(action)}>{action}</button>)}
+      {QUICK_ACTIONS.map(action => <button key={action} title={`Set command: ${action}`} onClick={() => setInput(action)}>{action}</button>)}
       <button onClick={async () => setPreviewContext(await getCurrentContext())}>Refresh context</button>
       </div>
 
@@ -249,6 +258,48 @@ export default function App() {
     {activePanel === 'Safety' && <section style={chrome}>
       <h3>Safety Cockpit</h3>
       <ul>{safety.slice(-20).map((s, i) => <li key={i}>{s.kind} / {s.action || s.step_id} / {s.ok === false ? 'fail' : 'ok'}</li>)}</ul>
+    </section>}
+
+    {activePanel === 'Workflows' && <section style={chrome}>
+      <h3>Reusable Workflows</h3>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+        <div>
+          <h4>Saved</h4>
+          <ul>{workflows.map((workflow: any) => <li key={workflow.workflow_id}>
+            <strong>{workflow.name}</strong> / {workflow.command_template}
+            <button style={{ marginLeft: 8 }} onClick={async () => {
+              const context = previewContext || await getCurrentContext().catch(() => null);
+              const r = await runWorkflow(workflow.workflow_id, context);
+              setOut(JSON.stringify(r, null, 2));
+              if (r.run_id) {
+                setRunId(r.run_id);
+                setRunStatus(r.status || (r.ok ? 'done' : 'waiting'));
+                await refreshRunState(r.run_id);
+              }
+            }}>Run</button>
+          </li>)}</ul>
+        </div>
+        <div>
+          <h4>Suggestions</h4>
+          <ul>{workflowSuggestions.map((suggestion: any, index: number) => <li key={`${suggestion.task_type}-${suggestion.pattern_key}-${index}`}>
+            <strong>{suggestion.suggested_workflow_name || suggestion.name}</strong>
+            <div>{suggestion.command_template}</div>
+            <button onClick={async () => {
+              const created = await createWorkflow({
+                name: suggestion.suggested_workflow_name || suggestion.name,
+                description: suggestion.description || '',
+                command_template: suggestion.command_template,
+                trigger_type: suggestion.trigger_type || 'manual',
+                trigger_value: suggestion.trigger_value || suggestion.pattern_key || '',
+                source: suggestion.source || 'desktop_suggestion',
+                confidence: suggestion.confidence || 0.5,
+              });
+              setOut(JSON.stringify(created, null, 2));
+              await refreshKnowledge();
+            }}>Save</button>
+          </li>)}</ul>
+        </div>
+      </div>
     </section>}
 
     {activePanel === 'Memory' && <section style={chrome}>

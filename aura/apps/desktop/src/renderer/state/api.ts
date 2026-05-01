@@ -42,6 +42,30 @@ export async function getMemoryItems() {
   return r.json();
 }
 
+export async function getWorkflows() {
+  const r = await fetch(`${BACKEND_URL}/workflows`);
+  return r.json();
+}
+
+export async function getWorkflowSuggestions() {
+  const r = await fetch(`${BACKEND_URL}/workflows/suggestions`);
+  return r.json();
+}
+
+export async function createWorkflow(body: any) {
+  const r = await fetch(`${BACKEND_URL}/workflows`, {
+    method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body)
+  });
+  return r.json();
+}
+
+export async function runWorkflow(workflowId: string, context?: any) {
+  const r = await fetch(`${BACKEND_URL}/workflows/${workflowId}/run`, {
+    method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ variables: {}, context })
+  });
+  return r.json();
+}
+
 export function subscribeRun(runId: string, onEvent: (e: any) => void) {
   const es = new EventSource(`${BACKEND_URL}/events/stream/${runId}`);
   es.onmessage = (msg) => onEvent(JSON.parse(msg.data));
