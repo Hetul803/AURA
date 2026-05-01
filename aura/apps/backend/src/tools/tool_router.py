@@ -7,6 +7,7 @@ from tools.filesystem_tool import handle_filesystem_action
 from tools.registry import is_registered_action
 from tools.os_automation import handle_os_action
 from tools.tool_result import failure
+from tools.user_ai import handle_user_ai_action
 from tools.web_playwright import handle_web_action
 
 OS_ACTIONS = {
@@ -18,6 +19,7 @@ WEB_ACTIONS = {'OS_OPEN_URL', 'WEB_NAVIGATE', 'WEB_CLICK', 'WEB_TYPE', 'WEB_READ
 FILESYSTEM_ACTIONS = {'FS_EXISTS', 'FS_READ_TEXT', 'FS_WRITE_TEXT'}
 CODE_ACTIONS = {'CODE_RUN', 'CODE_REPAIR'}
 AGENT_ACTIONS = {'AGENT_DELEGATE'}
+USER_AI_ACTIONS = {'USER_AI_PREPARE_PROMPT'}
 ASSIST_ACTIONS = {'ASSIST_CAPTURE_CONTEXT', 'ASSIST_RESEARCH_CONTEXT', 'ASSIST_DRAFT', 'ASSIST_WAIT_APPROVAL', 'ASSIST_PASTE_BACK'}
 
 
@@ -36,6 +38,8 @@ def dispatch_tool_action(step, run_context: dict | None = None) -> dict:
         return handle_code_action(step)
     if step.action_type in AGENT_ACTIONS:
         return handle_agent_action(step, run_context)
+    if step.action_type in USER_AI_ACTIONS:
+        return handle_user_ai_action(step, run_context)
     if step.action_type == 'WAIT_FOR':
         return {'ok': True, 'status': 'success', 'action': 'WAIT_FOR', 'result': {}, 'observation': {}, 'error': None, 'retryable': False, 'requires_user': False, 'safety_flags': [], 'artifacts': []}
     return failure(step.action_type, error='unsupported_action')

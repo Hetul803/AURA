@@ -11,6 +11,7 @@ from .learning import query_relevant_memory
 from .memory import execution_hints, latest_memory
 from .prefs import get_pref_value, should_ask
 from .steps import Condition, RetryPolicy, Step
+from .user_tools import build_user_ai_prompt, infer_user_tool
 
 
 def intent_signature(text: str) -> str:
@@ -21,6 +22,8 @@ def intent_signature(text: str) -> str:
         return 'code:python_script'
     if any(phrase in t for phrase in ['use codex', 'ask codex', 'delegate to codex', 'build me an app', 'create a full app', 'repair aura', 'fix aura']):
         return 'agent:coding'
+    if any(token in t for token in ['chatgpt', 'claude']) or 'use my ai subscription' in t:
+        return 'user_ai:web'
     if t.startswith('search '):
         return 'search:web'
     if 'gmail' in t:
@@ -152,6 +155,68 @@ def _agent_coding_plan(text: str, context: dict | None = None) -> dict:
         success_criteria=[{'type': 'agent_route_ready', 'expected': True}],
         memory_scope='agent:coding',
         slots={'agent_id': route['agent_id']},
+    )
+
+
+def _mode_for_user_ai(text: str) -> str:
+    low = text.lower()
+    if any(token in low for token in ['email', 'reply', 'gmail']):
+        return 'email'
+    if any(token in low for token in ['code', 'app', 'cursor', 'repo', 'bug']):
+        return 'coding'
+    return 'general'
+
+
+def _user_ai_web_plan(text: str, context: dict | None = None) -> dict:
+    tool_id = infer_user_tool(text)
+    mode = _mode_for_user_ai(text)
+    prepared = build_user_ai_prompt(task=text, tool_id=tool_id, context=context or {}, mode=mode)
+    tool = prepared['tool']
+    prompt = prepared['prompt']
+    domain = tool['url'].split('//', 1)[1].split('/', 1)[0]
+    steps = [
+        Step(
+            id='s1',
+            name='Prepare prompt for user AI tool',
+            action_type='USER_AI_PREPARE_PROMPT',
+            tool='agent',
+            args={'task': text, 'tool_id': tool_id, 'mode': mode, 'context': context or {}},
+            expected_outcome={'prompt_ready': True},
+        ),
+        Step(
+            id='s2',
+            name=f"Open {tool['label']}",
+            action_type='WEB_NAVIGATE',
+            tool='browser',
+            args={'url': tool['url']},
+            expected_outcome={'url_contains': domain},
+        ),
+        Step(
+            id='s3',
+            name='Copy prepared prompt to clipboard',
+            action_type='OS_WRITE_CLIPBOARD',
+            tool='os',
+            args={'text': prompt},
+            expected_outcome={'written_gte': min(20, len(prompt))},
+        ),
+        Step(
+            id='s4',
+            name=f"Paste prompt into {tool['label']}",
+            action_type='OS_PASTE',
+            tool='os',
+            args={'text': prompt, 'cautious': True},
+            expected_outcome={'pasted_gte': min(20, len(prompt))},
+            safety_level='CONFIRM',
+        ),
+    ]
+    return _build_plan(
+        goal=f"Use the user's {tool['label']} subscription for the requested task",
+        signature='user_ai:web',
+        steps=steps,
+        context={'request_text': text, 'tool': tool, 'mode': mode, 'prepared_prompt': prepared, 'context_snapshot': context or {}},
+        success_criteria=[{'type': 'prompt_ready', 'expected': True}, {'type': 'approval_received', 'expected': True}],
+        memory_scope=f'user_ai:{tool_id}:{mode}',
+        slots={'tool_id': tool_id, 'mode': mode},
     )
 
 
@@ -288,6 +353,9 @@ def plan_from_text(text: str, choices: dict | None = None, context: dict | None 
 
     if intent_signature(text) == 'agent:coding':
         return _agent_coding_plan(text, context)
+
+    if intent_signature(text) == 'user_ai:web':
+        return _user_ai_web_plan(text, context)
 
     if t.startswith('take the selected text, search it'):
         return _build_plan(

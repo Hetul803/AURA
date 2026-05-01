@@ -44,6 +44,7 @@ from aura.orchestrator import approve_run, reject_run, resume_run, retry_assist_
 from aura.planner import plan_from_text
 from aura.prefs import get_prefs, reset_all, reset_pref, set_pref
 from aura.state import cancel_run, db_conn, get_run_context, list_audit_log, list_run_events, list_safety_events, record_run_event, set_panic
+from aura.user_tools import build_user_ai_prompt, get_user_web_tool, list_user_web_tools
 from storage.export_import import export_profile, import_profile
 from storage.migrations import run_migrations
 from storage.profile_paths import profile_dir
@@ -147,6 +148,13 @@ class CostCacheBody(BaseModel):
     provider: str
     model: str
     response: dict
+
+
+class UserToolPromptBody(BaseModel):
+    task: str
+    tool_id: str = 'chatgpt'
+    mode: str = 'general'
+    context: dict | None = None
 
 
 class LearningQuery(BaseModel):
@@ -283,6 +291,24 @@ def cost_budget(body: CostBudgetBody):
 @app.post('/cost/cache')
 def cost_cache_put(body: CostCacheBody):
     return put_cached_response(body.purpose, body.prompt, body.provider, body.model, body.response)
+
+
+@app.get('/user-tools')
+def user_tools_list():
+    return list_user_web_tools()
+
+
+@app.get('/user-tools/{tool_id}')
+def user_tools_get(tool_id: str):
+    tool = get_user_web_tool(tool_id)
+    if not tool:
+        raise HTTPException(404, 'user tool not registered')
+    return tool
+
+
+@app.post('/user-tools/prompt')
+def user_tools_prompt(body: UserToolPromptBody):
+    return build_user_ai_prompt(task=body.task, tool_id=body.tool_id, context=body.context, mode=body.mode)
 
 
 @app.post('/plan')

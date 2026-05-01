@@ -40,6 +40,8 @@ def _expected_outcome_met(step, result: dict, observation_map: dict) -> bool:
             return False
         if key == 'agent_route_ready' and bool((result.get('result') or {}).get('route')) != bool(exp):
             return False
+        if key == 'prompt_ready' and bool((result.get('observation') or {}).get('prompt_ready')) != bool(exp):
+            return False
     return result.get('ok', False)
 
 
