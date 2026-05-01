@@ -7,6 +7,7 @@ from types import SimpleNamespace
 from urllib.parse import urlparse
 
 from llm.assist_client import classify_assist_request, generate_assist_draft
+from .context_engine import legacy_assist_context, normalize_context, persist_context_snapshot
 from .learning import query_relevant_memory
 from .prefs import get_pref_value, set_pref
 from .memory import write_memory
@@ -181,7 +182,7 @@ def gather_context(*, request_text: str, captured_context: dict, research_mode: 
 
 
 def capture_structured_context() -> dict:
-    captured = capture_context()
+    captured = legacy_assist_context(persist_context_snapshot(normalize_context(capture_context(), source='assist')))
     if not captured.get('ok'):
         return failure(
             'ASSIST_CAPTURE_CONTEXT',

@@ -8,6 +8,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from aura.assist import capture_structured_context
+from aura.context_engine import capture_current_context, latest_context_snapshot, list_context_snapshots
 from aura.learning import (
     consolidate_learning,
     list_preference_memory,
@@ -44,6 +45,7 @@ class Cmd(BaseModel):
     text: str
     choices: dict = {}
     use_macro: bool = False
+    context: dict | None = None
 
 
 class PanicBody(BaseModel):
@@ -100,7 +102,7 @@ def get_model():
 
 @app.post('/plan')
 def plan(cmd: Cmd):
-    planned = plan_from_text(cmd.text, cmd.choices)
+    planned = plan_from_text(cmd.text, cmd.choices, cmd.context)
     return {**planned, 'steps': [s.model_dump() for s in planned.get('steps', [])]}
 
 
@@ -112,7 +114,25 @@ def command(cmd: Cmd):
         rid = e.get('run_id', run_id)
         _emit(rid, e)
 
-    return run_command(cmd.text, emit, cmd.choices, cmd.use_macro)
+    return run_command(cmd.text, emit, cmd.choices, cmd.use_macro, context=cmd.context)
+
+
+@app.get('/context/current')
+def context_current():
+    return capture_current_context(source='api')
+
+
+@app.get('/context/latest')
+def context_latest():
+    snapshot = latest_context_snapshot()
+    if not snapshot:
+        raise HTTPException(404, 'context snapshot not found')
+    return snapshot
+
+
+@app.get('/context/history')
+def context_history(limit: int = 20):
+    return list_context_snapshots(limit=limit)
 
 
 @app.post('/assist/context')

@@ -5,6 +5,7 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 from .assist import classify_assist_task, looks_like_assist_request, research_mode_for, style_hints_for
+from .context_engine import default_workspace_root, github_repo_from_url
 from .learning import query_relevant_memory
 from .memory import execution_hints, latest_memory
 from .prefs import get_pref_value, should_ask
@@ -13,6 +14,8 @@ from .steps import Condition, RetryPolicy, Step
 
 def intent_signature(text: str) -> str:
     t = text.lower().strip()
+    if 'clone' in t and ('repo' in t or 'repository' in t or 'this' in t):
+        return 'github:clone'
     if t.startswith('fix and run python script at') or t.startswith('run python script at'):
         return 'code:python_script'
     if t.startswith('search '):
@@ -125,6 +128,67 @@ def _code_plan(text: str) -> dict:
     )
 
 
+def _context_ref(context: dict | None, ref_type: str) -> dict | None:
+    for ref in (context or {}).get('context_refs', []):
+        if ref.get('type') == ref_type:
+            return ref
+    return None
+
+
+def _clone_github_repo_plan(text: str, context: dict | None = None) -> dict:
+    github_ref = _context_ref(context, 'github_repo') or github_repo_from_url((context or {}).get('browser_url'))
+    if not github_ref:
+        return _build_plan(
+            goal='Clone the GitHub repository the user is looking at',
+            signature='github:clone',
+            steps=[],
+            context={'request_text': text, 'context_snapshot': context or {}},
+            clarifications=[{'key': 'github.repo_url', 'options': ['Paste GitHub repo URL']}],
+        )
+
+    workspace_root = (context or {}).get('workspace_hint') or default_workspace_root()
+    target_path = str(Path(workspace_root).expanduser() / github_ref['repo'])
+    command = f'git clone "{github_ref["clone_url"]}" "{target_path}"'
+    steps = [
+        Step(
+            id='s1',
+            name='Clone GitHub repository',
+            action_type='CODE_RUN',
+            tool='code',
+            args={'kind': 'shell', 'command': command, 'workspace': workspace_root},
+            expected_outcome={'exit_code': 0},
+            safety_level='CONFIRM',
+            fallback_hint='ask_for_git_or_folder_fix',
+        ),
+        Step(
+            id='s2',
+            name='Verify cloned repository folder',
+            action_type='FS_EXISTS',
+            tool='filesystem',
+            args={'path': target_path},
+            expected_outcome={'exists': True},
+            postconditions=[Condition(type='bool', key='file_exists', expected=True)],
+        ),
+    ]
+    return _build_plan(
+        goal=f"Clone {github_ref['repo_full_name']} locally",
+        signature='github:clone',
+        steps=steps,
+        context={
+            'request_text': text,
+            'context_snapshot_id': (context or {}).get('snapshot_id'),
+            'source_browser_url': (context or {}).get('browser_url'),
+            'github_repo': github_ref,
+            'workspace_root': workspace_root,
+            'target_path': target_path,
+            'implicit_context_used': True,
+        },
+        success_criteria=[{'type': 'exit_code', 'expected': 0}, {'type': 'path_opened', 'expected': target_path}],
+        memory_scope=f"github:{github_ref['repo_full_name']}",
+        slots={'repo': github_ref['repo_full_name'], 'target_path': target_path},
+    )
+
+
 def _assist_plan(text: str) -> dict:
     intent = classify_assist_task(text)
     task_kind = intent['task_kind']
@@ -186,8 +250,11 @@ def _assist_plan(text: str) -> dict:
     return _build_plan(goal=f'{task_goal} and paste it back after approval', signature='assist:writing', steps=steps, context=context, success_criteria=success_criteria, assist=assist)
 
 
-def plan_from_text(text: str, choices: dict | None = None) -> dict:
+def plan_from_text(text: str, choices: dict | None = None, context: dict | None = None) -> dict:
     t = text.lower().strip()
+
+    if intent_signature(text) == 'github:clone':
+        return _clone_github_repo_plan(text, context)
 
     if t.startswith('fix and run python script at') or t.startswith('run python script at'):
         return _code_plan(text)

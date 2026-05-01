@@ -21,6 +21,11 @@ export async function captureAssistContext() {
   return r.json();
 }
 
+export async function getCurrentContext() {
+  const r = await fetch(`${BACKEND_URL}/context/current`);
+  return r.json();
+}
+
 export function subscribeRun(runId: string, onEvent: (e: any) => void) {
   const es = new EventSource(`${BACKEND_URL}/events/stream/${runId}`);
   es.onmessage = (msg) => onEvent(JSON.parse(msg.data));

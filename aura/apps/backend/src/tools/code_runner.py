@@ -24,6 +24,7 @@ FAILURE_PATTERNS = {
 def _workspace(path: str | None, fallback: str | None = None) -> Path:
     if path:
         candidate = Path(path).expanduser()
+        candidate.mkdir(parents=True, exist_ok=True)
         return candidate if candidate.is_dir() else candidate.parent
     if fallback:
         candidate = Path(fallback).expanduser()

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { approveRun, captureAssistContext, getRunState, healthcheck, panicStop, rejectRun, resumeRun, retryRun, sendCommand, subscribeRun } from './state/api';
+import { approveRun, captureAssistContext, getCurrentContext, getRunState, healthcheck, panicStop, rejectRun, resumeRun, retryRun, sendCommand, subscribeRun } from './state/api';
 import ActionPanel from './ui/ActionPanel';
 import { pushEvent, store } from './state/store';
 import { BACKEND_URL } from '../shared/constants';
@@ -71,7 +71,7 @@ export default function App() {
     }
     tick();
     refreshKnowledge();
-    captureAssistContext().then(setPreviewContext).catch(() => undefined);
+    getCurrentContext().then(setPreviewContext).catch(() => captureAssistContext().then(setPreviewContext).catch(() => undefined));
     return () => { alive = false; };
   }, []);
 
@@ -110,8 +110,9 @@ export default function App() {
   const autoChoices = Object.fromEntries(clarifications.map((c: any) => [c.key, c.options[0]]));
   const finalText = useMemo(() => runState?.approval_state?.final_text || draftText || events.filter((e) => e.status === 'success').map((e) => e.message).filter(Boolean).join('\n') || out, [events, out, runState, draftText]);
   const approvalState = runState?.approval_state || {};
-  const capturedContext = runState?.captured_context || previewContext;
+  const capturedContext = runState?.captured_context || runState?.planning_context || previewContext;
   const pendingApproval = approvalState.status === 'pending' || runStatus === 'awaiting_approval';
+  const toolApproval = approvalState.kind === 'tool_confirmation';
   const generation = runState?.assist?.generation || {};
   const captureMethod = capturedContext?.capture_method || {};
   const pasteState = runState?.pasteback_state || {};
@@ -135,7 +136,7 @@ export default function App() {
 
     <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 8 }}>
       {QUICK_ACTIONS.map(action => <button key={action} onClick={() => setInput(action)}>{action}</button>)}
-      <button onClick={async () => setPreviewContext(await captureAssistContext())}>Refresh capture</button>
+      <button onClick={async () => setPreviewContext(await getCurrentContext())}>Refresh context</button>
     </div>
 
     <input value={input} onChange={e => setInput(e.target.value)} placeholder='Type command' style={{ width: '65%', marginRight: 8 }} />
@@ -156,6 +157,8 @@ export default function App() {
         <div><strong>App:</strong> {capturedContext?.active_app || '-'}</div>
         <div><strong>Window:</strong> {capturedContext?.window_title || '-'}</div>
         <div><strong>Capture Path:</strong> {capturedContext?.capture_path_used || capturedContext?.input_source || '-'}</div>
+        <div><strong>Workspace:</strong> {capturedContext?.workspace_hint || capturedContext?.project?.current_folder || '-'}</div>
+        <div><strong>Refs:</strong> {(capturedContext?.context_refs || []).map((r: any) => r.repo_full_name || r.type).join(', ') || '-'}</div>
         <div><strong>Clipboard preserved:</strong> {captureMethod.clipboard_preserved === undefined ? '-' : String(captureMethod.clipboard_preserved)}</div>
         <div><strong>Clipboard restored:</strong> {captureMethod.clipboard_restored_after_capture === undefined ? '-' : String(captureMethod.clipboard_restored_after_capture)}</div>
         <div><strong>Browser URL:</strong> {capturedContext?.browser_url || '-'}</div>
@@ -165,23 +168,25 @@ export default function App() {
       <section style={{ border: '1px solid #ddd', borderRadius: 8, padding: 12 }}>
         <h3>Draft Review</h3>
         <div><strong>Approval:</strong> {approvalState.status || 'not requested'}</div>
+        {toolApproval && <div><strong>Action:</strong> {approvalState.action_type || '-'} / {approvalState.step_name || '-'}</div>}
+        {toolApproval && <pre style={{ whiteSpace: 'pre-wrap' }}>{JSON.stringify(approvalState.requested_args || {}, null, 2)}</pre>}
         <div><strong>Generation:</strong> {generation.provider ? `${generation.provider}${generation.model ? ` / ${generation.model}` : ''}` : '-'}</div>
         <div><strong>Confidence:</strong> {generation.confidence ?? '-'}</div>
         <div><strong>Revalidation:</strong> {pasteState.target_validation_result || pasteState.target_validation || '-'}</div>
         <div><strong>Paste issue:</strong> {pasteState.paste_blocked_reason || pasteState.context_drift_reason || pasteState.clipboard_restore_error_after_paste || '-'}</div>
-        <textarea aria-label='draft editor' value={draftText} onChange={e => setDraftText(e.target.value)} rows={10} style={{ width: '100%' }} placeholder='Generated draft will appear here.' />
+        {!toolApproval && <textarea aria-label='draft editor' value={draftText} onChange={e => setDraftText(e.target.value)} rows={10} style={{ width: '100%' }} placeholder='Generated draft will appear here.' />}
         <input aria-label='retry feedback' value={feedback} onChange={e => setFeedback(e.target.value)} placeholder='Optional retry feedback (e.g. make it more direct)' style={{ width: '100%', marginTop: 8 }} />
         <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
           <button disabled={!runId || !pendingApproval} onClick={async () => {
             const r = await approveRun(runId, draftText);
             setOut(JSON.stringify(r, null, 2));
             await refreshRunState(runId);
-          }}>Approve & Paste</button>
-          <button disabled={!runId || !pendingApproval} onClick={async () => {
+          }}>{toolApproval ? 'Approve Action' : 'Approve & Paste'}</button>
+          {!toolApproval && <button disabled={!runId || !pendingApproval} onClick={async () => {
             const r = await retryRun(runId, feedback);
             setOut(JSON.stringify(r, null, 2));
             await refreshRunState(runId);
-          }}>Retry</button>
+          }}>Retry</button>}
           <button disabled={!runId || !pendingApproval} onClick={async () => {
             const r = await rejectRun(runId, feedback);
             setOut(JSON.stringify(r, null, 2));

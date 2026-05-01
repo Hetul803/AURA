@@ -19,6 +19,7 @@ PROFILE_TABLES = [
     'run_events',
     'approval_records',
     'audit_log',
+    'context_snapshots',
 ]
 
 def export_profile(path: str) -> str:

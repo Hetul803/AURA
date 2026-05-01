@@ -145,6 +145,22 @@ SCHEMA = [
   payload_json TEXT,
   created_at TEXT DEFAULT CURRENT_TIMESTAMP
 );""",
+"""CREATE TABLE IF NOT EXISTS context_snapshots(
+  snapshot_id TEXT PRIMARY KEY,
+  captured_at TEXT,
+  source TEXT,
+  active_app TEXT,
+  window_title TEXT,
+  browser_url TEXT,
+  browser_domain TEXT,
+  browser_title TEXT,
+  input_source TEXT,
+  input_preview TEXT,
+  current_folder TEXT,
+  current_repo TEXT,
+  workspace_hint TEXT,
+  snapshot_json TEXT
+);""",
 ]
 
 

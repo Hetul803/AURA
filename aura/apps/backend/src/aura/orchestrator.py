@@ -5,6 +5,7 @@ import time
 import uuid
 
 from .assist import apply_feedback_preferences, draft_from_state
+from .context_engine import capture_current_context
 from .executor import execute_steps
 from .learning import record_run_learning
 from .macros import match_macro, record_macro, render_macro_steps, touch_macro
@@ -45,13 +46,22 @@ def _status_from_result(result: list[dict]) -> str:
     return 'done' if all(r['status'] == 'success' for r in result) else 'partial'
 
 
-def run_command(text: str, event_cb=lambda e: None, choices: dict | None = None, use_macro: bool = False, run_id: str | None = None):
+def _capture_planning_context() -> dict:
+    try:
+        return capture_current_context(source='command')
+    except Exception as exc:
+        return {'ok': False, 'source': 'command', 'error': str(exc), 'context_refs': []}
+
+
+def run_command(text: str, event_cb=lambda e: None, choices: dict | None = None, use_macro: bool = False, run_id: str | None = None, context: dict | None = None):
     run_id = run_id or str(uuid.uuid4())
     _send_event(event_cb, {'type': 'run_start', 'run_id': run_id, 'status': 'running', 'message': text})
-    plan = plan_from_text(text, choices)
+    planning_context = context or _capture_planning_context()
+    _send_event(event_cb, {'type': 'context_captured', 'run_id': run_id, 'status': 'running', 'message': 'Context snapshot captured.', 'context_snapshot_id': planning_context.get('snapshot_id')})
+    plan = plan_from_text(text, choices, planning_context)
 
     if plan['clarifications']:
-        set_run_context(run_id, {'text': text, 'choices': choices or {}, 'use_macro': use_macro, 'status': 'needs_clarification', 'plan': {**plan, 'steps': []}})
+        set_run_context(run_id, {'text': text, 'choices': choices or {}, 'use_macro': use_macro, 'status': 'needs_clarification', 'planning_context': planning_context, 'plan': {**plan, 'steps': []}})
         return {'ok': False, 'run_id': run_id, 'needs_clarification': True, 'clarifications': plan['clarifications'], 'plan': {k: v for k, v in plan.items() if k != 'steps'}}
 
     for key, value in (choices or {}).items():
@@ -61,13 +71,14 @@ def run_command(text: str, event_cb=lambda e: None, choices: dict | None = None,
     steps, macro = _materialize_steps(plan, use_macro)
     if macro and not use_macro:
         _send_event(event_cb, {'type': 'macro_suggested', 'run_id': run_id, 'status': 'clarification', 'message': f"Use saved workflow {macro['name']}?"})
-        set_run_context(run_id, {'text': text, 'choices': choices or {}, 'use_macro': False, 'status': 'macro_suggested', 'plan': {**plan, 'steps': [s.model_dump() for s in steps]}})
+        set_run_context(run_id, {'text': text, 'choices': choices or {}, 'use_macro': False, 'status': 'macro_suggested', 'planning_context': planning_context, 'plan': {**plan, 'steps': [s.model_dump() for s in steps]}})
         return {'ok': False, 'run_id': run_id, 'macro_suggestion': {'id': macro['id'], 'name': macro['name']}, 'plan_signature': plan['signature'], 'plan': {k: v for k, v in plan.items() if k != 'steps'}}
 
     set_run_context(run_id, {
         'text': text,
         'choices': choices or {},
         'use_macro': use_macro,
+        'planning_context': planning_context,
         'steps': [s.model_dump() for s in steps],
         'plan': {**plan, 'steps': [s.model_dump() for s in steps]},
         'current_step_index': 0,
