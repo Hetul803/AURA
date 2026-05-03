@@ -1,0 +1,52 @@
+{
+  "id": "email_reply",
+  "label": "Email Reply",
+  "description": "Load an email-like thread and draft a concise polished reply.",
+  "command": "Draft a reply to this",
+  "task_kind": "reply",
+  "captured_context": {
+    "ok": true,
+    "active_app": "Mail",
+    "window_title": "Q2 planning follow-up",
+    "browser_url": "https://mail.demo.local/thread/q2-plan",
+    "browser_title": "Q2 planning follow-up",
+    "selected_text": "",
+    "clipboard_text": "Hi team — can you send a quick update on the revised Q2 launch timeline and whether design review will still finish by Thursday? I want to share a clean status note with leadership this afternoon.",
+    "input_text": "Hi team — can you send a quick update on the revised Q2 launch timeline and whether design review will still finish by Thursday? I want to share a clean status note with leadership this afternoon.",
+    "input_source": "demo_fixture",
+    "capture_path_used": "demo_fixture",
+    "target_fingerprint": {
+      "app_name": "Mail",
+      "window_title": "Q2 planning follow-up",
+      "browser_url": "https://mail.demo.local/thread/q2-plan",
+      "browser_domain": "mail.demo.local",
+      "browser_title": "Q2 planning follow-up",
+      "captured_at": "2026-03-19T00:00:00Z",
+      "capture_path_used": "demo_fixture",
+      "normalized": {
+        "app_name": "mail",
+        "window_title": "q2 planning follow-up",
+        "browser_url": "https://mail.demo.local/thread/q2-plan",
+        "browser_domain": "mail.demo.local",
+        "browser_title": "q2 planning follow-up"
+      }
+    },
+    "paste_target": {
+      "app_name": "Mail",
+      "window_title": "Q2 planning follow-up",
+      "browser_url": "https://mail.demo.local/thread/q2-plan",
+      "browser_domain": "mail.demo.local",
+      "browser_title": "Q2 planning follow-up",
+      "captured_at": "2026-03-19T00:00:00Z",
+      "capture_path_used": "demo_fixture",
+      "normalized": {
+        "app_name": "mail",
+        "window_title": "q2 planning follow-up",
+        "browser_url": "https://mail.demo.local/thread/q2-plan",
+        "browser_domain": "mail.demo.local",
+        "browser_title": "q2 planning follow-up"
+      }
+    },
+    "warnings": []
+  }
+}

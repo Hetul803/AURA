@@ -1,0 +1,52 @@
+{
+  "id": "research_answer",
+  "label": "Research Answer",
+  "description": "Load a question-style prompt and run the research-backed answer flow.",
+  "command": "Research this and respond",
+  "task_kind": "research_and_respond",
+  "captured_context": {
+    "ok": true,
+    "active_app": "Notes",
+    "window_title": "Launch research brief",
+    "browser_url": "https://docs.demo.local/research/launch-brief",
+    "browser_title": "Launch research brief",
+    "selected_text": "",
+    "clipboard_text": "What are the main reasons remote onboarding programs fail, and what three concrete changes improve retention in the first 30 days?",
+    "input_text": "What are the main reasons remote onboarding programs fail, and what three concrete changes improve retention in the first 30 days?",
+    "input_source": "demo_fixture",
+    "capture_path_used": "demo_fixture",
+    "target_fingerprint": {
+      "app_name": "Notes",
+      "window_title": "Launch research brief",
+      "browser_url": "https://docs.demo.local/research/launch-brief",
+      "browser_domain": "docs.demo.local",
+      "browser_title": "Launch research brief",
+      "captured_at": "2026-03-19T00:00:00Z",
+      "capture_path_used": "demo_fixture",
+      "normalized": {
+        "app_name": "notes",
+        "window_title": "launch research brief",
+        "browser_url": "https://docs.demo.local/research/launch-brief",
+        "browser_domain": "docs.demo.local",
+        "browser_title": "launch research brief"
+      }
+    },
+    "paste_target": {
+      "app_name": "Notes",
+      "window_title": "Launch research brief",
+      "browser_url": "https://docs.demo.local/research/launch-brief",
+      "browser_domain": "docs.demo.local",
+      "browser_title": "Launch research brief",
+      "captured_at": "2026-03-19T00:00:00Z",
+      "capture_path_used": "demo_fixture",
+      "normalized": {
+        "app_name": "notes",
+        "window_title": "launch research brief",
+        "browser_url": "https://docs.demo.local/research/launch-brief",
+        "browser_domain": "docs.demo.local",
+        "browser_title": "launch research brief"
+      }
+    },
+    "warnings": []
+  }
+}
