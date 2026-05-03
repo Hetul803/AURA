@@ -4,6 +4,7 @@ import json
 import queue
 
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
@@ -98,6 +99,19 @@ from tools.registry import actions_for_device, get_tool_spec, list_tool_specs
 
 run_migrations()
 app = FastAPI(title='AURA Backend')
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        'http://localhost:5173',
+        'http://127.0.0.1:5173',
+        'http://localhost:4173',
+        'http://127.0.0.1:4173',
+        'file://',
+    ],
+    allow_credentials=False,
+    allow_methods=['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
+    allow_headers=['content-type'],
+)
 EVENTS: dict[str, queue.Queue[str]] = {}
 
 

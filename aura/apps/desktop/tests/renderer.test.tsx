@@ -5,6 +5,7 @@ import { afterEach, describe, it, expect, vi } from 'vitest';
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
+  delete (window as any).auraDesktop;
 });
 
 function setupFetch(commandResponses: any[]) {
@@ -16,6 +17,8 @@ function setupFetch(commandResponses: any[]) {
     if (url.includes('/tools')) return { ok: true, json: async () => [{ action_type: 'OS_PASTE', tool: 'os', risk_level: 'high', requires_approval: true }] } as any;
     if (url.includes('/devices')) return { ok: true, json: async () => [{ adapter_id: 'desktop-local', name: 'Local Desktop', surface: 'desktop', status: 'available' }] } as any;
     if (url.includes('/memory/items')) return { ok: true, json: async () => [] } as any;
+    if (url.includes('/workflows/suggestions')) return { ok: true, json: async () => [{ suggested_workflow_name: 'Clone repo locally', command_template: 'Clone this repo locally', task_type: 'github' }] } as any;
+    if (url.includes('/workflows')) return { ok: true, json: async () => [] } as any;
     if (url.includes('/preferences')) return { ok: true, json: async () => [] } as any;
     if (url.includes('/memories')) return { ok: true, json: async () => [] } as any;
     if (url.includes('/browser/sessions')) return { ok: true, json: async () => [] } as any;
@@ -54,10 +57,10 @@ describe('renderer', () => {
     vi.stubGlobal('EventSource', class { onmessage: any; close() {} } as any);
     render(<App />);
     await waitFor(() => expect(screen.getByText(/Personal AI operating layer/)).toBeTruthy());
-    expect(screen.getByText(/Connected/)).toBeTruthy();
-    expect(screen.getByText(/Captured Context/)).toBeTruthy();
+    expect(screen.getAllByText(/AURA Core online/).length).toBeGreaterThan(0);
+    expect(screen.getByText(/AURA sees/)).toBeTruthy();
     expect(screen.getByText(/Captured text/)).toBeTruthy();
-    expect(screen.getByText(/clipboard_fallback/)).toBeTruthy();
+    expect(screen.getByText(/Hotkey unavailable/)).toBeTruthy();
   });
 
   it('shows first-time onboarding and local model guidance', async () => {
@@ -65,9 +68,13 @@ describe('renderer', () => {
     vi.stubGlobal('EventSource', class { onmessage: any; close() {} } as any);
     render(<App />);
     await waitFor(() => expect(screen.getByText(/First-Time Setup/)).toBeTruthy());
-    expect(screen.getByText(/AURA is your personal AI operating layer/)).toBeTruthy();
-    fireEvent.click(screen.getByText('Model'));
-    await waitFor(() => expect(screen.getByText(/Local model setup/)).toBeTruthy());
+    expect(screen.getByText(/I am AURA, your personal AI operating layer/)).toBeTruthy();
+    fireEvent.click(screen.getByText(/7. Local Model/));
+    await waitFor(() => expect(screen.getByText(/Recommended local model/)).toBeTruthy());
+    expect(screen.getByText(/Darwin/)).toBeTruthy();
+    expect(screen.getByText(/Apple Silicon/)).toBeTruthy();
+    expect(screen.getByText(/16 GB/)).toBeTruthy();
+    expect(screen.getByText(/Missing \/ Stopped/)).toBeTruthy();
     expect(screen.getByLabelText('local model name')).toBeTruthy();
   });
 
@@ -85,5 +92,42 @@ describe('renderer', () => {
     await waitFor(() => expect(screen.getByRole('alert')).toBeTruthy());
     fireEvent.change(screen.getByLabelText('draft editor'), { target: { value: 'Edited draft' } });
     fireEvent.click(screen.getByText('Approve & Paste'));
+  });
+
+  it('renders Guardian, activity, memory, and launch flow cards', async () => {
+    setupFetch([{ ok: true, run_id: 'r1' }]);
+    vi.stubGlobal('EventSource', class { onmessage: any; close() {} } as any);
+    render(<App />);
+    await waitFor(() => expect(screen.getByText(/AURA Guardian/)).toBeTruthy());
+    expect(screen.getByText(/Protected/)).toBeTruthy();
+    expect(screen.getByText(/Examples until live events arrive/)).toBeTruthy();
+    expect(screen.getByText(/Clone current repo/)).toBeTruthy();
+    fireEvent.click(screen.getByText('Memory'));
+    await waitFor(() => expect(screen.getByText(/Memory intelligence/)).toBeTruthy());
+    expect(screen.getByText(/No memory updates yet/)).toBeTruthy();
+  });
+
+  it('shows backend fallback when health check fails', async () => {
+    vi.stubGlobal('fetch', vi.fn(async (url: string) => {
+      if (url.includes('/health')) throw new Error('connection refused');
+      return { ok: true, json: async () => [] } as any;
+    }) as any);
+    vi.stubGlobal('EventSource', class { onmessage: any; close() {} } as any);
+    render(<App />);
+    await waitFor(() => expect(screen.getAllByText(/AURA Core disconnected/).length).toBeGreaterThan(0));
+    expect(screen.getByText(/Repair \/ retry/)).toBeTruthy();
+  });
+
+  it('renders hotkey active status from desktop bridge', async () => {
+    setupFetch([{ ok: true, run_id: 'r1' }]);
+    vi.stubGlobal('EventSource', class { onmessage: any; close() {} } as any);
+    (window as any).auraDesktop = {
+      getHotkeyStatus: async () => ({ ok: true, accelerator: 'CommandOrControl+Shift+Space' }),
+      onHotkey: () => () => undefined,
+      openLogs: async () => '/tmp/aura',
+    };
+    render(<App />);
+    await waitFor(() => expect(screen.getByText(/Hotkey active/)).toBeTruthy());
+    expect(screen.getByText(/CommandOrControl\+Shift\+Space brings AURA forward/)).toBeTruthy();
   });
 });

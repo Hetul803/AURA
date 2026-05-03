@@ -22,14 +22,13 @@ export function replaceHotkey(shortcut: ShortcutRegistry, previous: string, next
 }
 
 export function registerHotkeys(win: BrowserWindow) {
-  return registerHotkey(globalShortcut, HOTKEY || defaultHotkeyForPlatform(), () => {
-    if (win.isVisible() && win.isFocused()) {
-      win.hide();
-      return;
-    }
+  const accelerator = HOTKEY || defaultHotkeyForPlatform();
+  return registerHotkey(globalShortcut, accelerator, () => {
+    if (win.isMinimized()) win.restore();
     win.show();
     win.focus();
-  }).ok;
+    win.webContents.send('aura:hotkey', { accelerator, mode: 'compact_command', active: true });
+  });
 }
 
 export function unregisterHotkeys() {

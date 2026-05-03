@@ -13,6 +13,18 @@ def test_health():
     assert client.get('/health').status_code == 200
 
 
+def test_local_desktop_cors_allows_vite_renderer():
+    r = client.options(
+        '/health',
+        headers={
+            'Origin': 'http://127.0.0.1:5173',
+            'Access-Control-Request-Method': 'GET',
+        },
+    )
+    assert r.status_code == 200
+    assert r.headers['access-control-allow-origin'] == 'http://127.0.0.1:5173'
+
+
 
 def test_plan_endpoint_returns_structured_plan():
     with TemporaryDirectory() as td:

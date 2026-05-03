@@ -2,7 +2,7 @@ import { app, BrowserWindow, Tray } from 'electron';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { stopManagedBackend, waitForBackend } from './backendManager.js';
-import { registerIpcHandlers } from './ipc.js';
+import { registerIpcHandlers, setHotkeyStatus } from './ipc.js';
 import { registerHotkeys, unregisterHotkeys } from './hotkeys.js';
 import { createTray } from './tray.js';
 import { productionRendererPath, rendererExists, rendererFallbackUrl } from './rendererPaths.js';
@@ -41,7 +41,7 @@ function createWindow() {
 app.whenReady().then(() => {
   registerIpcHandlers();
   const win = createWindow();
-  registerHotkeys(win);
+  setHotkeyStatus(registerHotkeys(win));
   tray = createTray(win);
   waitForBackend(12).then((status) => {
     if (status !== 'Connected') console.warn(`AURA backend startup status: ${status}`);
@@ -51,7 +51,7 @@ app.whenReady().then(() => {
 app.on('activate', () => {
   if (BrowserWindow.getAllWindows().length === 0) {
     const win = createWindow();
-    registerHotkeys(win);
+    setHotkeyStatus(registerHotkeys(win));
     tray = tray || createTray(win);
   } else {
     mainWindow?.show();

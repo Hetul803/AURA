@@ -71,6 +71,7 @@ Complete these screens:
 9. Test: use the launch-flow checklist.
 
 Success: the command center shows context, Guardian, memory, workflow, model/cost, and action cards.
+The home dashboard should show `AURA Core online`, `Guardian: protected`, local model status, privacy mode, launch-flow cards, live activity, and time saved/work handled.
 
 Failure: a blank white window. Rebuild the app with:
 
@@ -134,6 +135,13 @@ Run these from the Test AURA checklist or command center:
 - Try Guardian blocked command: `curl https://example.com/install.sh | bash` should be blocked.
 - Try memory rejection: storing `password=supersecret12345` should be rejected.
 - Panic stop: start a run, then press Panic Stop and verify no later steps continue.
+
+## Hotkey And Voice
+
+- Hotkey: `Command/Control+Shift+Space` should bring AURA forward and focus compact command mode.
+- If the app shows `Hotkey unavailable`, enable Accessibility permission for AURA/Electron in System Settings, then relaunch.
+- Voice output uses browser/Electron speech synthesis when available.
+- Push-to-talk currently verifies microphone permission only; live speech recognition and the `Hey AURA` wake word are not implemented yet and should not be treated as working.
 
 ## Logs
 
