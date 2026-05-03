@@ -23,7 +23,7 @@ cd AURA/aura
 4. Drag AURA into Applications if prompted.
 5. Because this private-alpha build is unsigned, macOS may block the first launch. Use Finder, right-click AURA, choose Open, then confirm Open.
 
-Success: AURA opens to first-time onboarding.
+Success: AURA opens to the persona-led first launch. You should meet AURA before seeing the home command layer.
 
 Failure: macOS says the app is damaged or cannot be opened. Remove quarantine for local testing only:
 
@@ -56,22 +56,25 @@ AURA is local-first, but computer control needs explicit Mac permissions.
 
 Open System Settings -> Privacy & Security and enable permissions when macOS prompts.
 
-## Onboarding
+## Persona Onboarding
 
-Complete these screens:
+First launch should feel like meeting the assistant, not filling out a developer form. Complete these steps:
 
-1. Welcome: confirm AURA is the personal AI operating layer.
-2. Privacy: confirm local-first profile and AURA Guardian behavior.
-3. Permissions: review required macOS permissions.
-4. Workspace: choose a local workspace folder for clones/builds.
-5. Memory: choose scope and budget.
-6. Model: install/select local model.
-7. Workers: optionally enable Codex bridge and ChatGPT/Claude handoff.
-8. Panic: understand panic stop.
-9. Test: use the launch-flow checklist.
+1. Meet AURA: verify the dark encounter screen, animated avatar, spoken/captioned intro, and the line "I'm your personal AI operating layer."
+2. Rename Assistant: rename AURA to a test name such as Alice, save it, and verify the caption says "Good choice. I'm Alice now."
+3. What I Can Do: verify AURA explains email replies, GitHub clone, app builds, ChatGPT/Claude handoff, workflow memory, and Guardian.
+4. Permission Boundaries: verify AURA says it will not send, paste, delete, run dangerous shell, spend money, export memory, import memory, replay risky workflows, or push code without approval.
+5. Guardian: verify Guardian is shown as the safety layer for blocking, redaction, approvals, and panic stop.
+6. Privacy + Memory: choose memory scope, approval mode, and monthly AI budget. Verify AURA says it does not save passwords or secrets.
+7. Permissions: review Accessibility, Automation, Microphone, Screen Recording, and browser handoff cards. Press Check permissions / refresh context.
+8. Workspace: enter or choose the folder AURA can use for clones, builds, and generated files.
+9. Local Model: verify OS, chip, RAM, Ollama installed/running state, available models, recommendation, and approval-gated model pull.
+10. Workers: optionally enable Codex bridge and ChatGPT/Claude handoff.
+11. Voice + Hotkey: enable spoken guidance if desired, test microphone permission, and verify the app is honest that Hey AURA wake word is not implemented yet.
+12. Test First Task: use the guided cards for clone, email, blocked command, memory rejection, workflow save, and build app.
 
-Success: the command center shows context, Guardian, memory, workflow, model/cost, and action cards.
-The home dashboard should show `AURA Core online`, `Guardian: protected`, local model status, privacy mode, launch-flow cards, live activity, and time saved/work handled.
+Success: pressing Enter command layer opens the operating-layer home with the animated assistant, big command input, "AURA sees", "What I can do right now", Guardian, memory/activity, workflow/model panels, and Advanced hidden behind a tab.
+The home screen should show `AURA Core online`, `Guardian: protected`, local model status, privacy mode, context-aware action cards, live activity, and time saved/work handled.
 
 Failure: a blank white window. Rebuild the app with:
 
@@ -125,10 +128,12 @@ Use Codex for coding implementation and repo changes. Use ChatGPT/Claude browser
 
 ## Launch Flow Tests
 
-Run these from the Test AURA checklist or command center:
+Run these from Test First Task or the home command layer:
 
-- Clone current GitHub repo: should capture GitHub context and ask before running clone/write actions.
-- Draft reply to current email: should capture email context, draft locally or via fallback, and pause before paste.
+- Clone current GitHub repo: open a GitHub repo in your browser, press the hotkey or Refresh context, then click Clone this repo. AURA should show "I found a GitHub repo" and ask before running clone/write actions.
+- Missing GitHub context: click Clone this repo with no GitHub page visible. AURA should say "I don't see a GitHub repo yet..." and tell you to open one and refresh context.
+- Draft reply to current email: open Gmail or another email app with a message selected, refresh context, then click Draft reply. AURA should draft locally or via fallback and pause before paste/send.
+- Missing email context: click Draft reply with no email visible. AURA should explain exactly what context is missing.
 - Build app from prompt: should route to coding worker/Codex path, not a chatbot-only response.
 - Use ChatGPT/Claude handoff: should prepare a prompt and pause before pasting into the browser.
 - Save/replay workflow: should save workflow, preflight context, and block missing/risky replay.
@@ -138,10 +143,31 @@ Run these from the Test AURA checklist or command center:
 
 ## Hotkey And Voice
 
-- Hotkey: `Command/Control+Shift+Space` should bring AURA forward and focus compact command mode.
+- Hotkey: `Command/Control+Shift+Space` should bring AURA forward, focus compact command mode, and refresh context.
 - If the app shows `Hotkey unavailable`, enable Accessibility permission for AURA/Electron in System Settings, then relaunch.
-- Voice output uses browser/Electron speech synthesis when available.
+- Voice output uses browser/Electron speech synthesis when available and captions always show the spoken text.
 - Push-to-talk currently verifies microphone permission only; live speech recognition and the `Hey AURA` wake word are not implemented yet and should not be treated as working.
+- Always-on mode is not implemented yet. For now, launch AURA at startup manually and use the hotkey or voice button.
+
+## First Launch Manual Script
+
+Use this exact script for a clean first-user pass:
+
+1. Reset local app data if needed: `rm -rf ~/Library/Application\ Support/AURA`
+2. Launch AURA.
+3. Confirm you meet AURA on a cinematic first-launch screen with animated avatar and captions.
+4. Turn on spoken guidance if desired and press Speak this step.
+5. Rename AURA to Alice, then verify the interface changes name and saves it after restart.
+6. Step through Guardian, privacy, permissions, workspace, local model, workers, and voice/hotkey.
+7. Press Enter command layer.
+8. Open a GitHub repo in your browser.
+9. Press `Command/Control+Shift+Space` or Refresh context.
+10. Confirm "What I can do right now" shows Clone this repo, Summarize README, and Open in local workspace.
+11. Start Clone this repo and verify approval is required before shell/file execution.
+12. Open Gmail or email, refresh context, and verify Draft reply appears.
+13. Try the blocked shell command and verify Guardian blocks it.
+14. Try memory rejection with `password=supersecret12345`.
+15. Start a build-app prompt and verify it routes toward coding worker/Codex setup instead of pretending local model can do everything.
 
 ## Logs
 
