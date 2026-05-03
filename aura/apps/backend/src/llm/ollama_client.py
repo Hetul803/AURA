@@ -46,8 +46,9 @@ def default_ollama_model() -> str:
     try:
         tags = ollama_tags(timeout=1.2)
     except Exception:
-        return 'qwen2.5:3b'
-    return tags[0]['name'] if tags else 'qwen2.5:3b'
+        return 'gemma4:e4b-nvfp4'
+    names = [item.get('name') for item in tags if item.get('name')]
+    return next((name for name in names if str(name).startswith('gemma4')), names[0] if names else 'gemma4:e4b-nvfp4')
 
 
 def ollama_generate(*, prompt: str, model: str | None = None, system: str | None = None,

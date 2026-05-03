@@ -52,6 +52,7 @@ from aura.memory_engine import (
     search_memory_items,
     update_memory_item,
 )
+from aura.local_model_setup import local_model_status, pull_model, select_model
 from aura.models import available_models
 from aura.mobile_companion import (
     create_mobile_approval_card,
@@ -217,6 +218,12 @@ class CostCacheBody(BaseModel):
     provider: str
     model: str
     response: dict
+
+
+class LocalModelPullBody(BaseModel):
+    model: str
+    approved: bool = False
+    select_after_pull: bool = True
 
 
 class UserToolPromptBody(BaseModel):
@@ -417,15 +424,28 @@ def models():
 
 @app.post('/models/select')
 def set_model(model_id: str):
-    with db_conn() as conn:
-        conn.execute("INSERT INTO profile_meta(key,value) VALUES('selected_model',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value", (model_id,))
-    return {'ok': True, 'model_id': model_id}
+    return select_model(model_id)
 
 
 @app.get('/models/select')
 def get_model():
     row = db_conn().execute("SELECT value FROM profile_meta WHERE key='selected_model'").fetchone()
     return {'model_id': row['value'] if row else 'simple'}
+
+
+@app.get('/local-model/status')
+def local_model_setup_status():
+    return local_model_status()
+
+
+@app.post('/local-model/pull')
+def local_model_pull(body: LocalModelPullBody):
+    result = pull_model(body.model, approved=body.approved, select_after_pull=body.select_after_pull)
+    if result.get('requires_approval'):
+        raise HTTPException(403, result)
+    if not result.get('ok'):
+        raise HTTPException(400, result)
+    return result
 
 
 @app.get('/tools')

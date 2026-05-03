@@ -39,6 +39,7 @@ def test_codex_route_when_configured_for_large_coding_task(monkeypatch):
 
     assert route['agent_id'] == 'codex-coding-agent'
     assert route['status'] == 'available'
+    assert route['model_route']['purpose'] == 'coding'
     assert 'build me an app' in route['agent_prompt']
 
 

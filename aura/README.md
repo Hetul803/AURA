@@ -69,3 +69,5 @@ It runs backend tests, backend compile checks, and private-alpha readiness. Desk
 6. Run `Clone this repo locally` while viewing a GitHub repo and verify the launch flow is visible and safe.
 7. Open the Guardian panel and verify risky actions, redaction, and panic stop are visible.
 8. Open Memory and Workflow panels and verify memory compaction and workflow replay are testable.
+
+For install-like first-time Mac testing, use `docs/FIRST_USER_MAC_TEST.md`.

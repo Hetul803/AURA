@@ -44,3 +44,5 @@ Desktop auto-connects to `http://localhost:8000` (override with `AURA_BACKEND_UR
 pnpm test
 pnpm build
 ```
+
+For packaged first-user Mac testing from the DMG, see `../../docs/FIRST_USER_MAC_TEST.md`.

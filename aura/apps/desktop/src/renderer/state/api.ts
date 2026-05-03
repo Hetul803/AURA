@@ -80,6 +80,25 @@ export async function getCostModels() {
   return r.json();
 }
 
+export async function getLocalModelStatus() {
+  const r = await fetch(`${BACKEND_URL}/local-model/status`);
+  return r.json();
+}
+
+export async function selectModel(modelId: string) {
+  const r = await fetch(`${BACKEND_URL}/models/select?model_id=${encodeURIComponent(modelId)}`, { method: 'POST' });
+  return r.json();
+}
+
+export async function pullLocalModel(model: string, approved: boolean) {
+  const r = await fetch(`${BACKEND_URL}/local-model/pull`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ model, approved, select_after_pull: true })
+  });
+  return r.json();
+}
+
 export async function compactMemory(scope?: string) {
   const r = await fetch(`${BACKEND_URL}/memory/compact`, {
     method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ scope, older_than_days: 30 })
