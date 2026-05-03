@@ -23,6 +23,7 @@ pnpm dev
 - Desktop shows backend status (Connected/Disconnected + retry)
 - Enter command -> receives `run_id` -> subscribes to `/events/stream/{run_id}`
 - Action timeline updates live
+- AURA Guardian shows protection status, risk explanations, and redacted safety events
 - Panic Stop calls `/panic/{run_id}`
 - If blocked with manual step, click **Continue** to call `/runs/{run_id}/resume`
 
@@ -42,6 +43,13 @@ bash infra/scripts/run_tests.sh
 ```
 Writes `test_runs/<timestamp>/results.json`.
 
+Useful focused checks during hardening:
+```bash
+cd apps/backend
+python -m compileall -q src
+pytest -q tests/test_safety.py tests/test_memory_engine.py tests/test_workflow_engine.py tests/test_guardian.py
+```
+
 On Windows, the local reality-check runner is:
 ```powershell
 powershell -ExecutionPolicy Bypass -File infra/scripts/run_tests.ps1
@@ -51,3 +59,13 @@ It runs backend tests, backend compile checks, and private-alpha readiness. Desk
 ## Known intentional stubs
 - Voice transcription
 - Final purchase/checkout completion (confirmation-gated)
+
+## Full Desktop Manual Test
+1. Install dependencies with `pnpm -w install` and `cd apps/backend && pip install -e .`.
+2. Start backend/web with `pnpm -w dev`.
+3. Start desktop with `cd apps/desktop && pnpm dev`.
+4. Complete onboarding and save local profile settings.
+5. Run `Summarize this` with selected or copied text and verify approval is required before paste-back.
+6. Run `Clone this repo locally` while viewing a GitHub repo and verify the launch flow is visible and safe.
+7. Open the Guardian panel and verify risky actions, redaction, and panic stop are visible.
+8. Open Memory and Workflow panels and verify memory compaction and workflow replay are testable.

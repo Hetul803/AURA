@@ -7,6 +7,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from .state import db_conn
+from .privacy import detect_secret, detect_sensitive, redact_text, redact_value, sensitivity_labels
 from llm.embeddings import embed
 
 
@@ -58,7 +59,10 @@ def _quality_score(kind: str, key: str, value: str, *, confidence: float, source
         reasons.append('missing_key')
     if len(clean_value) < 4 or lower in LOW_VALUE_VALUES:
         reasons.append('low_information_value')
-    if any(marker in lower for marker in SENSITIVE_MARKERS) and permission not in {'private', 'sensitive'}:
+    combined = f'{key}\n{clean_value}'
+    if detect_secret(combined):
+        reasons.append('secret_never_stored')
+    elif (detect_sensitive(combined) or any(marker in lower or marker in key.lower() for marker in SENSITIVE_MARKERS)) and permission not in {'private', 'sensitive'}:
         reasons.append('sensitive_requires_private_permission')
     if source == 'auto' and confidence < 0.35:
         reasons.append('low_confidence_auto_memory')
@@ -148,6 +152,7 @@ def remember_item(
 ) -> dict[str, Any]:
     kind = kind if kind in ALLOWED_KINDS else 'note'
     scope = scope if scope in ALLOWED_SCOPES else 'personal'
+    labels = sensitivity_labels(f'{key}\n{value}')
     ok_to_store, reasons, adjusted_confidence = _quality_score(kind, key, value, confidence=confidence, source=source, permission=permission)
     if not ok_to_store:
         return {
@@ -158,6 +163,7 @@ def remember_item(
             'scope': scope,
             'memory_key': key,
             'confidence': adjusted_confidence,
+            'sensitivity': labels,
         }
     duplicate = _similar_existing(kind=kind, key=key, value=value, scope=scope)
     if duplicate:
@@ -166,7 +172,9 @@ def remember_item(
 
     mid = memory_id or f'mem_{uuid.uuid4().hex}'
     now = _now()
-    metadata = {**(metadata or {}), 'quality_score': adjusted_confidence}
+    metadata = redact_value({**(metadata or {}), 'quality_score': adjusted_confidence, 'sensitivity': labels})
+    provenance = redact_value(provenance or {'source': source, 'created_at': now})
+    value = redact_text(value)
     payload = (
         mid,
         scope,
@@ -179,7 +187,7 @@ def remember_item(
         permission,
         1 if pinned else 0,
         0,
-        json.dumps(provenance or {'source': source, 'created_at': now}, sort_keys=True),
+        json.dumps(provenance, sort_keys=True),
         user_notes,
         None,
         0,
@@ -281,6 +289,8 @@ def update_memory_item(memory_id: str, **changes: Any) -> dict[str, Any] | None:
     }
     fields = []
     params: list[Any] = []
+    if changes.get('value') is not None and detect_secret(str(changes.get('value'))):
+        return None
     for key, value in changes.items():
         if value is None:
             continue
@@ -303,6 +313,8 @@ def update_memory_item(memory_id: str, **changes: Any) -> dict[str, Any] | None:
             params.append(1 if value else 0)
             continue
         if key in allowed:
+            if key == 'value':
+                value = redact_text(str(value))
             fields.append(f'{key}=?')
             params.append(value)
     if not fields:

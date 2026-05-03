@@ -5,8 +5,9 @@ from copy import deepcopy
 
 from . import observer
 from .evaluator import evaluate_step
+from .guardian import record_step_events
 from .repair import build_repair_step, strategy_for_failure
-from .safety import guard_step
+from .safety import step_risk
 from .state import (
     append_run_history,
     create_approval_request,
@@ -236,19 +237,27 @@ def execute_steps(run_id: str, steps, event_cb, wait_poll_ms: int = 100, start_i
             continue
 
         task_type = ((ctx.get('plan') or {}).get('signature')) if ctx else None
-        guard = guard_step(step, task_type=task_type)
+        risk_decision = step_risk(step, task_type=task_type)
+        guard = risk_decision['decision']
         if guard == 'blocked':
             out.append({'step': step.id, 'status': 'blocked', 'step_index': idx})
-            event = {'kind': 'blocked', 'run_id': run_id, 'step_id': step.id, 'action': step.action_type}
+            event = {
+                'kind': 'blocked',
+                'run_id': run_id,
+                'step_id': step.id,
+                'action': step.action_type,
+                'risk_level': risk_decision.get('risk'),
+                'message': risk_decision.get('reason') or 'blocked by safety',
+            }
             _record_safety_history(run_id, event)
             _record_step_history(run_id, step, 'blocked')
             update_run_context(run_id, {'terminal_outcome': 'blocked', 'status': 'blocked'})
-            _emit_step(event_cb, run_id, step, 'failed', message='blocked by safety', url=last_obs.get('url', ''))
-            continue
+            _emit_step(event_cb, run_id, step, 'failed', message=f"AURA Guardian blocked this action: {event['message']}", url=last_obs.get('url', ''), guardian_reason=event['message'])
+            return out
         if guard == 'confirm' and step.action_type not in (ASSIST_APPROVAL, ASSIST_PASTE) and not is_step_approved(run_id, step.id):
-            approval = create_approval_request(run_id, step, 'confirmation_required')
+            approval = create_approval_request(run_id, step, risk_decision.get('reason') or 'confirmation_required')
             out.append({'step': step.id, 'status': 'awaiting_approval', 'step_index': idx, 'approval': approval})
-            event = {'kind': 'confirmation', 'run_id': run_id, 'step_id': step.id, 'action': step.action_type, 'risk_level': step.safety_level, 'approval_id': approval['approval_id']}
+            event = {'kind': 'confirmation', 'run_id': run_id, 'step_id': step.id, 'action': step.action_type, 'risk_level': risk_decision.get('risk') or step.safety_level, 'approval_id': approval['approval_id'], 'message': approval['risk_reason']}
             _record_safety_history(run_id, event)
             _record_step_history(run_id, step, 'needs_confirmation')
             update_run_context(run_id, {
@@ -267,6 +276,7 @@ def execute_steps(run_id: str, steps, event_cb, wait_poll_ms: int = 100, start_i
                     'action_type': step.action_type,
                     'tool': step.tool,
                     'risk_reason': approval['risk_reason'],
+                    'risk_level': risk_decision.get('risk'),
                     'requested_args': step.args,
                 },
             })
@@ -280,6 +290,7 @@ def execute_steps(run_id: str, steps, event_cb, wait_poll_ms: int = 100, start_i
                 'message': 'Confirmation required before AURA can continue.',
                 'action_type': step.action_type,
                 'risk_reason': approval['risk_reason'],
+                'risk_level': risk_decision.get('risk'),
                 'url': last_obs.get('url', ''),
             }
             record_run_event(payload)
@@ -329,6 +340,9 @@ def execute_steps(run_id: str, steps, event_cb, wait_poll_ms: int = 100, start_i
             _record_step_history(run_id, step, 'executed', attempt=attempts + 1)
             update_run_context(run_id, {'last_observation': observation_map, 'current_step_index': idx})
             _update_assist_context(run_id, step, result)
+            guardian_events = record_step_events(run_id, step, result, get_run_context(run_id) or {})
+            for guardian_event in guardian_events:
+                event_cb({'type': 'guardian_event', 'run_id': run_id, 'status': 'running', **guardian_event})
 
             if step.action_type in ('OS_PASTE', 'OS_WRITE_CLIPBOARD', 'OS_COPY_SELECTION', ASSIST_PASTE):
                 _record_safety_history(run_id, {'kind': 'clipboard', 'run_id': run_id, 'step_id': step.id, 'action': step.action_type, 'ok': result.get('ok', False)})

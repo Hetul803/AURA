@@ -2,12 +2,16 @@ from __future__ import annotations
 
 import json
 
+from .privacy import detect_secret, redact_text
 from .state import db_conn
 from llm.embeddings import embed
 
 
 
 def write_memory(key: str, value: str, tags: list[str] | None = None, importance: int = 1, pinned: int = 0):
+    if detect_secret(f'{key}\n{value}'):
+        return {'stored': False, 'rejected': True, 'reasons': ['secret_never_stored'], 'key': key}
+    value = redact_text(value)
     with db_conn() as conn:
         conn.execute(
             'INSERT INTO memories(key,value,tags,importance,pinned) VALUES(?,?,?,?,?)',
@@ -84,7 +88,9 @@ def update_memory(mid: int, value: str | None = None, pinned: int | None = None)
     row = conn.execute('SELECT * FROM memories WHERE id=?', (mid,)).fetchone()
     if not row:
         return False
-    value = value if value is not None else row['value']
+    if value is not None and detect_secret(value):
+        return False
+    value = redact_text(value) if value is not None else row['value']
     pinned = pinned if pinned is not None else row['pinned']
     with conn:
         conn.execute('UPDATE memories SET value=?, pinned=? WHERE id=?', (value, pinned, mid))

@@ -357,6 +357,24 @@ def _candidate_workflow_patterns(ctx: dict, outcome: str) -> list[dict]:
                 'outcome': 'failure',
                 'notes': pasteback.get('paste_blocked_reason') or '',
             })
+        proactive = ctx.get('proactive') or {}
+        selected = proactive.get('suggestion_selected')
+        if selected:
+            candidates.append({
+                'task_type': task_type,
+                'pattern_key': f'proactive:{selected}:selected',
+                'strategy': 'overlay_proactive_suggestion',
+                'outcome': 'success' if approval.get('status') in {'approved', 'pasted'} else outcome,
+                'notes': json.dumps({'confidence': proactive.get('suggestion_confidence'), 'signals': proactive.get('signals_used') or []}, sort_keys=True),
+            })
+            if approval.get('status') == 'rejected':
+                candidates.append({
+                    'task_type': task_type,
+                    'pattern_key': f'proactive:{selected}:rejected',
+                    'strategy': 'overlay_proactive_suggestion',
+                    'outcome': 'failure',
+                    'notes': approval.get('decision_reason') or '',
+                })
     if task_type == 'agent:coding':
         agent_route = ((ctx.get('plan') or {}).get('context') or {}).get('agent_route') or {}
         if agent_route.get('agent_id'):
@@ -715,6 +733,53 @@ def list_safety_memory() -> list[dict]:
         'SELECT * FROM safety_memory ORDER BY confidence DESC, evidence_count DESC, id DESC',
     ).fetchall()
     return [dict(row) for row in rows]
+
+
+def _memory_value(rows: list[dict], key: str, scope: str | None = None) -> str | None:
+    for row in rows:
+        if row.get('memory_key') != key:
+            continue
+        if scope and row.get('scope') not in {scope, 'global', 'assist:writing'}:
+            continue
+        return row.get('value')
+    return None
+
+
+def resolve_assist_profile(task_kind: str = 'summarize', active_app: str | None = None, domain: str | None = None) -> dict:
+    preferences = list_preference_memory()
+    safety = list_safety_memory()
+    workflow = list_workflow_memory()
+    scoped = f'assist.{task_kind}'
+    tone = _memory_value(preferences, 'writing.tone', scoped) or _memory_value(preferences, 'writing.tone') or 'polished'
+    length = _memory_value(preferences, 'writing.length', scoped) or _memory_value(preferences, 'writing.length') or 'concise'
+    warmth = _memory_value(preferences, 'writing.warmth', scoped) or _memory_value(preferences, 'writing.warmth') or 'neutral'
+    structure = _memory_value(preferences, 'writing.structure', scoped) or _memory_value(preferences, 'writing.structure') or 'answer_first'
+    research = _memory_value(preferences, 'assist.research', scoped) or _memory_value(preferences, 'assist.research') or 'auto'
+    strict_actions = {row.get('action_key') for row in safety if row.get('policy') in {'require_confirmation', 'revalidate_target', 'blocked'}}
+    caution = 'strict' if 'ASSIST_PASTE_BACK' in strict_actions else 'balanced'
+    relevant_workflow = [
+        row for row in workflow
+        if row.get('task_type') == 'assist:writing' and (row.get('pattern_key') or '').endswith(task_kind)
+    ][:5]
+    return {
+        'task_kind': task_kind,
+        'active_app': active_app,
+        'domain': domain,
+        'style_profile': {
+            'tone_preference': {'value': tone, 'source': 'memory_or_default'},
+            'length_preference': {'value': length, 'source': 'memory_or_default'},
+            'warmth_preference': {'value': warmth, 'source': 'memory_or_default'},
+            'structure_preference': {'value': structure, 'source': 'memory_or_default'},
+            'research_tendency': {'value': research, 'source': 'memory_or_default'},
+        },
+        'approval_profile': {
+            'approval_required': True,
+            'recommended_caution': caution,
+            'reason': 'AURA paste-back and send-like workflows are approval-first.',
+        },
+        'recent_workflow_patterns': relevant_workflow,
+        'memory_scope': 'assist:writing',
+    }
 
 
 def query_relevant_memory(

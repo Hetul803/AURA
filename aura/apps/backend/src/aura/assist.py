@@ -183,7 +183,12 @@ def gather_context(*, request_text: str, captured_context: dict, research_mode: 
 
 def capture_structured_context(raw_context: dict | None = None) -> dict:
     source = 'assist-provided' if raw_context else 'assist'
-    captured = legacy_assist_context(persist_context_snapshot(normalize_context(raw_context or capture_context(), source=source)))
+    using_original_capture = getattr(capture_context, '__module__', '') == 'tools.os_automation'
+    if raw_context is None and os.getenv('AURA_FORCE_FIXTURES') == '1' and using_original_capture:
+        from .context_engine import capture_current_context
+        captured = legacy_assist_context(capture_current_context(source=source))
+    else:
+        captured = legacy_assist_context(persist_context_snapshot(normalize_context(raw_context or capture_context(), source=source)))
     if not captured.get('ok'):
         return failure(
             'ASSIST_CAPTURE_CONTEXT',

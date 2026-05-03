@@ -22,7 +22,7 @@ function createWindow() {
 
   const devUrl = process.env.ELECTRON_DEV_URL;
   if (devUrl) win.loadURL(devUrl);
-  else win.loadFile(path.join(__dirname, '../renderer/index.html'));
+  else win.loadFile(path.join(__dirname, '../../dist/index.html'));
   mainWindow = win;
   return win;
 }

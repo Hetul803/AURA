@@ -73,7 +73,7 @@ def test_mobile_api_contracts():
 
 
 def test_mobile_companion_doc_exists():
-    doc = Path('aura/docs/MOBILE_COMPANION_PROTOTYPE.md')
+    doc = Path(__file__).resolve().parents[3] / 'docs/MOBILE_COMPANION_PROTOTYPE.md'
     assert doc.exists()
     text = doc.read_text(encoding='utf-8')
     assert 'approval' in text.lower()

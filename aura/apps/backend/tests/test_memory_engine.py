@@ -127,6 +127,14 @@ def test_memory_quality_rejects_junk_and_sensitive_public_memory():
     assert list_memory_items() == []
 
 
+def test_memory_never_stores_api_keys_or_passwords():
+    _clear_memory_items()
+    secret = remember_item(kind='fact', key='service.password', value='password=supersecret12345', permission='private', confidence=0.9)
+    assert secret['rejected'] is True
+    assert 'secret_never_stored' in secret['reasons']
+    assert list_memory_items() == []
+
+
 def test_memory_compaction_archives_raw_records_and_creates_summary():
     _clear_memory_items()
     for i in range(3):

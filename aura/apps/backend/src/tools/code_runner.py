@@ -8,6 +8,8 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
+from aura.privacy import redact_text
+from aura.safety import classify_shell_command
 from tools.tool_result import success, failure
 
 FAILURE_PATTERNS = {
@@ -34,6 +36,7 @@ def _workspace(path: str | None, fallback: str | None = None) -> Path:
 
 
 def _truncate(text: str, limit: int = 4000) -> str:
+    text = redact_text(text)
     return text if len(text) <= limit else text[:limit] + '\n...[truncated]'
 
 
@@ -107,9 +110,21 @@ def _command_observation(proc: subprocess.CompletedProcess[str], workspace: Path
 
 def run_shell_command(command: str, workspace: str | None = None) -> dict[str, Any]:
     cwd = _workspace(workspace)
+    classification = classify_shell_command(command, workspace=str(cwd))
+    if classification.get('blocked'):
+        return failure(
+            'CODE_RUN',
+            error=classification['reason'],
+            result={'command': redact_text(command), 'classification': classification},
+            observation={'workspace': str(cwd), 'command_risk': classification['risk'], 'failure_class': 'blocked_by_guardian', 'requires_user': True},
+            retryable=False,
+            requires_user=True,
+        )
     proc = subprocess.run(command, shell=True, cwd=str(cwd), capture_output=True, text=True)
     observation = _command_observation(proc, cwd)
-    result = {'stdout': proc.stdout, 'stderr': proc.stderr, 'exit_code': proc.returncode, 'command': command}
+    observation['command_risk'] = classification['risk']
+    observation['guardian_reason'] = classification['reason']
+    result = {'stdout': redact_text(proc.stdout), 'stderr': redact_text(proc.stderr), 'exit_code': proc.returncode, 'command': redact_text(command), 'classification': classification}
     if proc.returncode == 0:
         return success('CODE_RUN', result=result, observation=observation)
     failure_info = classify_failure(proc.stderr, proc.stdout)

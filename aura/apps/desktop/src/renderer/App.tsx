@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { approveRun, captureAssistContext, compactMemory, createWorkflow, getCurrentContext, getDevices, getMemoryItems, getProfileStatus, getRunState, getTools, getWorkflowSuggestions, getWorkflows, healthcheck, panicStop, rejectRun, resumeRun, retryRun, runWorkflow, sendCommand, subscribeRun } from './state/api';
+import { approveRun, captureAssistContext, compactMemory, createWorkflow, getCostModels, getCostSummary, getCurrentContext, getDevices, getGuardianStatus, getMemoryItems, getProfileStatus, getRunState, getTools, getWorkflowSuggestions, getWorkflows, healthcheck, panicStop, rejectRun, resumeRun, retryRun, runWorkflow, sendCommand, subscribeRun, updateProfileStatus } from './state/api';
 import ActionPanel from './ui/ActionPanel';
 import { pushEvent, store } from './state/store';
 import { BACKEND_URL } from '../shared/constants';
@@ -16,7 +16,7 @@ const QUICK_ACTIONS = [
   'Create a reusable workflow from this',
 ];
 
-const PANELS = ['Run', 'Workflows', 'Memory', 'Safety', 'System'];
+const PANELS = ['Run', 'Guardian', 'Workflows', 'Memory', 'System'];
 
 export default function App() {
   const [input, setInput] = useState('Summarize this');
@@ -37,6 +37,8 @@ export default function App() {
   const [draftText, setDraftText] = useState('');
   const [feedback, setFeedback] = useState('');
   const [activePanel, setActivePanel] = useState('Run');
+  const [onboardingOpen, setOnboardingOpen] = useState(() => localStorage.getItem('aura:onboarding-complete') !== '1');
+  const [onboardingPrefs, setOnboardingPrefs] = useState({ memoryScope: 'personal', approvalMode: 'balanced', monthlyBudget: '0', workspace: '' });
 
   const [prefs, setPrefs] = useState<any[]>([]);
   const [memories, setMemories] = useState<any[]>([]);
@@ -49,9 +51,12 @@ export default function App() {
   const [workflows, setWorkflows] = useState<any[]>([]);
   const [workflowSuggestions, setWorkflowSuggestions] = useState<any[]>([]);
   const [profileStatus, setProfileStatus] = useState<any>(null);
+  const [guardianStatus, setGuardianStatus] = useState<any>(null);
+  const [costSummary, setCostSummary] = useState<any>(null);
+  const [costModels, setCostModels] = useState<any[]>([]);
 
   async function refreshKnowledge() {
-    const [p, m, ss, st, se, ts, ds, mi, wf, ws, profile] = await Promise.all([
+    const [p, m, ss, st, se, ts, ds, mi, wf, ws, profile, guardian, cost, models] = await Promise.all([
       fetch(`${BACKEND_URL}/preferences`).then(r => r.json()),
       fetch(`${BACKEND_URL}/memories`).then(r => r.json()),
       fetch(`${BACKEND_URL}/browser/sessions`).then(r => r.json()),
@@ -63,6 +68,9 @@ export default function App() {
       getWorkflows(),
       getWorkflowSuggestions(),
       getProfileStatus(),
+      getGuardianStatus(runId || undefined),
+      getCostSummary(),
+      getCostModels(),
     ]);
     setPrefs(p); setMemories(m); setSessions(ss); setStorage(st); setSafety(se);
     setTools(ts); setDevices(ds);
@@ -70,6 +78,9 @@ export default function App() {
     setWorkflows(wf);
     setWorkflowSuggestions(ws);
     setProfileStatus(profile);
+    setGuardianStatus(guardian);
+    setCostSummary(cost);
+    setCostModels(models);
   }
 
   async function refreshRunState(targetRunId = runId) {
@@ -119,6 +130,7 @@ export default function App() {
         if (evt.session) setSessionState(evt.session);
         if (evt.type === 'needs_user') setNeedsUser(evt.message || 'User action required.');
         if (evt.type === 'approval_required') setNeedsUser('Draft ready for approval.');
+        if (evt.type === 'guardian_event') setGuardianStatus(await getGuardianStatus(res.run_id));
         if (evt.type === 'resumed') setNeedsUser('');
         await refreshRunState(res.run_id);
       });
@@ -150,17 +162,48 @@ export default function App() {
   const activeTabStyle = { border: '1px solid #152033', background: '#152033', color: '#fff', borderRadius: 6, padding: '7px 10px' };
   const tabStyle = { border: '1px solid #ccd5e1', background: '#fff', color: '#152033', borderRadius: 6, padding: '7px 10px' };
 
+  async function completeOnboarding() {
+    localStorage.setItem('aura:onboarding-complete', '1');
+    const metadata = { ...(profileStatus?.metadata || {}), onboarding: { completed: true, ...onboardingPrefs } };
+    const usage_limits = onboardingPrefs.monthlyBudget ? { monthly_budget_usd: Number(onboardingPrefs.monthlyBudget) || 0 } : undefined;
+    const updated = await updateProfileStatus({ metadata, usage_limits });
+    setProfileStatus(updated);
+    setOnboardingOpen(false);
+  }
+
   return <div style={{ fontFamily: 'Inter, system-ui, sans-serif', maxWidth: 1120, margin: '0 auto', padding: 16, color: '#172033', background: '#f6f8fb', minHeight: '100vh' }}>
     <header style={{ display: 'flex', justifyContent: 'space-between', gap: 16, alignItems: 'flex-start', marginBottom: 12 }}>
       <div>
         <h1 style={{ margin: 0, fontSize: 28 }}>AURA</h1>
-        <div style={{ color: '#526173', marginTop: 4 }}>Personal AI operating layer for this desktop</div>
+        <div style={{ color: '#526173', marginTop: 4 }}>Personal AI operating layer for this desktop. AURA does the work; AURA Guardian protects you.</div>
       </div>
       <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
         <span style={{ padding: '6px 10px', borderRadius: 999, border: '1px solid #ccd5e1', background: connection === 'Connected' ? '#e8f6ef' : '#fff0f0' }}>{connection}</span>
+        <span style={{ padding: '6px 10px', borderRadius: 999, border: '1px solid #9bd3b1', background: '#e8f6ef' }}>Guardian: {guardianStatus?.status || 'protected'}</span>
         <span style={{ padding: '6px 10px', borderRadius: 999, border: '1px solid #ccd5e1', background: '#fff' }}>Hotkey: Ctrl/Command+Shift+Space</span>
+        <button onClick={() => setOnboardingOpen(true)}>Onboarding</button>
       </div>
     </header>
+
+    {onboardingOpen && <section style={{ ...chrome, marginBottom: 10, borderColor: '#7fb799', background: '#f7fff9' }}>
+      <h2 style={{ marginTop: 0 }}>Set Up AURA</h2>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 10 }}>
+        <div><strong>1. Operating layer</strong><p>AURA uses the current app, page, clipboard, files, tools, and workflows as context.</p></div>
+        <div><strong>2. Local-first privacy</strong><p>Profile data stays on this device by default. Cloud sync and payment are off.</p></div>
+        <div><strong>3. AURA Guardian</strong><p>Risky actions pause for approval, destructive actions block, and secrets are redacted.</p></div>
+        <div><strong>4. Panic stop</strong><p>The panic control cancels the active run and stops further steps.</p></div>
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: 10, marginTop: 10 }}>
+        <label>Memory scope<select value={onboardingPrefs.memoryScope} onChange={e => setOnboardingPrefs({ ...onboardingPrefs, memoryScope: e.target.value })}><option>personal</option><option>work</option><option>company</option><option>session</option></select></label>
+        <label>Approval mode<select value={onboardingPrefs.approvalMode} onChange={e => setOnboardingPrefs({ ...onboardingPrefs, approvalMode: e.target.value })}><option>balanced</option><option>strict</option><option>demo</option></select></label>
+        <label>Monthly AI budget<input value={onboardingPrefs.monthlyBudget} onChange={e => setOnboardingPrefs({ ...onboardingPrefs, monthlyBudget: e.target.value })} placeholder='0 for local/free only' /></label>
+        <label>Workspace folder<input value={onboardingPrefs.workspace} onChange={e => setOnboardingPrefs({ ...onboardingPrefs, workspace: e.target.value })} placeholder='Optional local workspace' /></label>
+      </div>
+      <div style={{ marginTop: 10, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+        <button onClick={completeOnboarding}>Save local profile settings</button>
+        <button onClick={() => setOnboardingOpen(false)}>Later</button>
+      </div>
+    </section>}
 
     <div style={{ ...chrome, marginBottom: 10, display: 'grid', gridTemplateColumns: '1.1fr 1fr', gap: 12 }}>
       <div>
@@ -191,8 +234,8 @@ export default function App() {
       </div>
 
       <div style={{ display: 'flex', gap: 8 }}>
-        <input value={input} onChange={e => setInput(e.target.value)} placeholder={commandPlaceholder} style={{ flex: 1, minWidth: 260, padding: 10, border: '1px solid #c9d3df', borderRadius: 6 }} />
-        <button onClick={() => run()}>Run</button>
+        <input aria-label='command input' value={input} onChange={e => setInput(e.target.value)} placeholder={commandPlaceholder} style={{ flex: 1, minWidth: 260, padding: 10, border: '1px solid #c9d3df', borderRadius: 6 }} />
+        <button aria-label='run command' onClick={() => run()}>Run</button>
         <button onClick={() => panicStop(runId)} disabled={!runId}>Panic Stop</button>
       </div>
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 8 }}>
@@ -258,9 +301,21 @@ export default function App() {
 
     {activePanel === 'Run' && <ActionPanel events={events} />}
 
-    {activePanel === 'Safety' && <section style={chrome}>
-      <h3>Safety Cockpit</h3>
-      <ul>{safety.slice(-20).map((s, i) => <li key={i}>{s.kind} / {s.action || s.step_id} / {s.ok === false ? 'fail' : 'ok'}</li>)}</ul>
+    {activePanel === 'Guardian' && <section style={chrome}>
+      <h3>AURA Guardian</h3>
+      <p style={{ color: '#526173' }}>{guardianStatus?.summary || 'AURA Guardian is active: risky actions are approval-gated, dangerous actions are blocked, and logs are redacted.'}</p>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))', gap: 10 }}>
+        <div style={chrome}><strong>Privacy</strong><div>Local-first: yes</div><div>Secrets: redacted</div><div>Memory secrets: blocked</div></div>
+        <div style={chrome}><strong>Approvals</strong><div>Paste/send: required</div><div>Shell risk: reviewed</div><div>Workflow replay: checked</div></div>
+        <div style={chrome}><strong>Panic Stop</strong><div>{runId ? `Ready for ${runId}` : 'Ready'}</div><button onClick={() => panicStop(runId)} disabled={!runId}>Panic Stop</button></div>
+      </div>
+      <h4>Guardian events</h4>
+      <ul>{(guardianStatus?.events || []).map((event: any, i: number) => <li key={`${event.timestamp}-${i}`}>
+        <strong>{event.risk || 'low'}</strong> / {event.summary || event.type}
+        <div style={{ color: '#526173' }}>{event.explanation || event.context?.target || ''}</div>
+      </li>)}</ul>
+      <h4>Safety log</h4>
+      <ul>{safety.slice(-20).map((s, i) => <li key={i}>{s.kind} / {s.action || s.step_id} / {s.message || (s.ok === false ? 'fail' : 'ok')}</li>)}</ul>
     </section>}
 
     {activePanel === 'Workflows' && <section style={chrome}>
@@ -339,6 +394,16 @@ export default function App() {
       <ul>{devices.map((device: any) => <li key={device.adapter_id}><strong>{device.name}</strong>: {device.surface} / {device.status}</li>)}</ul>
       <h3>Local Profile</h3>
       <pre>{JSON.stringify(profileStatus, null, 2)}</pre>
+      <h3>Model And Cost</h3>
+      <div>Total estimated: ${costSummary?.total_estimated_cost_usd || 0} / Saved: ${costSummary?.estimated_savings_usd || 0}</div>
+      <div>Budget: {costSummary?.budget?.monthly_limit_usd ?? 'unset'} / Warn: {costSummary?.budget?.warn_at_usd ?? 'unset'}</div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 8, marginTop: 8 }}>
+        {costModels.map((model: any) => <div key={`${model.provider}-${model.model}`} style={{ border: '1px solid #e0e6ef', borderRadius: 6, padding: 8 }}>
+          <strong>{model.label}</strong>
+          <div>{model.provider} / {model.model}</div>
+          <div>{model.privacy} / {model.cost_tier} / {model.available ? 'available' : 'not configured'}</div>
+        </div>)}
+      </div>
     </section>}
 
     <pre>{out}</pre>

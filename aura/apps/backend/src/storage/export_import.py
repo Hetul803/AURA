@@ -1,7 +1,9 @@
 from __future__ import annotations
 import json
 from pathlib import Path
+from aura.privacy import detect_secret, redact_value
 from .db import get_conn
+from .profile_paths import profile_dir
 
 PROFILE_TABLES = [
     'memories',
@@ -35,20 +37,37 @@ PROFILE_TABLES = [
     'context_snapshots',
 ]
 
+def _safe_bundle_path(path: str) -> Path:
+    target = Path(path).expanduser()
+    if '..' in target.parts:
+        raise ValueError('path_traversal_blocked')
+    if not target.is_absolute():
+        target = profile_dir() / 'exports' / target
+    target.parent.mkdir(parents=True, exist_ok=True)
+    return target
+
+
 def export_profile(path: str) -> str:
     conn = get_conn()
     data = {}
     for table in PROFILE_TABLES:
         rows = [dict(r) for r in conn.execute(f"SELECT * FROM {table}").fetchall()]
-        data[table] = rows
-    Path(path).write_text(json.dumps(data, indent=2), encoding="utf-8")
-    return path
+        data[table] = redact_value(rows)
+    target = _safe_bundle_path(path)
+    target.write_text(json.dumps(data, indent=2), encoding="utf-8")
+    return str(target)
 
 def import_profile(path: str) -> None:
     conn = get_conn()
-    data = json.loads(Path(path).read_text(encoding="utf-8"))
+    target = _safe_bundle_path(path)
+    raw = target.read_text(encoding="utf-8")
+    if detect_secret(raw):
+        raise ValueError('profile_import_contains_secret')
+    data = json.loads(raw)
     with conn:
         for table, rows in data.items():
+            if table not in PROFILE_TABLES:
+                continue
             conn.execute(f"DELETE FROM {table}")
             for row in rows:
                 keys = list(row.keys())

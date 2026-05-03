@@ -164,6 +164,10 @@ def route_model(
     cost = estimate_cost(chosen['provider'], chosen['model'], prompt_tokens, completion_tokens)
     premium_baseline = estimate_cost('openai', 'gpt-5.5', prompt_tokens, completion_tokens)['estimated_cost_usd']
     saved = max(0.0, round(premium_baseline - cost['estimated_cost_usd'], 6))
+    budget = _budget()
+    approval_threshold = float((budget or {}).get('warn_at_usd') or 0.0)
+    paid_or_cloud = chosen['cost_tier'] in {'premium', 'subscription'} or chosen['privacy'] in {'cloud', 'user_browser'}
+    requires_approval = bool(paid_or_cloud and (cost['estimated_cost_usd'] > approval_threshold or chosen['cost_tier'] == 'premium'))
     return {
         'provider': chosen['provider'],
         'model': chosen['model'],
@@ -176,9 +180,11 @@ def route_model(
         'completion_tokens_estimate': completion_tokens,
         'estimated_cost_usd': cost['estimated_cost_usd'],
         'estimated_savings_vs_premium_usd': saved,
+        'requires_approval': requires_approval,
+        'approval_reason': 'premium_or_paid_model_above_threshold' if requires_approval else 'within_local_or_budget_policy',
         'cache_hit': bool(cache),
         'cached_response': cache['response'] if cache else None,
-        'budget': _budget(),
+        'budget': budget,
     }
 
 

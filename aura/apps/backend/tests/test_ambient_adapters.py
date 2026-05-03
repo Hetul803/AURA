@@ -73,7 +73,7 @@ def test_ambient_routine_storage_and_api():
 
 
 def test_home_car_doc_exists():
-    doc = Path('aura/docs/HOME_CAR_ADAPTERS.md')
+    doc = Path(__file__).resolve().parents[3] / 'docs/HOME_CAR_ADAPTERS.md'
     assert doc.exists()
     text = doc.read_text(encoding='utf-8')
     assert 'AURA Home' in text

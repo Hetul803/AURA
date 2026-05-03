@@ -104,7 +104,7 @@ def test_identity_boundary_api_contracts():
 
 
 def test_enterprise_architecture_doc_exists():
-    doc = Path('aura/docs/ENTERPRISE_TEAM_ARCHITECTURE.md')
+    doc = Path(__file__).resolve().parents[3] / 'docs/ENTERPRISE_TEAM_ARCHITECTURE.md'
     assert doc.exists()
     text = doc.read_text(encoding='utf-8')
     assert 'RBAC' in text

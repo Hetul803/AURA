@@ -7,11 +7,13 @@ from datetime import datetime, timezone
 from uuid import uuid4
 
 from storage.db import get_conn
+from .privacy import redact_value, safe_json_dumps
 
 PANIC = False
 RUN_CANCEL: dict[str, bool] = defaultdict(bool)
 RUN_CONTEXT: dict[str, dict] = {}
 SAFETY_EVENTS: list[dict] = []
+GUARDIAN_EVENTS: list[dict] = []
 LOCK = threading.Lock()
 
 
@@ -20,7 +22,7 @@ def _now_iso() -> str:
 
 
 def _json_dumps(value) -> str:
-    return json.dumps(value, sort_keys=True, default=str)
+    return safe_json_dumps(value)
 
 
 def _json_loads(value: str | None, fallback):
@@ -144,9 +146,9 @@ def list_safety_events() -> list[dict]:
 
 
 def persist_run_context(run_id: str, context: dict):
-    text = str(context.get('text') or '')
+    text = str(redact_value(context.get('text') or ''))
     status = str(context.get('status') or '')
-    payload = _json_dumps(context)
+    payload = _json_dumps(redact_value(context))
     now = _now_iso()
     with get_conn() as conn:
         conn.execute(
@@ -167,6 +169,7 @@ def record_run_event(evt: dict):
     run_id = evt.get('run_id')
     if not run_id:
         return
+    evt = redact_value(evt)
     with get_conn() as conn:
         conn.execute(
             'INSERT INTO run_events(run_id,event_type,status,step_id,payload_json) VALUES(?,?,?,?,?)',
@@ -194,6 +197,7 @@ def list_run_events(run_id: str) -> list[dict]:
 
 
 def record_audit_event(event: dict):
+    event = redact_value(event)
     with get_conn() as conn:
         conn.execute(
             """
@@ -233,7 +237,7 @@ def create_approval_request(run_id: str, step, risk_reason: str) -> dict:
     if existing and existing.get('step_id') == step.id:
         return existing
     approval_id = str(uuid4())
-    payload = {
+    payload = redact_value({
         'approval_id': approval_id,
         'run_id': run_id,
         'step_id': step.id,
@@ -243,7 +247,7 @@ def create_approval_request(run_id: str, step, risk_reason: str) -> dict:
         'args': step.args,
         'safety_level': step.safety_level,
         'risk_reason': risk_reason,
-    }
+    })
     now = _now_iso()
     with get_conn() as conn:
         conn.execute(
@@ -316,3 +320,27 @@ def is_step_approved(run_id: str, step_id: str) -> bool:
         (run_id, step_id),
     ).fetchone()
     return bool(row)
+
+
+def record_guardian_event(evt: dict):
+    evt = redact_value(evt)
+    with LOCK:
+        GUARDIAN_EVENTS.append(evt)
+        del GUARDIAN_EVENTS[:-300]
+    record_audit_event({
+        'run_id': evt.get('run_id'),
+        'step_id': evt.get('step_id'),
+        'event_type': f"guardian_{evt.get('type', 'event')}",
+        'action_type': evt.get('action'),
+        'risk_level': evt.get('risk'),
+        'message': evt.get('summary'),
+        'payload': evt,
+    })
+
+
+def list_guardian_events(run_id: str | None = None, limit: int = 100) -> list[dict]:
+    with LOCK:
+        items = list(GUARDIAN_EVENTS)
+    if run_id:
+        items = [item for item in items if item.get('run_id') == run_id]
+    return items[-limit:][::-1]

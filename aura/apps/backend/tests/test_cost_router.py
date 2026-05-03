@@ -46,6 +46,7 @@ def test_route_user_task_can_prefer_user_subscription():
     route = route_model(purpose='writing', prompt='draft a reply', prefer_user_subscription=True)
     assert route['provider'] == 'user_web'
     assert route['model'] == 'chatgpt_subscription'
+    assert route['requires_approval'] is False
 
 
 def test_usage_cache_budget_and_api_contracts():
@@ -69,6 +70,7 @@ def test_usage_cache_budget_and_api_contracts():
     api_route = client.post('/cost/route', json={'purpose': 'writing', 'prompt': 'reply', 'prefer_user_subscription': True})
     assert api_route.status_code == 200
     assert api_route.json()['provider'] == 'user_web'
+    assert 'approval_reason' in api_route.json()
     api_usage = client.post('/cost/usage', json={'run_id': 'r2', 'route': api_route.json()})
     assert api_usage.status_code == 200
     assert client.get('/cost/summary').json()['events_count'] >= 2

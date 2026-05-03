@@ -6,6 +6,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from .agent_router import workflow_suggestions
+from .privacy import detect_secret, redact_value
 from .state import db_conn
 
 
@@ -203,9 +204,29 @@ def render_workflow_command(workflow_id: str, variables: dict[str, Any] | None =
     if not workflow:
         return None
     command = workflow['command_template']
-    for key, value in (variables or {}).items():
+    for key, value in redact_value(variables or {}).items():
         command = command.replace('{' + key + '}', str(value))
     return {'workflow': workflow, 'command': command, 'variables': variables or {}}
+
+
+def validate_workflow_run(workflow: dict[str, Any], *, command: str, context: dict[str, Any] | None = None) -> dict[str, Any]:
+    context = context or {}
+    missing = []
+    for requirement in workflow.get('required_context') or []:
+        if requirement == 'browser_url:github_repo' and not any(ref.get('type') == 'github_repo' for ref in context.get('context_refs', [])):
+            missing.append(requirement)
+        elif requirement == 'selected_text_or_clipboard' and not (context.get('selected_text') or context.get('input_text') or context.get('clipboard_text')):
+            missing.append(requirement)
+        elif requirement == 'active_app_target' and not (context.get('active_app') or context.get('window_title')):
+            missing.append(requirement)
+        elif requirement == 'workspace_or_repo' and not (context.get('workspace_hint') or context.get('current_repo') or context.get('project')):
+            missing.append(requirement)
+    if detect_secret(command) or detect_secret(json.dumps(context, default=str)):
+        return {'ok': False, 'blocked': True, 'reason': 'workflow_contains_secret_or_sensitive_input', 'missing_context': missing}
+    if missing:
+        return {'ok': False, 'blocked': False, 'reason': 'missing_required_context', 'missing_context': missing}
+    risky = workflow.get('safety_class') in {'high', 'critical'} or workflow.get('approval_policy') in {'always_ask', 'require_approval'}
+    return {'ok': True, 'blocked': False, 'requires_approval': risky, 'reason': 'workflow_preflight_passed', 'missing_context': []}
 
 
 def create_workflow_version(

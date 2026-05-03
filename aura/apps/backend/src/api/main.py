@@ -66,8 +66,10 @@ from aura.mobile_companion import (
 from aura.orchestrator import approve_run, reject_run, resume_run, retry_assist_run, run_command
 from aura.planner import plan_from_text
 from aura.prefs import get_prefs, reset_all, reset_pref, set_pref
+from aura.proactive import proactive_suggestions_for_context
 from aura.profile_account import ensure_local_profile, get_profile_status, update_profile_status
 from aura.state import cancel_run, db_conn, get_run_context, list_audit_log, list_run_events, list_safety_events, record_run_event, set_panic
+from aura.state import list_guardian_events
 from aura.user_tools import build_user_ai_prompt, get_user_web_tool, list_user_web_tools
 from aura.workflow_engine import (
     create_workflow,
@@ -82,6 +84,7 @@ from aura.workflow_engine import (
     render_workflow_command,
     suggested_workflow_templates,
     update_workflow,
+    validate_workflow_run,
     workflow_update_suggestions,
 )
 from storage.export_import import export_profile, import_profile
@@ -106,6 +109,7 @@ class Cmd(BaseModel):
     choices: dict = {}
     use_macro: bool = False
     context: dict | None = None
+    proactive: dict | None = None
 
 
 class PanicBody(BaseModel):
@@ -752,6 +756,11 @@ def workflows_run(workflow_id: str, body: WorkflowRunBody):
     rendered = render_workflow_command(workflow_id, body.variables)
     if not rendered:
         raise HTTPException(404, 'workflow not found')
+    preflight = validate_workflow_run(rendered['workflow'], command=rendered['command'], context=body.context)
+    if not preflight['ok']:
+        if preflight.get('blocked'):
+            raise HTTPException(403, preflight)
+        raise HTTPException(400, preflight)
     run_id = 'pending'
 
     def emit(e):
@@ -761,7 +770,7 @@ def workflows_run(workflow_id: str, body: WorkflowRunBody):
     result = run_command(rendered['command'], emit, body.choices, body.use_macro, context=body.context)
     run_id = result.get('run_id', run_id)
     record_workflow_result(workflow_id, ok=bool(result.get('ok')), failure_reason=(result.get('status') or result.get('error')))
-    return {**result, 'workflow': rendered['workflow'], 'rendered_command': rendered['command']}
+    return {**result, 'workflow': rendered['workflow'], 'rendered_command': rendered['command'], 'workflow_preflight': preflight}
 
 
 @app.delete('/workflows/{workflow_id}')
@@ -785,7 +794,7 @@ def command(cmd: Cmd):
         rid = e.get('run_id', run_id)
         _emit(rid, e)
 
-    return run_command(cmd.text, emit, cmd.choices, cmd.use_macro, context=cmd.context)
+    return run_command(cmd.text, emit, cmd.choices, cmd.use_macro, context=cmd.context, proactive=cmd.proactive)
 
 
 @app.get('/context/current')
@@ -810,6 +819,12 @@ def context_history(limit: int = 20):
 def assist_context_capture():
     result = capture_structured_context()
     return result.get('result', {}).get('captured_context') or result
+
+
+@app.get('/proactive/suggestions')
+def proactive_suggestions():
+    context = capture_current_context(source='proactive')
+    return proactive_suggestions_for_context(context)
 
 
 @app.post('/panic')
@@ -894,12 +909,12 @@ def run_audit(run_id: str, limit: int = 100):
 
 
 @app.get('/events/stream/{run_id}')
-def stream(run_id: str):
+def stream(run_id: str, idle_limit: int = 20):
     q = EVENTS.setdefault(run_id, queue.Queue())
 
     def gen():
         idle = 0
-        while idle < 75:
+        while idle < idle_limit:
             try:
                 item = q.get(timeout=0.2)
                 idle = 0
@@ -936,6 +951,35 @@ def clear_all_browser_sessions():
 @app.get('/safety/events')
 def safety_events():
     return list_safety_events()
+
+
+@app.get('/guardian/status')
+def guardian_status(run_id: str | None = None, limit: int = 20):
+    events = list_guardian_events(run_id=run_id, limit=limit)
+    highest = 'low'
+    order = {'low': 0, 'medium': 1, 'high': 2, 'critical': 3, 'blocked': 4}
+    for event in events:
+        risk = event.get('risk') or event.get('risk_level') or 'low'
+        if order.get(risk, 0) > order.get(highest, 0):
+            highest = risk
+    return {
+        'status': 'protected',
+        'label': 'AURA Guardian',
+        'summary': 'AURA Guardian is active: risky actions are approval-gated, dangerous actions are blocked, and logs are redacted.',
+        'privacy': {
+            'local_first': True,
+            'secrets_redacted': True,
+            'memory_secret_storage': 'blocked',
+            'panic_stop': True,
+        },
+        'highest_recent_risk': highest,
+        'events': events,
+    }
+
+
+@app.get('/guardian/events')
+def guardian_events(run_id: str | None = None, limit: int = 100):
+    return list_guardian_events(run_id=run_id, limit=limit)
 
 
 @app.get('/storage/stats')
@@ -1069,12 +1113,18 @@ def retention_sweep():
 
 @app.post('/profile/export')
 def profile_export(path: str):
-    return {'path': export_profile(path)}
+    try:
+        return {'path': export_profile(path)}
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
 
 
 @app.post('/profile/import')
 def profile_import(path: str):
-    import_profile(path)
+    try:
+        import_profile(path)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
     return {'ok': True}
 
 

@@ -5,6 +5,7 @@ directories:
   output: release
 files:
   - dist/**
+  - dist-electron/**
 extraMetadata:
   description: Private, local-first personal AI operating layer.
 asar: true

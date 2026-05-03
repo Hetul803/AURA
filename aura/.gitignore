@@ -1,4 +1,11 @@
 node_modules
+apps/desktop/dist/
+apps/desktop/dist-electron/
+apps/desktop/release/
+apps/web/dist/
+apps/backend/.pytest_cache/
+apps/backend/src/**/*.pyc
+apps/backend/src/**/__pycache__/
 __pycache__
 .pytest_cache
 *.pyc

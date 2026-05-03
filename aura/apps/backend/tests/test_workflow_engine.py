@@ -13,6 +13,7 @@ from aura.workflow_engine import (
     render_workflow_command,
     suggested_workflow_templates,
     update_workflow,
+    validate_workflow_run,
     workflow_update_suggestions,
 )
 from storage.db import init_db
@@ -179,6 +180,23 @@ def test_workflow_run_replays_rendered_command():
     assert body['rendered_command'] == 'Reply to this email'
     assert body['workflow']['workflow_id'] == created['workflow_id']
     assert body['status'] == 'awaiting_approval'
+
+
+def test_workflow_preflight_blocks_missing_context_and_secrets():
+    _clear_workflows()
+    workflow = create_workflow(
+        name='Clone current repo',
+        command_template='Clone this repo locally',
+        required_context=['browser_url:github_repo'],
+        safety_class='high',
+    )
+
+    missing = validate_workflow_run(workflow, command='Clone this repo locally', context={})
+    secret = validate_workflow_run(workflow, command='Clone this repo locally password=supersecret12345', context={'context_refs': [{'type': 'github_repo'}]})
+
+    assert missing['ok'] is False
+    assert missing['reason'] == 'missing_required_context'
+    assert secret['blocked'] is True
 
 
 def test_workflow_version_and_repair_api_contracts():

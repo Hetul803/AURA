@@ -53,7 +53,7 @@ def _capture_planning_context() -> dict:
         return {'ok': False, 'source': 'command', 'error': str(exc), 'context_refs': []}
 
 
-def run_command(text: str, event_cb=lambda e: None, choices: dict | None = None, use_macro: bool = False, run_id: str | None = None, context: dict | None = None):
+def run_command(text: str, event_cb=lambda e: None, choices: dict | None = None, use_macro: bool = False, run_id: str | None = None, context: dict | None = None, proactive: dict | None = None):
     run_id = run_id or str(uuid.uuid4())
     _send_event(event_cb, {'type': 'run_start', 'run_id': run_id, 'status': 'running', 'message': text})
     planning_context = {**context, 'client_supplied': True} if context is not None else _capture_planning_context()
@@ -79,6 +79,12 @@ def run_command(text: str, event_cb=lambda e: None, choices: dict | None = None,
         'choices': choices or {},
         'use_macro': use_macro,
         'planning_context': planning_context,
+        'proactive': {
+            'suggestions_shown': list((proactive or {}).get('suggestions_shown', [])),
+            'suggestion_selected': (proactive or {}).get('suggestion_selected'),
+            'suggestion_confidence': (proactive or {}).get('suggestion_confidence'),
+            'signals_used': list((proactive or {}).get('signals_used', [])),
+        },
         'steps': [s.model_dump() for s in steps],
         'plan': {**plan, 'steps': [s.model_dump() for s in steps]},
         'current_step_index': 0,

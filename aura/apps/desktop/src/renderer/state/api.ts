@@ -57,6 +57,29 @@ export async function getProfileStatus() {
   return r.json();
 }
 
+export async function updateProfileStatus(patch: any) {
+  const r = await fetch(`${BACKEND_URL}/profile/status`, {
+    method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify(patch)
+  });
+  return r.json();
+}
+
+export async function getGuardianStatus(runId?: string) {
+  const qs = runId ? `?run_id=${encodeURIComponent(runId)}` : '';
+  const r = await fetch(`${BACKEND_URL}/guardian/status${qs}`);
+  return r.json();
+}
+
+export async function getCostSummary() {
+  const r = await fetch(`${BACKEND_URL}/cost/summary`);
+  return r.json();
+}
+
+export async function getCostModels() {
+  const r = await fetch(`${BACKEND_URL}/cost/models`);
+  return r.json();
+}
+
 export async function compactMemory(scope?: string) {
   const r = await fetch(`${BACKEND_URL}/memory/compact`, {
     method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ scope, older_than_days: 30 })

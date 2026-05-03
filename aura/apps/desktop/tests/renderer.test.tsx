@@ -21,6 +21,10 @@ function setupFetch(commandResponses: any[]) {
     if (url.includes('/browser/sessions')) return { ok: true, json: async () => [] } as any;
     if (url.includes('/storage/stats')) return { ok: true, json: async () => ({}) } as any;
     if (url.includes('/safety/events')) return { ok: true, json: async () => [] } as any;
+    if (url.includes('/guardian/status')) return { ok: true, json: async () => ({ status: 'protected', events: [] }) } as any;
+    if (url.includes('/cost/summary')) return { ok: true, json: async () => ({ total_estimated_cost_usd: 0, estimated_savings_usd: 0, budget: {} }) } as any;
+    if (url.includes('/cost/models')) return { ok: true, json: async () => [] } as any;
+    if (url.includes('/profile/status') && options?.method === 'PATCH') return { ok: true, json: async () => ({ metadata: {}, usage_limits: {} }) } as any;
     if (url.match(/\/runs\/[^/]+$/)) return { ok: true, json: async () => ({ approval_state: { status: 'pending', draft_text: 'Draft response' }, captured_context: { input_text: 'Captured text', active_app: 'Notes', input_source: 'clipboard_fallback', capture_path_used: 'clipboard_fallback', capture_method: { clipboard_preserved: true, clipboard_restored_after_capture: true } }, pasteback_state: { target_validation_result: 'exact_match', paste_blocked_reason: null } }) } as any;
     if (url.includes('/approve')) return { ok: true, json: async () => ({ ok: true, status: 'done' }) } as any;
     if (url.includes('/retry')) return { ok: true, json: async () => ({ ok: true, status: 'awaiting_approval' }) } as any;
@@ -32,6 +36,8 @@ function setupFetch(commandResponses: any[]) {
 }
 
 describe('renderer', () => {
+  afterEach(() => localStorage.clear());
+
   it('shows connection status and capture preview', async () => {
     setupFetch([{ ok: true, run_id: 'r1' }]);
     vi.stubGlobal('EventSource', class { onmessage: any; close() {} } as any);
@@ -52,8 +58,8 @@ describe('renderer', () => {
     } as any);
 
     render(<App />);
-    fireEvent.change(screen.getByPlaceholderText('Type command'), { target: { value: 'Summarize this' } });
-    fireEvent.click(screen.getByText('Run'));
+    fireEvent.change(screen.getByLabelText('command input'), { target: { value: 'Summarize this' } });
+    fireEvent.click(screen.getByRole('button', { name: 'run command' }));
     await waitFor(() => expect(screen.getByRole('alert')).toBeTruthy());
     fireEvent.change(screen.getByLabelText('draft editor'), { target: { value: 'Edited draft' } });
     fireEvent.click(screen.getByText('Approve & Paste'));

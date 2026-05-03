@@ -1,4 +1,13 @@
 import { describe, expect, it, vi } from 'vitest';
+
+vi.mock('electron', () => ({
+  globalShortcut: {
+    register: vi.fn(() => true),
+    unregister: vi.fn(),
+    unregisterAll: vi.fn(),
+  },
+}));
+
 import { defaultHotkeyForPlatform, registerHotkey, replaceHotkey } from '../src/main/hotkeys';
 
 describe('main hotkeys', () => {

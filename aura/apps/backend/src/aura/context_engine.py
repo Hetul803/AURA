@@ -185,7 +185,24 @@ def persist_context_snapshot(snapshot: dict) -> dict:
 
 
 def capture_current_context(*, source: str = 'desktop', persist: bool = True) -> dict:
-    raw = capture_context()
+    if os.getenv('AURA_FORCE_FIXTURES') == '1':
+        raw = {
+            'ok': True,
+            'active_app': 'Fixture Browser',
+            'window_title': 'AURA fixture context',
+            'browser_url': 'https://github.com/Hetul803/AURA',
+            'browser_title': 'Hetul803/AURA',
+            'selected_text': 'Fixture selected text for AURA tests.',
+            'clipboard_text': '',
+            'input_text': 'Fixture selected text for AURA tests.',
+            'input_source': 'fixture',
+            'capture_path_used': 'fixture',
+            'capture_method': {'fixture': True, 'clipboard_preserved': True, 'clipboard_restored_after_capture': True},
+            'target_fingerprint': {'app_name': 'Fixture Browser', 'browser_domain': 'github.com', 'browser_url': 'https://github.com/Hetul803/AURA'},
+            'paste_target': {'app_name': 'Fixture Browser', 'browser_domain': 'github.com', 'browser_url': 'https://github.com/Hetul803/AURA'},
+        }
+    else:
+        raw = capture_context()
     snapshot = normalize_context(raw, source=source)
     return persist_context_snapshot(snapshot) if persist else snapshot
 

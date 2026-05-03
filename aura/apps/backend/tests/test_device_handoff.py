@@ -60,7 +60,7 @@ def test_device_handoff_api_contracts():
 
 
 def test_cross_device_architecture_doc_exists():
-    doc = Path('aura/docs/CROSS_DEVICE_ARCHITECTURE.md')
+    doc = Path(__file__).resolve().parents[3] / 'docs/CROSS_DEVICE_ARCHITECTURE.md'
     assert doc.exists()
     text = doc.read_text(encoding='utf-8')
     assert 'Phone' in text
