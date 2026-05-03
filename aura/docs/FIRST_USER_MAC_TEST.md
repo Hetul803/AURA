@@ -4,10 +4,24 @@ This guide tests AURA like a first-time Mac user: install the packaged app, laun
 
 ## Install
 
-1. Build or download the macOS DMG.
-2. Open `apps/desktop/release/AURA-1.0.0-mac-arm64.dmg`.
-3. Drag AURA into Applications if prompted.
-4. Because this private-alpha build is unsigned, macOS may block the first launch. Use Finder, right-click AURA, choose Open, then confirm Open.
+1. From a fresh clone, build the macOS DMG:
+
+```bash
+git clone https://github.com/Hetul803/AURA.git
+cd AURA/aura
+pnpm aura:package
+```
+
+2. Or start developer mode directly:
+
+```bash
+cd AURA/aura
+./start-aura.sh
+```
+
+3. Open `apps/desktop/release/AURA-1.0.0-mac-arm64.dmg` on Apple Silicon Macs.
+4. Drag AURA into Applications if prompted.
+5. Because this private-alpha build is unsigned, macOS may block the first launch. Use Finder, right-click AURA, choose Open, then confirm Open.
 
 Success: AURA opens to first-time onboarding.
 
@@ -15,6 +29,20 @@ Failure: macOS says the app is damaged or cannot be opened. Remove quarantine fo
 
 ```bash
 xattr -dr com.apple.quarantine /Applications/AURA.app
+```
+
+Failure: Electron reports that it failed to install correctly. From `AURA/aura`, run:
+
+```bash
+pnpm approve-builds --all
+pnpm rebuild electron esbuild
+pnpm aura:verify-electron
+```
+
+Failure: the app opens but the backend is disconnected. Developer mode creates a backend virtual environment automatically. For packaged testing without the repo, install the bundled backend requirements:
+
+```bash
+python3 -m pip install -r "/Applications/AURA.app/Contents/Resources/backend/requirements-private-alpha.txt"
 ```
 
 ## Permissions
@@ -43,6 +71,14 @@ Complete these screens:
 9. Test: use the launch-flow checklist.
 
 Success: the command center shows context, Guardian, memory, workflow, model/cost, and action cards.
+
+Failure: a blank white window. Rebuild the app with:
+
+```bash
+pnpm aura:package
+```
+
+The packaged app should now show an explicit startup error if the renderer is missing or cannot load.
 
 ## Ollama And Gemma 4
 
@@ -108,6 +144,7 @@ Useful local paths may include:
 - Electron user data logs from the AURA app support folder.
 - Backend profile data under the local AURA profile directory.
 - Terminal output if launched from development mode.
+- Packaged backend log: click Open logs folder, then inspect `aura-backend.log`.
 
 ## Reset App Data
 
@@ -129,6 +166,7 @@ Use this only for local test data.
 
 - The private-alpha macOS app is unsigned and not notarized.
 - First launch may require right-click Open or quarantine removal.
+- Packaged AURA still depends on local Python 3.10+ and backend Python dependencies; the backend source is bundled in app resources, but Python itself is not embedded yet.
 - Ollama model pull progress is shown as an in-app pulling state plus final command output; detailed streaming progress is not yet polished.
 - Browser/live-site automation is experimental and approval-gated.
 - Local models are for private/simple tasks; heavy coding still belongs to Codex or another explicit worker.

@@ -26,12 +26,27 @@ function copyEntry(relativePath) {
   fs.cpSync(source, destination, { recursive: true });
 }
 
+function removeGeneratedPythonFiles(root) {
+  for (const entry of fs.readdirSync(root, { withFileTypes: true })) {
+    const fullPath = path.join(root, entry.name);
+    if (entry.isDirectory()) {
+      if (entry.name === '__pycache__' || entry.name.endsWith('.egg-info')) {
+        fs.rmSync(fullPath, { recursive: true, force: true });
+      } else {
+        removeGeneratedPythonFiles(fullPath);
+      }
+    } else if (entry.name.endsWith('.pyc') || entry.name.endsWith('.pyo')) {
+      fs.rmSync(fullPath, { force: true });
+    }
+  }
+}
+
 fs.rmSync(stageRoot, { recursive: true, force: true });
 fs.mkdirSync(stageRoot, { recursive: true });
 
 for (const entry of entriesToCopy) copyEntry(entry);
 
-fs.rmSync(path.join(stageRoot, 'src', 'aura_backend.egg-info'), { recursive: true, force: true });
+removeGeneratedPythonFiles(stageRoot);
 fs.writeFileSync(
   path.join(stageRoot, 'PRIVATE_ALPHA_BUNDLE.txt'),
   [

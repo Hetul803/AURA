@@ -5,6 +5,7 @@ import { stopManagedBackend, waitForBackend } from './backendManager.js';
 import { registerIpcHandlers } from './ipc.js';
 import { registerHotkeys, unregisterHotkeys } from './hotkeys.js';
 import { createTray } from './tray.js';
+import { productionRendererPath, rendererExists, rendererFallbackUrl } from './rendererPaths.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -21,18 +22,30 @@ function createWindow() {
   });
 
   const devUrl = process.env.ELECTRON_DEV_URL;
-  if (devUrl) win.loadURL(devUrl);
-  else win.loadFile(path.join(__dirname, '../../dist/index.html'));
+  if (devUrl) {
+    win.loadURL(devUrl);
+  } else if (rendererExists(__dirname)) {
+    win.loadFile(productionRendererPath(__dirname));
+  } else {
+    win.loadURL(rendererFallbackUrl(`Missing renderer: ${productionRendererPath(__dirname)}`));
+  }
+  win.webContents.on('did-fail-load', (_event, errorCode, errorDescription, validatedUrl) => {
+    if (!devUrl) {
+      win.loadURL(rendererFallbackUrl(`Renderer load failed: ${errorCode} ${errorDescription}\n${validatedUrl}`));
+    }
+  });
   mainWindow = win;
   return win;
 }
 
-app.whenReady().then(async () => {
+app.whenReady().then(() => {
   registerIpcHandlers();
-  await waitForBackend(12);
   const win = createWindow();
   registerHotkeys(win);
   tray = createTray(win);
+  waitForBackend(12).then((status) => {
+    if (status !== 'Connected') console.warn(`AURA backend startup status: ${status}`);
+  });
 });
 
 app.on('activate', () => {

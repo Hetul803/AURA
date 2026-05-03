@@ -29,8 +29,10 @@ The smoke check runs private-alpha readiness first, verifies Node/pnpm availabil
 On macOS/Linux, run:
 
 ```bash
-bash infra/scripts/build_desktop.sh
+pnpm aura:package
 ```
+
+The macOS build writes DMG artifacts under `apps/desktop/release/`. On Apple Silicon Macs, the expected first-user artifact is `apps/desktop/release/AURA-1.0.0-mac-arm64.dmg`.
 
 ## Alpha Guarantees
 

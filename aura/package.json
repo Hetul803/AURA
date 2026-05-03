@@ -4,6 +4,14 @@
   "version": "1.0.0",
   "scripts": {
     "dev": "bash infra/scripts/dev.sh",
-    "test": "bash infra/scripts/run_tests.sh"
+    "test": "bash infra/scripts/run_tests.sh",
+    "aura:install": "bash scripts/aura-install.sh",
+    "aura:start": "bash scripts/aura-dev.sh",
+    "aura:dev": "bash scripts/aura-dev.sh",
+    "aura:desktop": "pnpm --filter aura-desktop dev",
+    "aura:backend": "bash scripts/aura-backend.sh",
+    "aura:test": "bash infra/scripts/run_tests.sh",
+    "aura:package": "bash scripts/build-mac-dmg.sh",
+    "aura:verify-electron": "node scripts/verify-electron.cjs"
   }
 }

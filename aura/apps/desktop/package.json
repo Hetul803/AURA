@@ -5,9 +5,9 @@
   "main": "dist-electron/main/index.js",
   "type": "module",
   "scripts": {
-    "dev": "concurrently -k \"vite\" \"wait-on tcp:5173 && cross-env ELECTRON_DEV_URL=http://localhost:5173 electron ./dist-electron/main/index.js\" \"tsc -p tsconfig.electron.json --watch\"",
+    "dev": "tsc -p tsconfig.electron.json && concurrently -k \"vite\" \"wait-on tcp:5173 && cross-env ELECTRON_DEV_URL=http://localhost:5173 electron ./dist-electron/main/index.js\" \"tsc -p tsconfig.electron.json --watch\"",
     "build": "vite build && tsc -p tsconfig.electron.json",
-    "package": "pnpm build && electron-builder",
+    "package": "pnpm build && node scripts/stage-backend.mjs && electron-builder",
     "test": "vitest run"
   },
   "dependencies": {

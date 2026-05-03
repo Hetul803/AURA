@@ -2,6 +2,7 @@ import { app } from 'electron';
 import { spawn, type ChildProcessWithoutNullStreams } from 'child_process';
 import fs from 'fs';
 import path from 'path';
+import { findBackendDir } from './backendPaths.js';
 
 const BACKEND = process.env.AURA_BACKEND_URL || 'http://localhost:8000';
 const DEFAULT_PORT = process.env.AURA_BACKEND_PORT || '8000';
@@ -13,20 +14,6 @@ let logStream: fs.WriteStream | null = null;
 
 function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-function findBackendDir(start: string): string | null {
-  let current = start;
-  for (let i = 0; i < 8; i += 1) {
-    const candidate = path.join(current, 'aura', 'apps', 'backend');
-    if (fs.existsSync(path.join(candidate, 'src', 'api', 'main.py'))) return candidate;
-    const nestedCandidate = path.join(current, 'apps', 'backend');
-    if (fs.existsSync(path.join(nestedCandidate, 'src', 'api', 'main.py'))) return nestedCandidate;
-    const parent = path.dirname(current);
-    if (parent === current) break;
-    current = parent;
-  }
-  return null;
 }
 
 function pythonExecutable(): string {
@@ -80,9 +67,14 @@ export async function ensureBackendStarted(): Promise<BackendStatus> {
   if (process.env.AURA_BACKEND_URL) return existing;
   if (backendProcess) return 'Starting';
 
-  const backendDir = findBackendDir(process.cwd()) || findBackendDir(app.getAppPath());
+  const backendDir = findBackendDir({
+    cwd: process.cwd(),
+    appPath: app.getAppPath(),
+    resourcesPath: process.resourcesPath,
+    envBackendDir: process.env.AURA_BACKEND_DIR,
+  });
   if (!backendDir) {
-    appendLog(`[backend] unable to locate backend from ${process.cwd()} or ${app.getAppPath()}\n`);
+    appendLog(`[backend] unable to locate backend from cwd=${process.cwd()} appPath=${app.getAppPath()} resources=${process.resourcesPath}\n`);
     return 'Disconnected';
   }
 

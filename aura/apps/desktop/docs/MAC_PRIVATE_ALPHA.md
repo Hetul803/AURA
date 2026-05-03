@@ -55,31 +55,24 @@ Install these before first launch:
 From the repo checkout:
 
 ```bash
-cd aura/apps/desktop
-npm install
-npm run package:mac
+cd AURA/aura
+pnpm aura:package
 ```
 
-That produces an unpacked Mac app for quick local installation/testing.
+That produces a macOS DMG at `apps/desktop/release/AURA-1.0.0-mac-arm64.dmg` on Apple Silicon Macs.
 
-To produce distributable private-alpha artifacts:
+For development launch from a fresh clone:
 
 ```bash
-cd aura/apps/desktop
-npm install
-npm run dist:mac
+cd AURA/aura
+./start-aura.sh
 ```
 
-Run `dist:mac` on a Mac build machine. The unpacked `.app` path is validated in this repo environment, but DMG generation is a macOS-hosted step for private-alpha packaging.
+`./start-aura.sh` installs/checks pnpm dependencies, rebuilds Electron/esbuild for pnpm v10, prepares the backend virtual environment, starts the backend, and launches the desktop app.
 
 ## Output locations
 
-After `npm run package:mac`:
-
-- Unpacked app:
-  - `aura/apps/desktop/release/mac*/AURA.app`
-
-After `npm run dist:mac`:
+After `pnpm aura:package`:
 
 - Packaged app:
   - `aura/apps/desktop/release/mac*/AURA.app`
@@ -92,13 +85,7 @@ The exact `mac*` folder name depends on the build machine architecture, typicall
 
 ## Install/open flow on macOS
 
-### If you built `package:mac`
-1. Open Finder.
-2. Go to `aura/apps/desktop/release/mac*/`.
-3. Drag `AURA.app` into `/Applications`.
-4. Open `AURA.app`.
-
-### If you built `dist:mac`
+### If you built the DMG
 1. Open the generated `.dmg`.
 2. Drag `AURA.app` into `/Applications`.
 3. Eject the `.dmg`.

@@ -7,17 +7,36 @@ Local-first AI computer operator monorepo for desktop (Electron + Python backend
 Read [docs/AURA_VISION_AND_BUILD_CONSTITUTION.md](docs/AURA_VISION_AND_BUILD_CONSTITUTION.md) before planning or implementing any AURA task. It defines the long-term product vision, platform primitives, safety rules, memory boundaries, cost philosophy, cross-device future, enterprise direction, and required development workflow.
 
 ## Quick start
+
+Fresh clone developer start:
+
 ```bash
-pnpm -w install
-cd apps/backend && pip install -e .
-cd ../..
-pnpm -w dev
+git clone https://github.com/Hetul803/AURA.git
+cd AURA/aura
+./start-aura.sh
 ```
-In another terminal:
+
+Equivalent pnpm commands from `AURA/aura`:
+
 ```bash
-cd apps/desktop
-pnpm dev
+pnpm aura:start
+pnpm aura:install
+pnpm aura:backend
+pnpm aura:desktop
+pnpm aura:test
+pnpm aura:package
 ```
+
+`./start-aura.sh` checks Node, pnpm, Python, Electron, esbuild, and the backend virtual environment. It installs missing dependencies, rebuilds Electron/esbuild for pnpm v10, starts the backend, then launches the desktop app.
+
+If pnpm blocks Electron or esbuild build scripts, run:
+
+```bash
+pnpm approve-builds --all
+pnpm rebuild electron esbuild
+```
+
+Then rerun `./start-aura.sh`.
 
 ## Desktop demo loop
 - Desktop shows backend status (Connected/Disconnected + retry)
@@ -36,10 +55,13 @@ pnpm dev
 - Ollama missing: backend auto-falls back to deterministic `SimpleLLM`.
 - Playwright browser install: run `python -m playwright install chromium` for real-site browsing.
 - Permissions/hotkeys: desktop may require OS Accessibility permissions.
+- Electron failed to install correctly: run `pnpm approve-builds --all`, then `pnpm rebuild electron esbuild`, then `pnpm aura:verify-electron`.
+- Blank white packaged app: rebuild with `pnpm aura:package`. The app now loads an explicit startup error page if the renderer is missing instead of staying blank.
+- Reset local desktop data: quit AURA, then run `rm -rf ~/Library/Application\ Support/AURA`.
 
 ## Tests
 ```bash
-bash infra/scripts/run_tests.sh
+pnpm aura:test
 ```
 Writes `test_runs/<timestamp>/results.json`.
 
@@ -61,9 +83,9 @@ It runs backend tests, backend compile checks, and private-alpha readiness. Desk
 - Final purchase/checkout completion (confirmation-gated)
 
 ## Full Desktop Manual Test
-1. Install dependencies with `pnpm -w install` and `cd apps/backend && pip install -e .`.
-2. Start backend/web with `pnpm -w dev`.
-3. Start desktop with `cd apps/desktop && pnpm dev`.
+1. Install and start with `./start-aura.sh`.
+2. Or start backend and desktop separately with `pnpm aura:backend` and `pnpm aura:desktop`.
+3. Package a first-user build with `pnpm aura:package`, then open `apps/desktop/release/AURA-1.0.0-mac-arm64.dmg` on Apple Silicon Macs.
 4. Complete onboarding and save local profile settings.
 5. Run `Summarize this` with selected or copied text and verify approval is required before paste-back.
 6. Run `Clone this repo locally` while viewing a GitHub repo and verify the launch flow is visible and safe.
