@@ -2,7 +2,7 @@ from fastapi.testclient import TestClient
 
 from api.main import app
 from aura import local_model_setup
-from aura.local_model_setup import local_model_status, pull_model, recommend_local_model
+from aura.local_model_setup import local_model_status, pull_model, recommend_local_model, select_model
 
 client = TestClient(app)
 
@@ -61,3 +61,28 @@ def test_local_model_status_api_contract(monkeypatch):
 
     pull = client.post('/local-model/pull', json={'model': 'gemma4:e4b-nvfp4', 'approved': False})
     assert pull.status_code == 403
+
+
+def test_selected_ollama_model_is_used_by_assist_path(monkeypatch):
+    from llm import assist_client
+
+    calls = []
+
+    def fake_generate(**kwargs):
+        calls.append(kwargs)
+        return {
+            'ok': True,
+            'provider': 'ollama',
+            'model': kwargs['model'],
+            'response': '{"task_kind":"reply","source_text_present":true,"intent_confidence":0.91,"needs_research":false,"style_hints":{},"approval_required":true,"pasteback_mode":"reactivate_validate_paste","reasoning_summary":"selected"}',
+        }
+
+    select_model('ollama:gemma4:latest')
+    monkeypatch.setattr(assist_client, 'ollama_available', lambda: True)
+    monkeypatch.setattr(assist_client, 'ollama_generate', fake_generate)
+    result = assist_client.classify_assist_request('Reply to this email')
+    assert result.provider == 'ollama'
+    assert result.model == 'gemma4:latest'
+    assert calls[0]['model'] == 'gemma4:latest'
+
+    select_model('simple')

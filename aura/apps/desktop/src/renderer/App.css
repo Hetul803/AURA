@@ -785,6 +785,102 @@ h1, h2, h3, p {
   box-shadow: 0 0 0 1px rgba(99, 251, 211, 0.42), 0 30px 100px rgba(33, 213, 255, 0.16);
 }
 
+.operating-layer {
+  min-height: 100vh;
+  background:
+    radial-gradient(circle at 50% 10%, rgba(92, 255, 224, 0.12), transparent 34%),
+    linear-gradient(135deg, #02060d 0%, #06111f 46%, #070a13 100%);
+}
+
+.presence-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+
+.presence-shell {
+  display: grid;
+  gap: 18px;
+}
+
+.presence-core {
+  display: grid;
+  grid-template-columns: minmax(220px, 320px) minmax(0, 1fr);
+  align-items: center;
+  gap: 28px;
+  padding: clamp(20px, 4vw, 46px);
+  border: 1px solid rgba(99, 251, 211, 0.22);
+  border-radius: 18px;
+  background:
+    linear-gradient(145deg, rgba(9, 24, 43, 0.78), rgba(4, 10, 21, 0.92)),
+    radial-gradient(circle at 20% 20%, rgba(99, 251, 211, 0.18), transparent 30%);
+  box-shadow: 0 34px 130px rgba(0, 0, 0, 0.42), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+.presence-dialogue {
+  display: grid;
+  gap: 16px;
+}
+
+.presence-dialogue h1 {
+  font-size: clamp(42px, 7vw, 84px);
+  line-height: 0.95;
+  margin: 0;
+}
+
+.command-bar-large {
+  grid-template-columns: 92px 1fr 100px;
+  padding: 10px;
+  background: rgba(1, 8, 17, 0.72);
+}
+
+.operating-grid {
+  display: grid;
+  grid-template-columns: minmax(280px, 0.9fr) minmax(340px, 1.35fr);
+  gap: 14px;
+}
+
+.stream-panel {
+  min-height: 360px;
+}
+
+.action-panel, .guardian-card {
+  align-self: start;
+}
+
+.secondary-intelligence details,
+.advanced-diagnostics details {
+  margin-bottom: 14px;
+}
+
+.secondary-intelligence summary,
+.advanced-diagnostics summary {
+  cursor: pointer;
+  font-weight: 800;
+  color: #dbfff7;
+}
+
+.approval-workspace {
+  display: grid;
+}
+
+.advanced-toggle {
+  display: flex;
+  justify-content: center;
+}
+
+.advanced-diagnostics pre {
+  max-height: 420px;
+  overflow: auto;
+}
+
+.persona-details {
+  display: grid;
+  gap: 12px;
+}
+
 @media (max-width: 820px) {
   .persona-stage {
     grid-template-columns: 1fr;
@@ -816,11 +912,12 @@ h1, h2, h3, p {
     grid-template-columns: 1fr;
   }
 
-  .topbar, .onboarding-hero {
+  .topbar, .onboarding-hero, .presence-topbar {
     flex-direction: column;
+    align-items: stretch;
   }
 
-  .dashboard-grid, .command-bar {
+  .dashboard-grid, .command-bar, .presence-core, .operating-grid {
     grid-template-columns: 1fr;
   }
 

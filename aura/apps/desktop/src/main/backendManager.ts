@@ -20,6 +20,21 @@ function pythonExecutable(): string {
   return process.env.AURA_BACKEND_PYTHON || process.env.PYTHON || (process.platform === 'win32' ? 'python' : 'python3');
 }
 
+function venvPython() {
+  const venvDir = path.join(app.getPath('userData'), 'backend-venv');
+  return process.platform === 'win32'
+    ? path.join(venvDir, 'Scripts', 'python.exe')
+    : path.join(venvDir, 'bin', 'python3');
+}
+
+function pythonForBackend() {
+  const repairedPython = venvPython();
+  if (!process.env.AURA_BACKEND_PYTHON && fs.existsSync(repairedPython)) {
+    return repairedPython;
+  }
+  return pythonExecutable();
+}
+
 function backendCommand(backendDir: string) {
   if (process.env.AURA_BACKEND_COMMAND) {
     return {
@@ -29,7 +44,7 @@ function backendCommand(backendDir: string) {
     };
   }
   return {
-    command: pythonExecutable(),
+    command: pythonForBackend(),
     args: ['-m', 'uvicorn', 'api.main:app', '--app-dir', 'src', '--host', '127.0.0.1', '--port', DEFAULT_PORT],
     cwd: backendDir,
   };
@@ -92,6 +107,74 @@ export async function ensureBackendStarted(): Promise<BackendStatus> {
     backendProcess = null;
   });
   return 'Starting';
+}
+
+function runRepairStep(command: string, args: string[], cwd: string) {
+  appendLog(`[backend-repair] ${command} ${args.join(' ')} cwd=${cwd}\n`);
+  return new Promise<{ ok: boolean; code: number | null }>((resolve) => {
+    const child = spawn(command, args, {
+      cwd,
+      env: { ...process.env, PYTHONUNBUFFERED: '1' },
+      shell: process.platform === 'win32',
+    });
+    child.stdout.on('data', (chunk) => appendLog(chunk.toString()));
+    child.stderr.on('data', (chunk) => appendLog(chunk.toString()));
+    child.on('exit', (code) => resolve({ ok: code === 0, code }));
+    child.on('error', (error) => {
+      appendLog(`[backend-repair] failed to start ${command}: ${error.message}\n`);
+      resolve({ ok: false, code: null });
+    });
+  });
+}
+
+export async function repairBackendDependencies() {
+  const backendDir = findBackendDir({
+    cwd: process.cwd(),
+    appPath: app.getAppPath(),
+    resourcesPath: process.resourcesPath,
+    envBackendDir: process.env.AURA_BACKEND_DIR,
+  });
+  if (!backendDir) {
+    appendLog('[backend-repair] backend directory not found\n');
+    return { ok: false, message: 'Backend directory was not found in app resources or repo checkout.' };
+  }
+  const requirements = path.join(backendDir, 'requirements-private-alpha.txt');
+  if (!fs.existsSync(requirements)) {
+    appendLog(`[backend-repair] missing requirements: ${requirements}\n`);
+    return { ok: false, message: `Backend requirements file is missing: ${requirements}` };
+  }
+
+  const venvDir = path.dirname(path.dirname(venvPython()));
+  fs.mkdirSync(app.getPath('userData'), { recursive: true });
+  if (!fs.existsSync(venvPython())) {
+    const created = await runRepairStep(pythonExecutable(), ['-m', 'venv', venvDir], backendDir);
+    if (!created.ok) return { ok: false, message: 'Could not create backend Python environment. Open logs for details.' };
+  }
+
+  const pipUpgrade = await runRepairStep(venvPython(), ['-m', 'pip', 'install', '--upgrade', 'pip'], backendDir);
+  if (!pipUpgrade.ok) return { ok: false, message: 'Could not upgrade pip in backend environment. Open logs for details.' };
+  const installed = await runRepairStep(venvPython(), ['-m', 'pip', 'install', '-r', requirements], backendDir);
+  if (!installed.ok) return { ok: false, message: 'Could not install backend dependencies. Open logs for details.' };
+  appendLog(`[backend-repair] ready: ${venvPython()}\n`);
+  return { ok: true, message: 'Backend dependencies repaired. Restarting AURA Core.', python: venvPython(), backendDir };
+}
+
+export function backendDiagnostics() {
+  const backendDir = findBackendDir({
+    cwd: process.cwd(),
+    appPath: app.getAppPath(),
+    resourcesPath: process.resourcesPath,
+    envBackendDir: process.env.AURA_BACKEND_DIR,
+  });
+  const cmd = backendDir ? backendCommand(backendDir) : null;
+  return {
+    backendUrl: BACKEND,
+    backendDir,
+    logPath: path.join(app.getPath('logs'), 'aura-backend.log'),
+    command: cmd ? `${cmd.command} ${cmd.args.join(' ')}` : '',
+    usingRepairedVenv: fs.existsSync(venvPython()),
+    repairedPython: venvPython(),
+  };
 }
 
 export async function waitForBackend(maxAttempts = 8): Promise<BackendStatus> {

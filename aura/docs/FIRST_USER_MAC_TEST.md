@@ -68,20 +68,16 @@ Open System Settings -> Privacy & Security and enable permissions when macOS pro
 First launch should feel like meeting the assistant, not filling out a developer form. Complete these steps:
 
 1. Meet AURA: verify the dark encounter screen, animated avatar, spoken/captioned intro, and the line "I'm your personal AI operating layer."
-2. Rename Assistant: rename AURA to a test name such as Alice, save it, and verify the caption says "Good choice. I'm Alice now."
+2. Rename Me: rename AURA to a test name such as Alice, save it, and verify the caption says "Good choice. I'm Alice now."
 3. What I Can Do: verify AURA explains email replies, GitHub clone, app builds, ChatGPT/Claude handoff, workflow memory, and Guardian.
-4. Permission Boundaries: verify AURA says it will not send, paste, delete, run dangerous shell, spend money, export memory, import memory, replay risky workflows, or push code without approval.
+4. Approval Promise: verify AURA says it will not send, paste, delete, run dangerous shell, spend money, export memory, import memory, replay risky workflows, or push code without approval.
 5. Guardian: verify Guardian is shown as the safety layer for blocking, redaction, approvals, and panic stop.
-6. Privacy + Memory: choose memory scope, approval mode, and monthly AI budget. Verify AURA says it does not save passwords or secrets.
-7. Permissions: review Accessibility, Automation, Microphone, Screen Recording, and browser handoff cards. Press Check permissions / refresh context.
-8. Workspace: enter or choose the folder AURA can use for clones, builds, and generated files.
-9. Local Model: verify OS, chip, RAM, Ollama installed/running state, available models, recommendation, and approval-gated model pull.
-10. Workers: optionally enable Codex bridge and ChatGPT/Claude handoff.
-11. Voice + Hotkey: enable spoken guidance if desired, test push-to-talk, and verify the app is honest that Hey AURA wake word is not implemented yet.
-12. Test First Task: use the guided cards for clone, email, blocked command, memory rejection, workflow save, and build app.
+6. Permissions: review Accessibility, Automation, Microphone, Screen Recording, and browser handoff cards. Press Check permissions / refresh context.
+7. Local Brain: verify OS, chip, RAM, Ollama installed/running state, available models, recommendation, and approval-gated model pull.
+8. Finish: enable spoken guidance if desired, test push-to-talk, and verify the app is honest that Hey AURA wake word is not implemented yet.
 
-Success: pressing Enter command layer opens the operating-layer home with the animated assistant, big command input, "AURA sees", "What I can do right now", Guardian, memory/activity, workflow/model panels, and Advanced hidden behind a tab.
-The home screen should show `AURA Core online`, `Guardian: protected`, local model status, privacy mode, context-aware action cards, live activity, and time saved/work handled.
+Success: pressing Enter command layer opens the operating-layer home with the animated assistant, one big command input, "AURA sees", action stream, Guardian, and context-aware actions. Memory/workflow/model status should be secondary, and raw diagnostics should be hidden behind Advanced / Diagnostics.
+The home screen should show `AURA Core online`, Guardian protection, local model status, visible build ID, current context, and a natural action stream.
 
 Failure: a blank white window. Rebuild the app with:
 
@@ -90,6 +86,8 @@ pnpm aura:package
 ```
 
 The packaged app should now show an explicit startup error if the renderer is missing or cannot load.
+
+If the packaged backend fails with missing Python dependencies, AURA should not silently remain disconnected. It should show **Repair Backend**. Click it to create a local backend venv under the app data folder and install the bundled backend requirements, then retry the backend health check.
 
 ## Ollama And Gemma 4
 
@@ -208,10 +206,21 @@ For a clean first-user test:
 Development reset:
 
 ```bash
-rm -rf ~/Library/Application\ Support/AURA
+scripts/reset-aura-local.sh
 ```
 
-Use this only for local test data.
+The reset script prints these targets and asks for confirmation before deleting:
+
+- `/Applications/AURA.app`
+- `~/Library/Application Support/aura-desktop`
+- `~/Library/Logs/aura-desktop`
+- `~/.aura`
+
+For non-interactive local test cleanup:
+
+```bash
+scripts/reset-aura-local.sh --yes
+```
 
 ## Known Limitations
 

@@ -95,11 +95,11 @@ describe('renderer', () => {
     setupFetch([{ ok: true, run_id: 'r1' }]);
     vi.stubGlobal('EventSource', class { onmessage: any; close() {} } as any);
     render(<App />);
-    await waitFor(() => expect(screen.getByText(/Personal AI operating layer/)).toBeTruthy());
+    await waitFor(() => expect(screen.getByText(/AI operating layer/)).toBeTruthy());
     expect(screen.getAllByText(/AURA Core online/).length).toBeGreaterThan(0);
-    expect(screen.getByText(/AURA sees/)).toBeTruthy();
+    expect(screen.getAllByText(/AURA sees/).length).toBeGreaterThan(0);
     expect(screen.getByText(/Captured text/)).toBeTruthy();
-    expect(screen.getAllByText(/Hotkey unavailable/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Hotkey needs Accessibility|Hotkey setup/).length).toBeGreaterThan(0);
   });
 
   it('shows first-time onboarding and local model guidance', async () => {
@@ -109,7 +109,7 @@ describe('renderer', () => {
     render(<App />);
     await waitFor(() => expect(screen.getByText(/First Launch Encounter/)).toBeTruthy());
     expect(screen.getByText(/Hello. I'm AURA/)).toBeTruthy();
-    fireEvent.click(screen.getByText(/Local Model/));
+    fireEvent.click(screen.getByText(/Local Brain/));
     await waitFor(() => expect(screen.getByText(/Recommended local model/)).toBeTruthy());
     expect(screen.getByText(/Darwin/)).toBeTruthy();
     expect(screen.getByText(/Apple Silicon/)).toBeTruthy();
@@ -132,7 +132,7 @@ describe('renderer', () => {
     render(<App />);
     await waitFor(() => expect(screen.getByText(/First Launch Encounter/)).toBeTruthy());
     fireEvent.click(screen.getByText('Enter command layer'));
-    await waitFor(() => expect(screen.getByText(/What should AURA do/)).toBeTruthy());
+    await waitFor(() => expect(screen.getByText(/AI operating layer/)).toBeTruthy());
   });
 
   it('shows model pull approval and persists selected fallback', async () => {
@@ -140,7 +140,7 @@ describe('renderer', () => {
     setupFetch([{ ok: true, run_id: 'r1' }]);
     vi.stubGlobal('EventSource', class { onmessage: any; close() {} } as any);
     render(<App />);
-    fireEvent.click(await screen.findByText(/Local Model/));
+    fireEvent.click(await screen.findByText(/Local Brain/));
     await waitFor(() => expect(screen.getAllByText(/Approve download/).length).toBeGreaterThan(0));
     fireEvent.click(screen.getByText(/Use fallback/));
     await waitFor(() => expect((fetch as any).mock.calls.some((call: any[]) => String(call[0]).includes('/models/select?model_id=simple'))).toBe(true));
@@ -171,12 +171,12 @@ describe('renderer', () => {
     vi.stubGlobal('EventSource', class { onmessage: any; close() {} } as any);
     render(<App />);
     await waitFor(() => expect(screen.getByText(/AURA Guardian/)).toBeTruthy());
-    expect(screen.getByText(/Protected/)).toBeTruthy();
-    expect(screen.getByText(/Examples until live events arrive/)).toBeTruthy();
-    expect(screen.getByText(/Clone current repo/)).toBeTruthy();
-    fireEvent.click(screen.getByText('Memory'));
+    expect(screen.getAllByText(/Protected/).length).toBeGreaterThan(0);
+    expect(screen.getByText(/AURA captured browser context/)).toBeTruthy();
+    expect(screen.getByText(/Try opening a GitHub repo/)).toBeTruthy();
+    fireEvent.click(screen.getByText(/Memory, workflows, and model status/));
     await waitFor(() => expect(screen.getByText(/Memory intelligence/)).toBeTruthy());
-    expect(screen.getByText(/No memory updates yet/)).toBeTruthy();
+    expect(screen.getAllByText(/No memory updates yet/).length).toBeGreaterThan(0);
   });
 
   it('shows backend fallback when health check fails', async () => {
@@ -189,7 +189,7 @@ describe('renderer', () => {
     vi.stubGlobal('EventSource', class { onmessage: any; close() {} } as any);
     render(<App />);
     await waitFor(() => expect(screen.getAllByText(/AURA Core disconnected/).length).toBeGreaterThan(0));
-    expect(screen.getByText(/Repair \/ retry/)).toBeTruthy();
+    expect(screen.getByText(/Repair Backend/)).toBeTruthy();
   });
 
   it('renders hotkey active status from desktop bridge', async () => {
@@ -204,7 +204,7 @@ describe('renderer', () => {
     };
     render(<App />);
     await waitFor(() => expect(screen.getByText(/Hotkey active/)).toBeTruthy());
-    expect(screen.getByText(/CommandOrControl\+Shift\+Space brings AURA forward/)).toBeTruthy();
+    expect(screen.getByText(/CommandOrControl\+Shift\+Space opens command mode/)).toBeTruthy();
   });
 
   it('persists assistant rename during persona onboarding', async () => {
@@ -213,7 +213,7 @@ describe('renderer', () => {
     vi.stubGlobal('EventSource', class { onmessage: any; close() {} } as any);
     render(<App />);
     await waitFor(() => expect(screen.getByText(/First Launch Encounter/)).toBeTruthy());
-    fireEvent.click(screen.getByText(/Rename Assistant/));
+    fireEvent.click(screen.getByText(/Rename Me/));
     fireEvent.change(screen.getByLabelText('assistant name'), { target: { value: 'Alice' } });
     fireEvent.click(screen.getByText('Save name'));
     await waitFor(() => expect(localStorage.getItem('aura:assistant-name')).toBe('Alice'));
@@ -228,7 +228,7 @@ describe('renderer', () => {
     fireEvent.click(screen.getByText(/Permissions/));
     await waitFor(() => expect(screen.getAllByText(/Accessibility/).length).toBeGreaterThan(0));
     expect(screen.getByText(/Never controls apps silently/)).toBeTruthy();
-    fireEvent.click(screen.getByText(/Voice \+ Hotkey/));
+    fireEvent.click(screen.getByText(/Finish/));
     await waitFor(() => expect(screen.getAllByText(/Hotkey unavailable/).length).toBeGreaterThan(0));
     expect(screen.getAllByText(/enable Accessibility permission/i).length).toBeGreaterThan(0);
   });
@@ -241,7 +241,7 @@ describe('renderer', () => {
     Object.defineProperty(window, 'SpeechRecognition', { value: undefined, configurable: true });
     Object.defineProperty(window, 'webkitSpeechRecognition', { value: undefined, configurable: true });
     render(<App />);
-    await waitFor(() => expect(screen.getByText(/What should AURA do/)).toBeTruthy());
+    await waitFor(() => expect(screen.getByText(/AI operating layer/)).toBeTruthy());
     fireEvent.click(screen.getByText('Mic'));
     await waitFor(() => expect(screen.getAllByText(/Voice recognition is unavailable/).length).toBeGreaterThan(0));
     expect(screen.getAllByText(/Wake word is coming soon/).length).toBeGreaterThan(0);
@@ -282,7 +282,7 @@ describe('renderer', () => {
     setupFetch([{ ok: true, run_id: 'r1' }]);
     vi.stubGlobal('EventSource', class { onmessage: any; close() {} } as any);
     render(<App />);
-    await waitFor(() => expect(screen.getByText(/What I can do right now/)).toBeTruthy());
+    await waitFor(() => expect(screen.getByText(/What I can do now/)).toBeTruthy());
     fireEvent.click(screen.getAllByRole('button', { name: /Show setup needed/i })[0]);
     await waitFor(() => expect(screen.getAllByText(/I don't see a GitHub repo yet/).length).toBeGreaterThan(0));
   });
@@ -315,9 +315,9 @@ describe('renderer', () => {
     setupFetch([{ ok: true, run_id: 'r1' }]);
     vi.stubGlobal('EventSource', class { onmessage: any; close() {} } as any);
     render(<App />);
-    await waitFor(() => expect(screen.getByText(/What I can do right now/)).toBeTruthy());
+    await waitFor(() => expect(screen.getByText(/What I can do now/)).toBeTruthy());
     fireEvent.change(screen.getByLabelText('command input'), { target: { value: 'Reply to this email' } });
-    fireEvent.click(screen.getByText('Reply to this email'));
+    fireEvent.click(screen.getByRole('button', { name: 'run command' }));
     await waitFor(() => expect(screen.getAllByText(/I don't see an email thread yet/).length).toBeGreaterThan(0));
   });
 
@@ -329,7 +329,7 @@ describe('renderer', () => {
     render(<App />);
     await waitFor(() => expect(screen.getByText(/Build app/)).toBeTruthy());
     fireEvent.click(screen.getByText(/Build app/).closest('article')!.querySelector('button')!);
-    await waitFor(() => expect(screen.getByText(/Done. I created a coding job at \/tmp\/aura-job/)).toBeTruthy());
+    await waitFor(() => expect(screen.getAllByText(/Done. I created a coding job at \/tmp\/aura-job/).length).toBeGreaterThan(0));
   });
 
   it('keeps raw run ids out of the main home until Advanced is opened', async () => {
@@ -338,9 +338,10 @@ describe('renderer', () => {
     setupFetch([{ ok: true, run_id: 'r1' }]);
     vi.stubGlobal('EventSource', class { onmessage: any; close() {} } as any);
     render(<App />);
-    await waitFor(() => expect(screen.getByText(/What should AURA do/)).toBeTruthy());
+    await waitFor(() => expect(screen.getByText(/AI operating layer/)).toBeTruthy());
     expect(screen.queryByText(/Flow:/)).toBeNull();
-    fireEvent.click(screen.getByText('Advanced'));
-    await waitFor(() => expect(screen.getByText(/System, model, and backend internals/)).toBeTruthy());
+    fireEvent.click(screen.getByText(/Advanced \/ Diagnostics/));
+    await waitFor(() => expect(screen.getByText(/Diagnostics \/ Freshness/)).toBeTruthy());
+    expect(screen.getByText(/Build ID:/)).toBeTruthy();
   });
 });

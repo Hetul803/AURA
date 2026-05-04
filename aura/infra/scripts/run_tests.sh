@@ -5,6 +5,7 @@ import time; print(time.time())
 PY
 )
 logdir=$(mktemp -d)
+export PROFILE_DIR_OVERRIDE="${PROFILE_DIR_OVERRIDE:-$(mktemp -d /tmp/aura-test-profile.XXXXXX)}"
 
 suites='[]'
 run_suite() {

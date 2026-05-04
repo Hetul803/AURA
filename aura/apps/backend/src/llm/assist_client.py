@@ -6,6 +6,7 @@ from typing import Literal
 from pydantic import BaseModel, Field, ValidationError
 
 from llm.ollama_client import default_ollama_model, ollama_available, ollama_generate, parse_json_response
+from aura.state import db_conn
 
 AssistTaskKind = Literal['summarize', 'reply', 'rewrite', 'explain', 'answer', 'research_and_respond']
 
@@ -56,9 +57,22 @@ DRAFT_SYSTEM_PROMPT = (
 
 
 def assist_model_metadata() -> dict:
+    model = selected_ollama_assist_model()
+    if model is None:
+        return {'available': False, 'provider': 'simple', 'model': 'simple'}
     if not ollama_available():
-        return {'available': False, 'provider': 'ollama', 'model': default_ollama_model()}
-    return {'available': True, 'provider': 'ollama', 'model': default_ollama_model()}
+        return {'available': False, 'provider': 'ollama', 'model': model}
+    return {'available': True, 'provider': 'ollama', 'model': model}
+
+
+def selected_ollama_assist_model() -> str | None:
+    row = db_conn().execute("SELECT value FROM profile_meta WHERE key='selected_model'").fetchone()
+    selected = row['value'] if row else ''
+    if selected == 'simple':
+        return None
+    if selected.startswith('ollama:'):
+        return selected.split(':', 1)[1]
+    return default_ollama_model()
 
 
 def _json_prompt(payload: dict) -> str:
@@ -139,7 +153,7 @@ def classify_assist_request(text: str) -> AssistIntentResult:
         'supported_task_kinds': ['summarize', 'reply', 'rewrite', 'explain', 'answer', 'research_and_respond'],
         'notes': 'Assume source text usually comes from selected text or clipboard if the request says this/selected/copied.',
     })
-    raw = ollama_generate(prompt=prompt, system=INTENT_SYSTEM_PROMPT, format_json=True, timeout=12.0, options={'temperature': 0.0})
+    raw = ollama_generate(prompt=prompt, model=metadata['model'], system=INTENT_SYSTEM_PROMPT, format_json=True, timeout=12.0, options={'temperature': 0.0})
     if not raw.get('ok'):
         fallback = classify_assist_with_parser(text)
         fallback.provider = 'parser'
@@ -202,7 +216,7 @@ def generate_assist_draft(*, task_kind: str, source_text: str, request_text: str
             'keep_research_bounded': True,
         },
     })
-    raw = ollama_generate(prompt=prompt, system=DRAFT_SYSTEM_PROMPT, format_json=True, timeout=35.0, options={'temperature': 0.35})
+    raw = ollama_generate(prompt=prompt, model=metadata['model'], system=DRAFT_SYSTEM_PROMPT, format_json=True, timeout=35.0, options={'temperature': 0.35})
     if not raw.get('ok'):
         raise RuntimeError(raw.get('error') or 'assist_generation_failed')
     try:

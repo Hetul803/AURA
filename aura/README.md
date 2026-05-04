@@ -45,13 +45,12 @@ pnpm rebuild electron esbuild
 
 Then rerun `./start-aura.sh`.
 
-## Desktop demo loop
-- Desktop shows backend status (Connected/Disconnected + retry)
-- Enter command -> receives `run_id` -> subscribes to `/events/stream/{run_id}`
-- Action timeline updates live
-- AURA Guardian shows protection status, risk explanations, and redacted safety events
-- Panic Stop calls `/panic/{run_id}`
-- If blocked with manual step, click **Continue** to call `/runs/{run_id}/resume`
+## Desktop experience loop
+- AURA opens as an AI operating layer, not a dashboard: avatar, one command input, spoken/captioned status, action stream, context, and Guardian.
+- Type or speak one intent. AURA refreshes context first, then submits the command to the backend.
+- Guardian pauses approval-gated actions such as paste/send, risky shell/file operations, paid models, workflow replay, and memory export/import.
+- Advanced / Diagnostics contains raw run IDs, backend internals, build ID, paths, logs, and reset instructions.
+- If the packaged backend cannot start because dependencies such as `uvicorn` are missing, AURA shows a **Repair Backend** action that creates a local backend venv and installs bundled requirements with user approval.
 
 ## 3 best demo commands
 1. `search ai operator design and give me key points`
@@ -64,8 +63,9 @@ Then rerun `./start-aura.sh`.
 - Playwright browser install: run `python -m playwright install chromium` for real-site browsing.
 - Permissions/hotkeys: desktop may require OS Accessibility permissions.
 - Electron failed to install correctly: run `pnpm approve-builds --all`, then `pnpm rebuild electron esbuild`, then `pnpm aura:verify-electron`.
-- Blank white packaged app: rebuild with `pnpm aura:package`. The app now loads an explicit startup error page if the renderer is missing instead of staying blank.
-- Reset local desktop data: quit AURA, then run `rm -rf ~/Library/Application\ Support/AURA`.
+- Blank white packaged app: rebuild with `pnpm aura:package`. The app shows visible build metadata in the UI and an explicit startup error page if the renderer is missing instead of staying blank.
+- Stale installed app: quit AURA, run `scripts/reset-aura-local.sh`, rebuild with `pnpm aura:package`, then reinstall from the new DMG.
+- Reset local desktop data: quit AURA, then run `scripts/reset-aura-local.sh`. It prints every target and asks before deleting app/profile/log data.
 
 ## Tests
 ```bash
@@ -94,12 +94,12 @@ It runs backend tests, backend compile checks, and private-alpha readiness. Desk
 1. Install and start with `./start-aura.sh`.
 2. Or start backend and desktop separately with `pnpm aura:backend` and `pnpm aura:desktop`.
 3. Package a first-user build with `pnpm aura:package`, then open `apps/desktop/release/AURA-1.0.0-mac-arm64.dmg` on Apple Silicon Macs.
-4. Complete onboarding and save local profile settings.
-5. On Local Model, verify hardware detection, model choices, and approval-gated Ollama pull. Skipping should still let AURA start.
-6. On Voice + Hotkey, verify hotkey status, speech output, and push-to-talk. If Web Speech API is unavailable, AURA should say so and keep typed commands working.
+4. Meet AURA in the persona-led onboarding, optionally rename it, then enter the command layer.
+5. On Local Brain, verify hardware detection, model choices, and approval-gated Ollama pull. Skipping should still let AURA start.
+6. On Finish, verify hotkey status, speech output, and push-to-talk. If Web Speech API is unavailable, AURA should say so and keep typed commands working.
 7. Run `Clone this repo locally` while viewing a GitHub repo and verify the launch flow asks for approval before shell/file execution.
 8. Run `Reply to this email` while viewing email and verify AURA pauses before paste/send.
-9. Open the Guardian panel and verify risky actions, redaction, and panic stop are visible.
-10. Open Memory and Workflow panels and verify memory compaction and workflow replay are testable.
+9. Verify Guardian is visible on the main shell and that Panic Stop is available when a run exists.
+10. Open **Memory, workflows, and model status** for secondary intelligence; open **Advanced / Diagnostics** only for raw logs, build ID, backend paths, and reset instructions.
 
 For install-like first-time Mac testing, use `docs/FIRST_USER_MAC_TEST.md`.
