@@ -43,17 +43,25 @@ def detect_hardware() -> dict[str, Any]:
     processor = platform.processor() or ''
     ram_gb = None
     if system == 'Darwin':
+        macos_version = ''
         try:
             mem = subprocess.run(['sysctl', '-n', 'hw.memsize'], capture_output=True, text=True, timeout=1.5, check=True)
             ram_gb = round(int(mem.stdout.strip()) / (1024 ** 3))
         except Exception:
             ram_gb = None
+        try:
+            version = subprocess.run(['sw_vers', '-productVersion'], capture_output=True, text=True, timeout=1.5, check=True)
+            macos_version = version.stdout.strip()
+        except Exception:
+            macos_version = ''
         if not processor:
             try:
                 brand = subprocess.run(['sysctl', '-n', 'machdep.cpu.brand_string'], capture_output=True, text=True, timeout=1.5, check=True)
                 processor = brand.stdout.strip()
             except Exception:
                 processor = ''
+    else:
+        macos_version = ''
     if ram_gb is None:
         try:
             pages = int(os.sysconf('SC_PHYS_PAGES'))
@@ -66,6 +74,7 @@ def detect_hardware() -> dict[str, Any]:
         'arch': machine,
         'cpu': processor or machine,
         'ram_gb': ram_gb,
+        'macos_version': macos_version,
         'apple_silicon': system == 'Darwin' and machine in {'arm64', 'aarch64'},
         'intel_mac': system == 'Darwin' and machine in {'x86_64', 'i386'},
     }
@@ -90,6 +99,7 @@ def recommend_local_model(hardware: dict[str, Any] | None = None, installed_mode
         **recommended,
         'model': selected,
         'recommended_pull': recommended['model'],
+        'choices': _model_choices(ram, installed_models, recommended['model']),
         'installed': bool(installed_match),
         'fallback_installed_model': fallback,
         'reason': _recommendation_reason(hardware, recommended),
@@ -103,6 +113,33 @@ def recommend_local_model(hardware: dict[str, Any] | None = None, installed_mode
             'privacy-sensitive simple tasks',
         ],
     }
+
+
+def _model_choices(ram: int, installed_models: list[str], recommended_model: str) -> list[dict[str, Any]]:
+    choices = []
+    for item in GEMMA4_MODELS:
+        available_for_hardware = ram >= item['min_ram_gb']
+        installed = any(name == item['model'] or name.startswith(item['model'] + ':') for name in installed_models)
+        choices.append({
+            **item,
+            'id': item['model'],
+            'installed': installed,
+            'available_for_hardware': available_for_hardware,
+            'recommended': item['model'] == recommended_model,
+            'status': 'installed' if installed else ('recommended' if item['model'] == recommended_model else ('available' if available_for_hardware else 'too_large_for_detected_ram')),
+        })
+    choices.append({
+        'id': 'simple',
+        'model': 'simple',
+        'label': 'Skip local model for now',
+        'min_ram_gb': 0,
+        'role': 'deterministic fallback until Ollama is configured',
+        'installed': True,
+        'available_for_hardware': True,
+        'recommended': False,
+        'status': 'fallback',
+    })
+    return choices
 
 
 def _recommendation_reason(hardware: dict[str, Any], model: dict[str, Any]) -> str:

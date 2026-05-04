@@ -16,6 +16,13 @@ cd AURA/aura
 ./start-aura.sh
 ```
 
+If your shell says the script is not executable after a zip/manual copy, fix the bit once:
+
+```bash
+chmod +x start-aura.sh
+./start-aura.sh
+```
+
 Equivalent pnpm commands from `AURA/aura`:
 
 ```bash
@@ -52,7 +59,8 @@ Then rerun `./start-aura.sh`.
 3. `find flights from SFO to JFK on 2026-07-01 return 2026-07-10`
 
 ## Troubleshooting
-- Ollama missing: backend auto-falls back to deterministic `SimpleLLM`.
+- Ollama missing: AURA still starts and falls back to deterministic `SimpleLLM`. Onboarding shows install/running status, available models, Gemma recommendation, and a skip option.
+- Ollama installed but stopped: start the Ollama app or run `ollama serve`, then use Retry detection in onboarding.
 - Playwright browser install: run `python -m playwright install chromium` for real-site browsing.
 - Permissions/hotkeys: desktop may require OS Accessibility permissions.
 - Electron failed to install correctly: run `pnpm approve-builds --all`, then `pnpm rebuild electron esbuild`, then `pnpm aura:verify-electron`.
@@ -79,7 +87,7 @@ powershell -ExecutionPolicy Bypass -File infra/scripts/run_tests.ps1
 It runs backend tests, backend compile checks, and private-alpha readiness. Desktop/web tests run when `pnpm` is installed.
 
 ## Known intentional stubs
-- Voice transcription
+- Always-listening `Hey AURA` wake word. Push-to-talk uses Web Speech API when the Electron runtime exposes it; typed input remains the fallback.
 - Final purchase/checkout completion (confirmation-gated)
 
 ## Full Desktop Manual Test
@@ -87,9 +95,11 @@ It runs backend tests, backend compile checks, and private-alpha readiness. Desk
 2. Or start backend and desktop separately with `pnpm aura:backend` and `pnpm aura:desktop`.
 3. Package a first-user build with `pnpm aura:package`, then open `apps/desktop/release/AURA-1.0.0-mac-arm64.dmg` on Apple Silicon Macs.
 4. Complete onboarding and save local profile settings.
-5. Run `Summarize this` with selected or copied text and verify approval is required before paste-back.
-6. Run `Clone this repo locally` while viewing a GitHub repo and verify the launch flow is visible and safe.
-7. Open the Guardian panel and verify risky actions, redaction, and panic stop are visible.
-8. Open Memory and Workflow panels and verify memory compaction and workflow replay are testable.
+5. On Local Model, verify hardware detection, model choices, and approval-gated Ollama pull. Skipping should still let AURA start.
+6. On Voice + Hotkey, verify hotkey status, speech output, and push-to-talk. If Web Speech API is unavailable, AURA should say so and keep typed commands working.
+7. Run `Clone this repo locally` while viewing a GitHub repo and verify the launch flow asks for approval before shell/file execution.
+8. Run `Reply to this email` while viewing email and verify AURA pauses before paste/send.
+9. Open the Guardian panel and verify risky actions, redaction, and panic stop are visible.
+10. Open Memory and Workflow panels and verify memory compaction and workflow replay are testable.
 
 For install-like first-time Mac testing, use `docs/FIRST_USER_MAC_TEST.md`.

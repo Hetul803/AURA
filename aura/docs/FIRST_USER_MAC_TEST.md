@@ -19,6 +19,13 @@ cd AURA/aura
 ./start-aura.sh
 ```
 
+If macOS or a copied checkout strips executable permissions:
+
+```bash
+chmod +x start-aura.sh
+./start-aura.sh
+```
+
 3. Open `apps/desktop/release/AURA-1.0.0-mac-arm64.dmg` on Apple Silicon Macs.
 4. Drag AURA into Applications if prompted.
 5. Because this private-alpha build is unsigned, macOS may block the first launch. Use Finder, right-click AURA, choose Open, then confirm Open.
@@ -70,7 +77,7 @@ First launch should feel like meeting the assistant, not filling out a developer
 8. Workspace: enter or choose the folder AURA can use for clones, builds, and generated files.
 9. Local Model: verify OS, chip, RAM, Ollama installed/running state, available models, recommendation, and approval-gated model pull.
 10. Workers: optionally enable Codex bridge and ChatGPT/Claude handoff.
-11. Voice + Hotkey: enable spoken guidance if desired, test microphone permission, and verify the app is honest that Hey AURA wake word is not implemented yet.
+11. Voice + Hotkey: enable spoken guidance if desired, test push-to-talk, and verify the app is honest that Hey AURA wake word is not implemented yet.
 12. Test First Task: use the guided cards for clone, email, blocked command, memory rejection, workflow save, and build app.
 
 Success: pressing Enter command layer opens the operating-layer home with the animated assistant, big command input, "AURA sees", "What I can do right now", Guardian, memory/activity, workflow/model panels, and Advanced hidden behind a tab.
@@ -104,14 +111,21 @@ Start Ollama, then reopen or refresh AURA. Onboarding detects:
 - Ollama install/running status;
 - available local models.
 
-AURA recommends Gemma 4 by hardware:
+AURA recommends Gemma 4 by hardware and shows choices instead of forcing one model:
 
 - constrained Mac: `gemma4:e4b-nvfp4`;
 - 16 GB class Mac: `gemma4:latest`;
 - 32 GB class Mac: `gemma4:26b`;
 - 64 GB+ Mac: `gemma4:31b`.
 
-Pulling a model requires user approval in onboarding. You can skip local setup and keep using SimpleLLM until later.
+Pulling a model requires user approval in onboarding. AURA runs `ollama pull <model>` only after you click Approve download, verifies the selected model through the backend, and saves it as `ollama:<model>` for routing. You can skip local setup and keep using SimpleLLM until later.
+
+After setup, the Memory or Local Model panel should show:
+
+- Provider: Ollama;
+- Model: the selected Gemma model;
+- Local model: ready;
+- Used for private/simple tasks, memory cleanup, routing, summaries, and draft fallback.
 
 ## Model Roles
 
@@ -146,7 +160,9 @@ Run these from Test First Task or the home command layer:
 - Hotkey: `Command/Control+Shift+Space` should bring AURA forward, focus compact command mode, and refresh context.
 - If the app shows `Hotkey unavailable`, enable Accessibility permission for AURA/Electron in System Settings, then relaunch.
 - Voice output uses browser/Electron speech synthesis when available and captions always show the spoken text.
-- Push-to-talk currently verifies microphone permission only; live speech recognition and the `Hey AURA` wake word are not implemented yet and should not be treated as working.
+- Push-to-talk uses the browser Web Speech API when Electron exposes it. Press Mic or the voice test button, say `Hey AURA clone this repo`, and AURA should strip the wake phrase, show the transcript, caption "I heard...", then submit `Clone this repo locally`.
+- If Web Speech API is unavailable in this Electron/WebView build, AURA should say `Voice recognition is unavailable...` and keep typed commands working.
+- The `Hey AURA` always-listening wake word is not implemented yet and should not be treated as working.
 - Always-on mode is not implemented yet. For now, launch AURA at startup manually and use the hotkey or voice button.
 
 ## First Launch Manual Script
@@ -163,11 +179,12 @@ Use this exact script for a clean first-user pass:
 8. Open a GitHub repo in your browser.
 9. Press `Command/Control+Shift+Space` or Refresh context.
 10. Confirm "What I can do right now" shows Clone this repo, Summarize README, and Open in local workspace.
-11. Start Clone this repo and verify approval is required before shell/file execution.
-12. Open Gmail or email, refresh context, and verify Draft reply appears.
-13. Try the blocked shell command and verify Guardian blocks it.
-14. Try memory rejection with `password=supersecret12345`.
-15. Start a build-app prompt and verify it routes toward coding worker/Codex setup instead of pretending local model can do everything.
+11. Press Mic and say `Hey AURA clone this repo`. If speech recognition is available, verify the transcript appears and AURA starts the clone flow. If not, type `Clone this repo locally`.
+12. Verify approval is required before shell/file execution.
+13. Open Gmail or email, refresh context, and verify Draft reply appears.
+14. Try the blocked shell command and verify Guardian blocks it.
+15. Try memory rejection with `password=supersecret12345`.
+16. Start a build-app prompt and verify it routes toward coding worker/Codex setup instead of pretending local model can do everything.
 
 ## Logs
 
@@ -202,6 +219,7 @@ Use this only for local test data.
 - First launch may require right-click Open or quarantine removal.
 - Packaged AURA still depends on local Python 3.10+ and backend Python dependencies; the backend source is bundled in app resources, but Python itself is not embedded yet.
 - Ollama model pull progress is shown as an in-app pulling state plus final command output; detailed streaming progress is not yet polished.
+- Web Speech API support depends on the Electron/Chromium runtime and microphone permission. Typed command input is the supported fallback.
 - Browser/live-site automation is experimental and approval-gated.
 - Local models are for private/simple tasks; heavy coding still belongs to Codex or another explicit worker.
 - Cloud account, payment, and sync are not required for first-user testing.

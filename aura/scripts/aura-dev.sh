@@ -4,9 +4,16 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
+echo "==> AURA one-command start"
+echo "    Working directory: $ROOT"
+echo "    Expected command: cd AURA/aura && ./start-aura.sh"
+echo
+
 if [[ ! -d node_modules || ! -d apps/desktop/node_modules || ! -x apps/backend/.venv/bin/python ]]; then
+  echo "==> Dependencies are missing or incomplete; running installer"
   bash scripts/aura-install.sh
 else
+  echo "==> Dependencies found; verifying Electron/esbuild"
   pnpm rebuild electron esbuild >/dev/null
 fi
 
@@ -33,6 +40,7 @@ else
     fi
     if ! kill -0 "$BACKEND_PID" >/dev/null 2>&1; then
       echo "Backend exited before becoming healthy." >&2
+      echo "Try: pnpm aura:backend" >&2
       exit 2
     fi
     sleep 0.25
@@ -47,6 +55,7 @@ fi
 
 echo "==> Starting AURA desktop"
 echo "Backend: ${BACKEND_URL}"
+echo "If Electron fails after a fresh clone, run: pnpm approve-builds --all && pnpm rebuild electron esbuild"
 echo "Quit the desktop app or press Ctrl+C here to stop the dev session."
 export AURA_BACKEND_URL="$BACKEND_URL"
 pnpm --filter aura-desktop dev

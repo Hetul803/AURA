@@ -1,6 +1,8 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import App from '../src/renderer/App';
 import { afterEach, describe, it, expect, vi } from 'vitest';
+import { existsSync, readFileSync, statSync } from 'node:fs';
+import { dirname, join } from 'node:path';
 
 afterEach(() => {
   cleanup();
@@ -19,7 +21,7 @@ function setupSpeech() {
   });
 }
 
-function setupFetch(commandResponses: any[], contextOverride?: any) {
+function setupFetch(commandResponses: any[], contextOverride?: any, localModelOverride?: any) {
   let i = 0;
   const context = contextOverride || { active_app: 'Notes', input_text: 'Captured text', input_source: 'clipboard_fallback', capture_path_used: 'clipboard_fallback', capture_method: { clipboard_preserved: true, clipboard_restored_after_capture: true } };
   vi.stubGlobal('fetch', vi.fn(async (url: string, options?: any) => {
@@ -39,11 +41,20 @@ function setupFetch(commandResponses: any[], contextOverride?: any) {
     if (url.includes('/guardian/status')) return { ok: true, json: async () => ({ status: 'protected', events: [] }) } as any;
     if (url.includes('/cost/summary')) return { ok: true, json: async () => ({ total_estimated_cost_usd: 0, estimated_savings_usd: 0, budget: {} }) } as any;
     if (url.includes('/cost/models')) return { ok: true, json: async () => [] } as any;
-    if (url.includes('/local-model/status')) return { ok: true, json: async () => ({
+    if (url.includes('/local-model/status')) return { ok: true, json: async () => (localModelOverride || {
       hardware: { os: 'Darwin', arch: 'arm64', ram_gb: 16, apple_silicon: true },
       ollama: { installed: false, running: false, install_url: 'https://ollama.com/download' },
       available_models: [],
-      recommendation: { model: 'gemma4:e4b-nvfp4', recommended_pull: 'gemma4:e4b-nvfp4', reason: 'compact default' },
+      recommendation: {
+        model: 'gemma4:e4b-nvfp4',
+        recommended_pull: 'gemma4:e4b-nvfp4',
+        reason: 'Gemma 4 compact fits this Mac.',
+        choices: [
+          { id: 'gemma4:e4b-nvfp4', model: 'gemma4:e4b-nvfp4', label: 'Gemma 4 compact', min_ram_gb: 8, role: 'private/simple tasks', installed: false, available_for_hardware: true, recommended: true, status: 'recommended' },
+          { id: 'gemma4:latest', model: 'gemma4:latest', label: 'Gemma 4 balanced', min_ram_gb: 16, role: 'better local drafting', installed: false, available_for_hardware: true, recommended: false, status: 'available' },
+          { id: 'simple', model: 'simple', label: 'Skip local model for now', min_ram_gb: 0, role: 'fallback', installed: true, available_for_hardware: true, recommended: false, status: 'fallback' },
+        ],
+      },
       selected_model: { id: 'simple', model: 'simple', available: true },
       setup_steps: ['Install Ollama'],
       summary: 'Ollama is not installed.',
@@ -63,6 +74,20 @@ function setupFetch(commandResponses: any[], contextOverride?: any) {
 
 describe('renderer', () => {
   afterEach(() => localStorage.clear());
+
+  it('ships the one-command start script and root scripts', () => {
+    let root = process.cwd();
+    for (let i = 0; i < 6 && !existsSync(join(root, 'start-aura.sh')); i += 1) root = dirname(root);
+    const scriptPath = join(root, 'start-aura.sh');
+    const packagePath = join(root, 'package.json');
+    expect(existsSync(scriptPath)).toBe(true);
+    expect(statSync(scriptPath).mode & 0o111).toBeGreaterThan(0);
+    const script = readFileSync(scriptPath, 'utf8');
+    expect(script).toContain('scripts/aura-dev.sh');
+    const pkg = JSON.parse(readFileSync(packagePath, 'utf8'));
+    expect(pkg.scripts['aura:start']).toContain('scripts/aura-dev.sh');
+    expect(pkg.scripts['aura:package']).toContain('build-mac-dmg.sh');
+  });
 
   it('shows connection status and capture preview', async () => {
     localStorage.setItem('aura:onboarding-complete', '1');
@@ -88,9 +113,37 @@ describe('renderer', () => {
     await waitFor(() => expect(screen.getByText(/Recommended local model/)).toBeTruthy());
     expect(screen.getByText(/Darwin/)).toBeTruthy();
     expect(screen.getByText(/Apple Silicon/)).toBeTruthy();
-    expect(screen.getByText(/16 GB/)).toBeTruthy();
+    expect(screen.getAllByText(/16 GB/).length).toBeGreaterThan(0);
     expect(screen.getByText(/Missing \/ Stopped/)).toBeTruthy();
-    expect(screen.getByLabelText('local model name')).toBeTruthy();
+    expect(screen.getByText(/Choose model size/)).toBeTruthy();
+    expect(screen.getAllByText(/Gemma 4 compact/).length).toBeGreaterThan(0);
+    expect(screen.getByText(/Skip local model for now/)).toBeTruthy();
+  });
+
+  it('can finish onboarding when hardware or model detection fails', async () => {
+    setupSpeech();
+    vi.stubGlobal('fetch', vi.fn(async (url: string, options?: any) => {
+      if (url.includes('/local-model/status')) throw new Error('model detection failed');
+      if (url.includes('/health')) return { ok: true, json: async () => ({ ok: true }) } as any;
+      if (url.includes('/profile/status') && options?.method === 'PATCH') return { ok: true, json: async () => ({ metadata: {}, usage_limits: {} }) } as any;
+      return { ok: true, json: async () => [] } as any;
+    }) as any);
+    vi.stubGlobal('EventSource', class { onmessage: any; close() {} } as any);
+    render(<App />);
+    await waitFor(() => expect(screen.getByText(/First Launch Encounter/)).toBeTruthy());
+    fireEvent.click(screen.getByText('Enter command layer'));
+    await waitFor(() => expect(screen.getByText(/What should AURA do/)).toBeTruthy());
+  });
+
+  it('shows model pull approval and persists selected fallback', async () => {
+    setupSpeech();
+    setupFetch([{ ok: true, run_id: 'r1' }]);
+    vi.stubGlobal('EventSource', class { onmessage: any; close() {} } as any);
+    render(<App />);
+    fireEvent.click(await screen.findByText(/Local Model/));
+    await waitFor(() => expect(screen.getAllByText(/Approve download/).length).toBeGreaterThan(0));
+    fireEvent.click(screen.getByText(/Use fallback/));
+    await waitFor(() => expect((fetch as any).mock.calls.some((call: any[]) => String(call[0]).includes('/models/select?model_id=simple'))).toBe(true));
   });
 
   it('renders approval ui and can approve draft', async () => {
@@ -180,6 +233,49 @@ describe('renderer', () => {
     expect(screen.getAllByText(/enable Accessibility permission/i).length).toBeGreaterThan(0);
   });
 
+  it('renders voice unsupported fallback honestly', async () => {
+    localStorage.setItem('aura:onboarding-complete', '1');
+    setupSpeech();
+    setupFetch([{ ok: true, run_id: 'r1' }]);
+    vi.stubGlobal('EventSource', class { onmessage: any; close() {} } as any);
+    Object.defineProperty(window, 'SpeechRecognition', { value: undefined, configurable: true });
+    Object.defineProperty(window, 'webkitSpeechRecognition', { value: undefined, configurable: true });
+    render(<App />);
+    await waitFor(() => expect(screen.getByText(/What should AURA do/)).toBeTruthy());
+    fireEvent.click(screen.getByText('Mic'));
+    await waitFor(() => expect(screen.getAllByText(/Voice recognition is unavailable/).length).toBeGreaterThan(0));
+    expect(screen.getAllByText(/Wake word is coming soon/).length).toBeGreaterThan(0);
+  });
+
+  it('submits a transcribed push-to-talk command', async () => {
+    localStorage.setItem('aura:onboarding-complete', '1');
+    setupSpeech();
+    setupFetch([{ ok: true, run_id: 'r1' }], { active_app: 'Arc', browser_url: 'https://github.com/Hetul803/AURA', window_title: 'Hetul803/AURA: GitHub' });
+    vi.stubGlobal('EventSource', class { onmessage: any; close() {} } as any);
+    class FakeRecognition {
+      lang = '';
+      continuous = false;
+      interimResults = false;
+      onresult: any;
+      onerror: any;
+      onend: any;
+      start() {
+        const finalResult: any = [{ transcript: 'hey aura clone this repo' }];
+        finalResult.isFinal = true;
+        setTimeout(() => this.onresult?.({ results: [finalResult] }), 0);
+      }
+      stop() { this.onend?.(); }
+    }
+    Object.defineProperty(window, 'webkitSpeechRecognition', { value: FakeRecognition, configurable: true });
+    render(<App />);
+    await waitFor(() => expect(screen.getByText(/Clone this repo/)).toBeTruthy());
+    fireEvent.click(screen.getByText('Mic'));
+    await waitFor(() => expect((fetch as any).mock.calls.some((call: any[]) => {
+      const body = call[1]?.body ? JSON.parse(call[1].body) : {};
+      return String(call[0]).includes('/command') && body.text === 'Clone this repo locally';
+    })).toBe(true));
+  });
+
   it('explains missing GitHub context before clone flow', async () => {
     localStorage.setItem('aura:onboarding-complete', '1');
     setupSpeech();
@@ -211,6 +307,29 @@ describe('renderer', () => {
     await waitFor(() => expect(screen.getByText(/Draft reply/)).toBeTruthy());
     expect(screen.getByText(/Summarize thread/)).toBeTruthy();
     expect(screen.getAllByText(/Email context found/).length).toBeGreaterThan(0);
+  });
+
+  it('explains missing email context before reply flow', async () => {
+    localStorage.setItem('aura:onboarding-complete', '1');
+    setupSpeech();
+    setupFetch([{ ok: true, run_id: 'r1' }]);
+    vi.stubGlobal('EventSource', class { onmessage: any; close() {} } as any);
+    render(<App />);
+    await waitFor(() => expect(screen.getByText(/What I can do right now/)).toBeTruthy());
+    fireEvent.change(screen.getByLabelText('command input'), { target: { value: 'Reply to this email' } });
+    fireEvent.click(screen.getByText('Reply to this email'));
+    await waitFor(() => expect(screen.getAllByText(/I don't see an email thread yet/).length).toBeGreaterThan(0));
+  });
+
+  it('build app voice or card path creates coding job feedback', async () => {
+    localStorage.setItem('aura:onboarding-complete', '1');
+    setupSpeech();
+    setupFetch([{ ok: true, run_id: 'r-build', steps: [{ result: { result: { agent_job: { job_dir: '/tmp/aura-job' } } } }] }]);
+    vi.stubGlobal('EventSource', class { onmessage: any; close() {} } as any);
+    render(<App />);
+    await waitFor(() => expect(screen.getByText(/Build app/)).toBeTruthy());
+    fireEvent.click(screen.getByText(/Build app/).closest('article')!.querySelector('button')!);
+    await waitFor(() => expect(screen.getByText(/Done. I created a coding job at \/tmp\/aura-job/)).toBeTruthy());
   });
 
   it('keeps raw run ids out of the main home until Advanced is opened', async () => {

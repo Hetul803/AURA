@@ -40,6 +40,18 @@ button:disabled {
   opacity: 0.45;
 }
 
+a.button-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(148, 222, 255, 0.32);
+  background: rgba(11, 25, 44, 0.78);
+  color: #eaf8ff;
+  border-radius: 8px;
+  padding: 9px 12px;
+  text-decoration: none;
+}
+
 input, textarea, select {
   width: 100%;
   border: 1px solid rgba(148, 222, 255, 0.25);
@@ -494,6 +506,20 @@ h1, h2, h3, p {
   font-size: 13px;
 }
 
+.voice-command-panel {
+  display: grid;
+  gap: 4px;
+  margin-top: 12px;
+  border: 1px solid rgba(148, 222, 255, 0.18);
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: rgba(4, 12, 24, 0.48);
+}
+
+.voice-command-panel strong {
+  color: #8fffe2;
+}
+
 .repair-banner, .approval-banner {
   display: flex;
   align-items: center;
@@ -694,6 +720,47 @@ h1, h2, h3, p {
 
 .model-grid .wide {
   grid-column: span 2;
+}
+
+.model-choice-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.model-choice {
+  display: grid;
+  gap: 6px;
+  border: 1px solid rgba(148, 222, 255, 0.18);
+  border-radius: 8px;
+  padding: 12px;
+  background: rgba(4, 12, 24, 0.5);
+}
+
+.model-choice.recommended {
+  border-color: rgba(99, 251, 211, 0.72);
+  box-shadow: 0 0 30px rgba(99, 251, 211, 0.08);
+}
+
+.model-choice > span, .transcript-pill {
+  color: #6bf3c6;
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.model-choice h3 {
+  margin-bottom: 0;
+}
+
+.model-choice p {
+  margin-bottom: 0;
+}
+
+.transcript-pill {
+  display: inline-block;
+  text-transform: none;
 }
 
 .callout {

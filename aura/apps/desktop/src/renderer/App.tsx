@@ -12,6 +12,8 @@ declare global {
       getHotkeyStatus?: () => Promise<{ ok: boolean; accelerator: string; error?: string }>;
       onHotkey?: (callback: (payload: any) => void) => () => void;
     };
+    SpeechRecognition?: any;
+    webkitSpeechRecognition?: any;
   }
 }
 
@@ -124,8 +126,27 @@ function buildContextActions(context: any) {
   ];
 }
 
+function normalizeSpokenCommand(text: string) {
+  const cleaned = text.trim().replace(/^hey\s+aura[,\s]*/i, '');
+  const low = cleaned.toLowerCase();
+  if (low.includes('clone') && low.includes('repo')) return 'Clone this repo locally';
+  if (low.includes('reply') && (low.includes('email') || low.includes('mail'))) return 'Reply to this email';
+  if ((low.includes('build') || low.includes('create') || low.includes('make')) && low.includes('app')) return cleaned;
+  return cleaned || text;
+}
+
+function requirementForCommand(command: string) {
+  const low = command.toLowerCase();
+  if (low.includes('clone') && low.includes('repo')) return 'github';
+  if (low.includes('reply') && (low.includes('email') || low.includes('mail'))) return 'email';
+  if ((low.includes('build') || low.includes('create') || low.includes('make')) && low.includes('app')) return 'workspace';
+  return 'none';
+}
+
 export default function App() {
   const commandRef = useRef<HTMLInputElement>(null);
+  const recognitionRef = useRef<any>(null);
+  const voiceCommandEnabledRef = useRef(false);
   const [input, setInput] = useState('Summarize this');
   const [out, setOut] = useState('');
   const [runId, setRunId] = useState('');
@@ -139,6 +160,10 @@ export default function App() {
   const [compactCommand, setCompactCommand] = useState(false);
   const [voiceStatus, setVoiceStatus] = useState('Voice output ready. Wake word is not implemented yet.');
   const [voiceEnabled, setVoiceEnabled] = useState(() => localStorage.getItem('aura:voice-enabled') === '1');
+  const [voiceCommandEnabled, setVoiceCommandEnabled] = useState(() => localStorage.getItem('aura:voice-command-enabled') === '1');
+  const [isListening, setIsListening] = useState(false);
+  const [voiceTranscript, setVoiceTranscript] = useState('');
+  const [voiceUnsupportedReason, setVoiceUnsupportedReason] = useState('');
   const [assistantName, setAssistantName] = useState(() => localStorage.getItem('aura:assistant-name') || 'AURA');
   const [draftAssistantName, setDraftAssistantName] = useState(() => localStorage.getItem('aura:assistant-name') || 'AURA');
   const [caption, setCaption] = useState('Hello. I am AURA. Nice to meet you.');
@@ -282,21 +307,79 @@ export default function App() {
     setVoiceStatus(`${assistantName} is speaking.`);
   }
 
+  function speechRecognitionCtor() {
+    return window.SpeechRecognition || window.webkitSpeechRecognition;
+  }
+
+  async function submitVoiceCommand(transcript: string) {
+    const command = normalizeSpokenCommand(transcript);
+    setVoiceTranscript(transcript);
+    setInput(command);
+    speak(`I heard: ${command}.`, 'thinking');
+    await startAction({ title: command, command, requires: requirementForCommand(command) });
+  }
+
   async function pushToTalk() {
-    if (!navigator.mediaDevices?.getUserMedia) {
-      setVoiceStatus('Microphone capture is unavailable. Voice input coming soon on this build.');
+    const Recognition = speechRecognitionCtor();
+    if (!Recognition) {
+      const reason = 'Voice recognition is unavailable in this Electron/WebView build. Type the command or try a Chromium build with Web Speech API support.';
+      setVoiceUnsupportedReason(reason);
+      setVoiceStatus(reason);
+      setCaption('Wake word is coming soon. For now, press the mic or hotkey and speak when voice recognition is supported, or type the command.');
+      setAssistantMode('error');
+      return;
+    }
+    if (isListening) {
+      recognitionRef.current?.stop?.();
       return;
     }
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      stream.getTracks().forEach((track) => track.stop());
-      setVoiceStatus('Microphone permission granted. Live speech recognition and Hey AURA wake word are not implemented yet.');
-      setCaption('Microphone permission is available. Always-listening wake word is coming later; for now, use the hotkey or voice button.');
+      const recognition = new Recognition();
+      recognitionRef.current = recognition;
+      recognition.lang = 'en-US';
+      recognition.continuous = false;
+      recognition.interimResults = true;
+      setIsListening(true);
+      setVoiceUnsupportedReason('');
+      setVoiceStatus("I'm listening. Say a command like clone this repo.");
+      setCaption("I'm listening.");
       setAssistantMode('listening');
+      recognition.onresult = (event: any) => {
+        const transcript = Array.from(event.results || [])
+          .map((result: any) => result?.[0]?.transcript || '')
+          .join(' ')
+          .trim();
+        setVoiceTranscript(transcript);
+        if (transcript) setCaption(`I heard: ${transcript}`);
+        const last = event.results?.[event.results.length - 1];
+        if (last?.isFinal && transcript) {
+          setIsListening(false);
+          recognition.stop?.();
+          submitVoiceCommand(transcript).catch((error) => {
+            const message = `I heard you, but command submission failed: ${error?.message || 'unknown error'}.`;
+            setVoiceStatus(message);
+            setCaption(message);
+            setAssistantMode('error');
+          });
+        }
+      };
+      recognition.onerror = (event: any) => {
+        const message = event?.error === 'not-allowed'
+          ? 'Microphone permission denied. Enable Microphone permission for AURA/Electron in System Settings, then try again.'
+          : `Voice recognition failed: ${event?.error || 'unknown error'}. Type the command as fallback.`;
+        setVoiceStatus(message);
+        setCaption(message);
+        setAssistantMode('error');
+        setIsListening(false);
+      };
+      recognition.onend = () => setIsListening(false);
+      recognition.start();
     } catch (error: any) {
-      setVoiceStatus(`Microphone unavailable: ${error?.message || 'permission denied'}.`);
-      setCaption('Microphone permission is unavailable. You can still type commands.');
+      const message = `Voice recognition could not start: ${error?.message || 'permission or platform issue'}. Type the command as fallback.`;
+      setVoiceStatus(message);
+      setCaption(message);
       setAssistantMode('error');
+      setIsListening(false);
     }
   }
 
@@ -318,6 +401,7 @@ export default function App() {
       setOnboardingOpen(false);
       refreshContext();
       speak("I'm listening. Tell me what you want done.", 'listening');
+      if (voiceCommandEnabledRef.current) pushToTalk();
       setTimeout(() => commandRef.current?.focus(), 0);
     });
     return () => { alive = false; unsubscribe?.(); };
@@ -330,6 +414,11 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem('aura:voice-enabled', voiceEnabled ? '1' : '0');
   }, [voiceEnabled]);
+
+  useEffect(() => {
+    voiceCommandEnabledRef.current = voiceCommandEnabled;
+    localStorage.setItem('aura:voice-command-enabled', voiceCommandEnabled ? '1' : '0');
+  }, [voiceCommandEnabled]);
 
   useEffect(() => {
     localStorage.setItem('aura:assistant-name', assistantName);
@@ -396,6 +485,12 @@ export default function App() {
       setCaption('Approval required before I continue.');
       setAssistantMode('protected');
     }
+    if (res.ok && res.run_id && !res.status) {
+      const job = res?.run_state?.last_observation?.agent_job_id || res?.steps?.[0]?.result?.result?.agent_job?.job_dir;
+      setCaption(job ? `Done. I created a coding job at ${job}.` : 'Done.');
+      setAssistantMode('protected');
+      if (voiceEnabled) speak(job ? `Done. I created a coding job.` : 'Done.', 'protected');
+    }
     refreshKnowledge();
   }
 
@@ -429,7 +524,7 @@ export default function App() {
 
   async function completeOnboarding() {
     localStorage.setItem('aura:onboarding-complete', '1');
-    const metadata = { ...(profileStatus?.metadata || {}), assistant_name: assistantName, onboarding: { completed: true, ...onboardingPrefs, local_model_status: localModelStatus?.summary, voice_enabled: voiceEnabled } };
+    const metadata = { ...(profileStatus?.metadata || {}), assistant_name: assistantName, onboarding: { completed: true, ...onboardingPrefs, local_model_status: localModelStatus?.summary, selected_model: selectedModelId, voice_enabled: voiceEnabled, voice_command_enabled: voiceCommandEnabled } };
     const usage_limits = onboardingPrefs.monthlyBudget ? { monthly_budget_usd: Number(onboardingPrefs.monthlyBudget) || 0 } : undefined;
     const updated = await updateProfileStatus({ metadata, usage_limits });
     setProfileStatus(updated);
@@ -453,10 +548,17 @@ export default function App() {
     if (voiceEnabled) speak(`Good choice. I'm ${cleanName} now.`, 'speaking');
   }
 
-  async function approveAndPullLocalModel() {
-    setModelPullState(`Pulling ${selectedLocalModel}. This may take a while...`);
-    const result = await pullLocalModel(selectedLocalModel, true);
-    setModelPullState(result.ok ? `Pulled and selected ${selectedLocalModel}.` : JSON.stringify(result, null, 2));
+  async function approveAndPullLocalModel(modelOverride?: string) {
+    const modelToPull = modelOverride || selectedLocalModel;
+    if (modelToPull === 'simple') {
+      await useExistingOrSkipLocalModel('simple');
+      return;
+    }
+    setModelPullState(`Approval accepted. Pulling ${modelToPull} with Ollama. This may take a while...`);
+    const result = await pullLocalModel(modelToPull, true);
+    const detail = result.detail || result;
+    setModelPullState(detail.ok ? `Pulled and selected ${modelToPull}. Local model is ready for private/simple tasks.` : JSON.stringify(detail, null, 2));
+    if (detail.ok) speak(`Local model ${modelToPull} is ready. I will use it for private and simple tasks.`, 'protected');
     await refreshKnowledge();
   }
 
@@ -481,9 +583,7 @@ export default function App() {
       ? missingContextMessage('github', assistantName)
       : requirement === 'email' && currentKind !== 'email'
         ? missingContextMessage('email', assistantName)
-        : requirement === 'workspace' && !onboardingPrefs.workspace && !capturedContext?.workspace_hint
-          ? missingContextMessage('workspace', assistantName)
-          : '';
+        : '';
     if (missing) {
       setNeedsUser(missing);
       setCaption(missing);
@@ -524,8 +624,23 @@ export default function App() {
       });
     }
     setClarifications(res.clarifications || []);
-    if (res.status === 'needs_user') setNeedsUser('Please complete the required manual action, then continue.');
-    if (res.status === 'awaiting_approval') setNeedsUser('Approval required before I continue.');
+    if (res.status === 'needs_user') {
+      setNeedsUser('Please complete the required manual action, then continue.');
+      setCaption('I need a manual step before I can continue.');
+      setAssistantMode('protected');
+    }
+    if (res.status === 'awaiting_approval') {
+      setNeedsUser('Approval required before I continue.');
+      setCaption('Approval required before I continue.');
+      setAssistantMode('protected');
+      if (voiceEnabled) speak('Approval required before I continue.', 'protected');
+    }
+    if (res.ok && res.run_id && !res.status) {
+      const jobDir = res?.steps?.[0]?.result?.result?.agent_job?.job_dir;
+      setCaption(jobDir ? `Done. I created a coding job at ${jobDir}.` : 'Done.');
+      setAssistantMode('protected');
+      if (voiceEnabled) speak(jobDir ? 'Done. I created the coding job.' : 'Done.', 'protected');
+    }
     refreshKnowledge();
   }
 
@@ -585,9 +700,9 @@ export default function App() {
           {step === 'Privacy + Memory' && <div className="settings-row"><label>Memory scope<select value={onboardingPrefs.memoryScope} onChange={e => setOnboardingPrefs({ ...onboardingPrefs, memoryScope: e.target.value })}><option>personal</option><option>work</option><option>company</option><option>session</option><option>device</option></select></label><label>Approval mode<select value={onboardingPrefs.approvalMode} onChange={e => setOnboardingPrefs({ ...onboardingPrefs, approvalMode: e.target.value })}><option>balanced</option><option>strict</option><option>demo</option></select></label><label>Monthly AI budget<input value={onboardingPrefs.monthlyBudget} onChange={e => setOnboardingPrefs({ ...onboardingPrefs, monthlyBudget: e.target.value })} placeholder="0" /></label></div>}
           {step === 'Permissions' && <div><PermissionCards contextStatus={contextStatus} hotkeyStatus={hotkeyStatus} refreshContext={refreshContext} /><div className="callout"><strong>Current context check:</strong> {contextStatus}</div></div>}
           {step === 'Workspace' && <input className="wide-input" value={onboardingPrefs.workspace} onChange={e => setOnboardingPrefs({ ...onboardingPrefs, workspace: e.target.value })} placeholder="/Users/you/Projects/AURA-workspace" />}
-          {step === 'Local Model' && <ModelStatusPanel localModelStatus={localModelStatus} modelError={modelError} selectedLocalModel={selectedLocalModel} setSelected={(value) => setOnboardingPrefs({ ...onboardingPrefs, selectedLocalModel: value })} approveAndPullLocalModel={approveAndPullLocalModel} skip={() => useExistingOrSkipLocalModel('simple')} refresh={refreshKnowledge} modelPullState={modelPullState} />}
+          {step === 'Local Model' && <ModelStatusPanel localModelStatus={localModelStatus} modelError={modelError} selectedLocalModel={selectedLocalModel} setSelected={(value) => setOnboardingPrefs({ ...onboardingPrefs, selectedLocalModel: value })} approveAndPullLocalModel={approveAndPullLocalModel} selectExisting={(modelId) => useExistingOrSkipLocalModel(modelId)} skip={() => useExistingOrSkipLocalModel('simple')} refresh={refreshKnowledge} modelPullState={modelPullState} />}
           {step === 'Workers' && <div className="settings-row"><label><input type="checkbox" checked={onboardingPrefs.codexBridge} onChange={e => setOnboardingPrefs({ ...onboardingPrefs, codexBridge: e.target.checked })} /> Optional Codex bridge for code implementation</label><label><input type="checkbox" checked={onboardingPrefs.userAiHandoff} onChange={e => setOnboardingPrefs({ ...onboardingPrefs, userAiHandoff: e.target.checked })} /> Optional ChatGPT/Claude browser handoff</label></div>}
-          {step === 'Voice + Hotkey' && <VoiceHotkeyPanel voiceStatus={voiceStatus} voiceEnabled={voiceEnabled} setVoiceEnabled={setVoiceEnabled} speak={speak} pushToTalk={pushToTalk} hotkeyStatus={hotkeyStatus} assistantName={assistantName} />}
+          {step === 'Voice + Hotkey' && <VoiceHotkeyPanel voiceStatus={voiceStatus} voiceEnabled={voiceEnabled} setVoiceEnabled={setVoiceEnabled} voiceCommandEnabled={voiceCommandEnabled} setVoiceCommandEnabled={setVoiceCommandEnabled} isListening={isListening} voiceTranscript={voiceTranscript} voiceUnsupportedReason={voiceUnsupportedReason} speak={speak} pushToTalk={pushToTalk} hotkeyStatus={hotkeyStatus} assistantName={assistantName} />}
           {step === 'Test First Task' && <TestAuraCards startAction={startAction} localReady={localReady} coreOnline={coreStatus === 'connected'} context={capturedContext} assistantName={assistantName} />}
         </section>
 
@@ -632,9 +747,14 @@ export default function App() {
         <strong>{caption}</strong>
       </div>
       <div className="command-bar">
-        <button className="voice-button" onClick={pushToTalk} title="Push to talk">Voice</button>
+        <button className="voice-button" onClick={pushToTalk} title="Push to talk">{isListening ? 'Listening...' : 'Mic'}</button>
         <input ref={commandRef} aria-label="command input" value={input} onChange={e => setInput(e.target.value)} placeholder={`Ask ${assistantName} to act on the current app, page, repo, or selection`} />
         <button className="primary-button" aria-label="run command" onClick={() => run()}>Run</button>
+      </div>
+      <div className="voice-command-panel" aria-live="polite">
+        <strong>{isListening ? `${assistantName} is listening.` : 'Push-to-talk voice command'}</strong>
+        <span>{voiceTranscript ? `Transcript: ${voiceTranscript}` : 'Wake word is coming soon. For now, press the mic or hotkey and speak.'}</span>
+        {voiceUnsupportedReason && <span className="helper-text">{voiceUnsupportedReason}</span>}
       </div>
       <div className="suggestions">
         {QUICK_ACTIONS.map(action => <button key={action} onClick={() => chooseCommand(action)}>{action}</button>)}
@@ -724,7 +844,7 @@ export default function App() {
 
     {activePanel === 'Memory' && <section className="panel-body two-column">
       <div className="glass-panel"><PanelTitle eyebrow="Memory intelligence" title="Useful learning" /><Feed items={memoryFeed.length ? memoryFeed : [{ kind: 'empty', title: 'No memory updates yet', detail: 'AURA will show useful learning here after real tasks.' }]} /><button onClick={async () => { const r = await compactMemory('personal'); setOut(JSON.stringify(r, null, 2)); await refreshKnowledge(); }}>Compact personal memory</button></div>
-      <div className="glass-panel"><PanelTitle eyebrow="Local model" title={localReady ? 'Ready' : 'Needs setup'} /><ModelStatusPanel localModelStatus={localModelStatus} modelError={modelError} selectedLocalModel={selectedLocalModel} setSelected={(value) => setOnboardingPrefs({ ...onboardingPrefs, selectedLocalModel: value })} approveAndPullLocalModel={approveAndPullLocalModel} skip={() => useExistingOrSkipLocalModel('simple')} refresh={refreshKnowledge} modelPullState={modelPullState} /></div>
+      <div className="glass-panel"><PanelTitle eyebrow="Local model" title={localReady ? 'Ready' : 'Needs setup'} /><ModelStatusPanel localModelStatus={localModelStatus} modelError={modelError} selectedLocalModel={selectedLocalModel} setSelected={(value) => setOnboardingPrefs({ ...onboardingPrefs, selectedLocalModel: value })} approveAndPullLocalModel={approveAndPullLocalModel} selectExisting={(modelId) => useExistingOrSkipLocalModel(modelId)} skip={() => useExistingOrSkipLocalModel('simple')} refresh={refreshKnowledge} modelPullState={modelPullState} /></div>
     </section>}
 
     {activePanel === 'Workflows' && <section className="panel-body two-column">
@@ -815,26 +935,66 @@ function ContextActionCards(props: { cards: Array<any>; startAction: (card: any)
   </article>)}</div>;
 }
 
-function ModelStatusPanel(props: { localModelStatus: any; modelError: string; selectedLocalModel: string; setSelected: (value: string) => void; approveAndPullLocalModel: () => void; skip: () => void; refresh: () => void; modelPullState: string }) {
+function ModelStatusPanel(props: { localModelStatus: any; modelError: string; selectedLocalModel: string; setSelected: (value: string) => void; approveAndPullLocalModel: (model?: string) => void; selectExisting: (modelId: string) => void; skip: () => void; refresh: () => void; modelPullState: string }) {
   const hw = props.localModelStatus?.hardware || {};
   const ollama = props.localModelStatus?.ollama || {};
   const recommendation = props.localModelStatus?.recommendation || {};
+  const choices = asArray(recommendation.choices);
+  const selectedModelId = props.localModelStatus?.selected_model?.id || 'simple';
+  const selectedModel = props.localModelStatus?.selected_model?.model || 'simple';
+  const availableModels = asArray(props.localModelStatus?.available_models);
   return <div className="model-grid">
     {props.modelError && <div className="callout bad">{props.modelError}</div>}
-    <div className="glass-panel"><span>OS</span><strong>{hw.os || 'Unknown'}</strong></div>
+    <div className="glass-panel"><span>OS</span><strong>{hw.os || 'Unknown'}{hw.macos_version ? ` ${hw.macos_version}` : ''}</strong></div>
     <div className="glass-panel"><span>Chip</span><strong>{hw.apple_silicon ? 'Apple Silicon' : hw.arch === 'x64' ? 'Intel' : hw.arch || 'Unknown'}</strong></div>
     <div className="glass-panel"><span>RAM</span><strong>{hw.ram_gb ? `${hw.ram_gb} GB` : 'Unknown'}</strong></div>
     <div className="glass-panel"><span>Ollama</span><strong>{ollama.installed ? 'Installed' : 'Missing'} / {ollama.running ? 'Running' : 'Stopped'}</strong></div>
-    <div className="glass-panel wide"><span>Recommended local model</span><strong>{recommendation.model || props.selectedLocalModel}</strong><p>{recommendation.reason || 'AURA recommends a small private model until hardware detection completes.'}</p></div>
-    <div className="glass-panel wide"><span>Local model status</span><strong>{props.localModelStatus?.summary || 'Checking local model runtime...'}</strong><input aria-label="local model name" value={props.selectedLocalModel} onChange={e => props.setSelected(e.target.value)} /><div className="panel-actions"><button onClick={props.approveAndPullLocalModel} disabled={!ollama.installed}>Approve Pull Model</button><button onClick={props.skip}>Skip for now</button><button onClick={props.refresh}>Refresh</button></div>{props.modelPullState && <pre>{props.modelPullState}</pre>}</div>
+    <div className="glass-panel wide">
+      <span>Recommended local model</span>
+      <strong>{recommendation.recommended_pull || recommendation.model || props.selectedLocalModel}</strong>
+      <p>{recommendation.reason || 'AURA recommends a small private model until hardware detection completes.'}</p>
+      <p className="helper-text">Used for private/simple tasks, memory cleanup, routing, summaries, and draft fallback. Codex remains the coding worker.</p>
+    </div>
+    <div className="glass-panel wide">
+      <span>Local model status</span>
+      <strong>{props.localModelStatus?.summary || 'Checking local model runtime...'}</strong>
+      <p>Provider: {selectedModelId === 'simple' ? 'SimpleLLM fallback' : 'Ollama'} / Model: {selectedModel}</p>
+      <p>Available local models: {availableModels.length ? availableModels.join(', ') : 'None detected yet'}</p>
+      <div className="panel-actions"><button onClick={props.refresh}>Retry detection</button><button onClick={props.skip}>Skip local model</button>{!ollama.installed && <a className="button-link" href={ollama.install_url || 'https://ollama.com/download'} target="_blank" rel="noreferrer">Install Ollama</a>}</div>
+      {ollama.installed && !ollama.running && <p className="helper-text">Ollama is installed but stopped. Start the Ollama app, or run `ollama serve`, then retry detection.</p>}
+    </div>
+    <div className="glass-panel wide">
+      <span>Choose model size</span>
+      <div className="model-choice-grid">
+        {(choices.length ? choices : [{ id: recommendation.recommended_pull || props.selectedLocalModel, model: recommendation.recommended_pull || props.selectedLocalModel, label: 'Recommended Gemma local model', role: recommendation.role || 'private/simple tasks', installed: false, available_for_hardware: true, recommended: true, status: 'recommended' }, { id: 'simple', model: 'simple', label: 'Skip local model for now', role: 'deterministic fallback until Ollama is configured', installed: true, available_for_hardware: true, recommended: false, status: 'fallback' }]).map((choice: any) => {
+          const model = choice.model || choice.id;
+          const selected = props.selectedLocalModel === model || selectedModelId === `ollama:${model}` || selectedModelId === model;
+          const canPull = choice.id !== 'simple' && ollama.installed && choice.available_for_hardware;
+          const canSelect = choice.id === 'simple' || choice.installed;
+          return <article className={choice.recommended ? 'model-choice recommended' : 'model-choice'} key={choice.id || model}>
+            <span>{choice.recommended ? 'Recommended' : choice.status}</span>
+            <h3>{choice.label || model}</h3>
+            <p>{model}</p>
+            <p>{choice.role}</p>
+            <p className="helper-text">RAM: {choice.min_ram_gb || 0} GB+ / {choice.installed ? 'installed' : choice.available_for_hardware ? 'download needed' : 'too large for detected RAM'}</p>
+            <div className="panel-actions">
+              <button onClick={() => props.setSelected(model)} disabled={choice.id === 'simple'}>{selected ? 'Selected' : 'Choose'}</button>
+              {canSelect && <button onClick={() => props.selectExisting(choice.id === 'simple' ? 'simple' : `ollama:${model}`)}>{choice.id === 'simple' ? 'Use fallback' : 'Use installed'}</button>}
+              {!choice.installed && choice.id !== 'simple' && <button onClick={() => { props.setSelected(model); props.approveAndPullLocalModel(model); }} disabled={!canPull}>Approve download</button>}
+            </div>
+          </article>;
+        })}
+      </div>
+      {props.modelPullState && <pre>{props.modelPullState}</pre>}
+    </div>
   </div>;
 }
 
-function VoiceHotkeyPanel(props: { voiceStatus: string; voiceEnabled: boolean; setVoiceEnabled: (value: boolean) => void; speak: (text: string) => void; pushToTalk: () => void; hotkeyStatus: { ok: boolean; accelerator: string; error?: string }; assistantName: string }) {
+function VoiceHotkeyPanel(props: { voiceStatus: string; voiceEnabled: boolean; setVoiceEnabled: (value: boolean) => void; voiceCommandEnabled: boolean; setVoiceCommandEnabled: (value: boolean) => void; isListening: boolean; voiceTranscript: string; voiceUnsupportedReason: string; speak: (text: string) => void; pushToTalk: () => void; hotkeyStatus: { ok: boolean; accelerator: string; error?: string }; assistantName: string }) {
   return <div className="voice-grid">
-    <div className="glass-panel"><span>Hotkey</span><strong>{props.hotkeyStatus.ok ? 'Hotkey active' : 'Hotkey unavailable'}</strong><p>{props.hotkeyStatus.ok ? `${props.hotkeyStatus.accelerator} opens compact command mode, focuses input, and refreshes context.` : `Hotkey unavailable - ${props.hotkeyStatus.error || 'enable Accessibility permission for AURA/Electron in System Settings.'}`}</p></div>
+    <div className="glass-panel"><span>Hotkey Setup</span><strong>{props.hotkeyStatus.ok ? 'Hotkey active' : 'Hotkey unavailable'}</strong><p>{props.hotkeyStatus.ok ? `${props.hotkeyStatus.accelerator} brings AURA forward, focuses command input, captures context, and can start listening if enabled below.` : `Hotkey unavailable - ${props.hotkeyStatus.error || 'enable Accessibility permission for AURA/Electron in System Settings, then relaunch AURA.'}`}</p><button onClick={props.pushToTalk}>Test voice button</button><p className="helper-text">macOS path: System Settings to Privacy & Security to Accessibility, then enable AURA or Electron.</p></div>
     <div className="glass-panel"><span>Voice output</span><strong>{props.voiceEnabled ? 'Enabled' : 'Optional'}</strong><label><input type="checkbox" checked={props.voiceEnabled} onChange={e => props.setVoiceEnabled(e.target.checked)} /> Speak guidance and status</label><button onClick={() => props.speak(`I'm ${props.assistantName}. I help you use your computer safely. Guardian is active.`)}>Speak intro</button></div>
-    <div className="glass-panel"><span>Voice input</span><strong>Push-to-talk foundation</strong><p>{props.voiceStatus}</p><button onClick={props.pushToTalk}>Test microphone</button><p className="helper-text">Hey AURA wake word is not implemented yet.</p></div>
+    <div className="glass-panel"><span>Voice input</span><strong>{props.isListening ? 'Listening now' : 'Push-to-talk command mode'}</strong><p>{props.voiceStatus}</p><label><input type="checkbox" checked={props.voiceCommandEnabled} onChange={e => props.setVoiceCommandEnabled(e.target.checked)} /> Start listening when hotkey opens AURA</label><button onClick={props.pushToTalk}>{props.isListening ? 'Stop listening' : 'Press and speak'}</button><p className="helper-text">Wake word is coming soon. For now, press the mic or hotkey and speak.</p>{props.voiceTranscript && <p className="transcript-pill">Transcript: {props.voiceTranscript}</p>}{props.voiceUnsupportedReason && <p className="helper-text">{props.voiceUnsupportedReason}</p>}</div>
     <div className="glass-panel"><span>Always-on mode</span><strong>Coming later</strong><p>For now, start AURA when your Mac starts and use the hotkey or voice button.</p></div>
   </div>;
 }

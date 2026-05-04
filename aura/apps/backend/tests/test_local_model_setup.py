@@ -11,12 +11,15 @@ def test_hardware_recommendation_chooses_compact_gemma_for_low_memory():
     rec = recommend_local_model({'os': 'Darwin', 'arch': 'arm64', 'ram_gb': 8, 'apple_silicon': True}, [])
     assert rec['recommended_pull'] == 'gemma4:e4b-nvfp4'
     assert 'privacy-sensitive simple tasks' in rec['local_roles']
+    assert any(choice['model'] == 'gemma4:e4b-nvfp4' and choice['recommended'] for choice in rec['choices'])
+    assert any(choice['id'] == 'simple' for choice in rec['choices'])
 
 
 def test_hardware_recommendation_chooses_larger_gemma_for_capable_mac():
     rec = recommend_local_model({'os': 'Darwin', 'arch': 'arm64', 'ram_gb': 32, 'apple_silicon': True}, [])
     assert rec['recommended_pull'] == 'gemma4:26b'
     assert rec['cloud_guidance'].startswith('Use Codex')
+    assert any(choice['model'] == 'gemma4:26b' and choice['available_for_hardware'] for choice in rec['choices'])
 
 
 def test_missing_ollama_status_is_guided_fallback(monkeypatch):
