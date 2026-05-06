@@ -148,10 +148,31 @@ function requirementForCommand(command: string) {
   return 'none';
 }
 
+type AssistantMode = 'idle' | 'speaking' | 'listening' | 'thinking' | 'acting' | 'protected' | 'blocked' | 'error';
+
+function guardianTitle(event: any) {
+  const title = event?.title || event?.summary || event?.message || event?.kind || event?.type || 'Protection event';
+  return String(title).replace(/^Guardian\s*[:\-]?\s*/i, '');
+}
+
+function guardianDetail(event: any) {
+  const action = event?.action_required ? ` Action: ${event.action_required}` : '';
+  return `${event?.explanation || event?.risk_reason || event?.action || 'Protection state updated.'}${action}`;
+}
+
+function eventSeverityMode(event: any): AssistantMode {
+  const severity = event?.severity || event?.status || event?.risk;
+  if (severity === 'blocked') return 'blocked';
+  if (severity === 'error') return 'error';
+  if (severity === 'approval_required' || severity === 'high' || severity === 'critical') return 'protected';
+  return 'protected';
+}
+
 export default function App() {
   const commandRef = useRef<HTMLInputElement>(null);
   const recognitionRef = useRef<any>(null);
   const voiceCommandEnabledRef = useRef(false);
+  const guardianEventKeysRef = useRef<Set<string>>(new Set());
   const [input, setInput] = useState('Summarize this');
   const [out, setOut] = useState('');
   const [runId, setRunId] = useState('');
@@ -172,7 +193,7 @@ export default function App() {
   const [assistantName, setAssistantName] = useState(() => localStorage.getItem('aura:assistant-name') || 'AURA');
   const [draftAssistantName, setDraftAssistantName] = useState(() => localStorage.getItem('aura:assistant-name') || 'AURA');
   const [caption, setCaption] = useState('Hello. I am AURA. Nice to meet you.');
-  const [assistantMode, setAssistantMode] = useState<'idle' | 'speaking' | 'listening' | 'thinking' | 'protected' | 'blocked' | 'error'>('idle');
+  const [assistantMode, setAssistantMode] = useState<AssistantMode>('idle');
   const [contextStatus, setContextStatus] = useState('AURA is checking what it can see.');
   const [clarifications, setClarifications] = useState<any[]>([]);
   const [events, setEvents] = useState<any[]>([]);
@@ -203,11 +224,29 @@ export default function App() {
   const [workflowSuggestions, setWorkflowSuggestions] = useState<any[]>([]);
   const [profileStatus, setProfileStatus] = useState<any>(null);
   const [guardianStatus, setGuardianStatus] = useState<any>(null);
+  const [localGuardianEvents, setLocalGuardianEvents] = useState<any[]>([]);
   const [costSummary, setCostSummary] = useState<any>(null);
   const [costModels, setCostModels] = useState<any[]>([]);
   const [localModelStatus, setLocalModelStatus] = useState<any>(null);
   const [diagnostics, setDiagnostics] = useState<any>(null);
   const [repairState, setRepairState] = useState('');
+
+  function emitLocalGuardianEvent(event: { severity: string; title: string; explanation: string; action_required: string; type?: string; risk?: string; context?: any }) {
+    const key = `${event.type || 'notice'}:${event.title}`;
+    if (guardianEventKeysRef.current.has(key)) return null;
+    guardianEventKeysRef.current.add(key);
+    const item = {
+      source: 'AURA Guardian',
+      timestamp: Date.now() / 1000,
+      type: event.type || 'notice',
+      risk: event.risk || (event.severity === 'blocked' ? 'blocked' : event.severity === 'approval_required' ? 'high' : 'medium'),
+      ...event,
+    };
+    setLocalGuardianEvents((prev) => [item, ...prev].slice(0, 12));
+    setAssistantMode(eventSeverityMode(item));
+    setCaption(item.explanation);
+    return item;
+  }
 
   async function refreshConnection() {
     setCoreStatus((current) => current === 'connected' ? current : 'starting');
@@ -223,6 +262,14 @@ export default function App() {
       setCoreStatus('disconnected');
       setCoreMessage('AURA Core disconnected.');
       setCoreError(error?.message || `Cannot reach ${BACKEND_URL}`);
+      emitLocalGuardianEvent({
+        severity: 'error',
+        title: 'Guardian cannot reach AURA Core.',
+        explanation: 'The backend is offline, so AURA can still show the shell but cannot execute computer actions yet.',
+        action_required: 'Click Repair Backend or Retry before running a command.',
+        type: 'backend_disconnect',
+        risk: 'high',
+      });
       return false;
     }
   }
@@ -260,6 +307,15 @@ export default function App() {
     if (localModel) {
       setLocalModelStatus(localModel);
       setModelError('');
+      if (localModel?.selected_model?.id === 'simple' || localModel?.ollama?.running === false) {
+        emitLocalGuardianEvent({
+          severity: 'notice',
+          title: 'Local model is using fallback mode.',
+          explanation: 'Ollama or the selected local model is unavailable, so AURA will use the basic local fallback for simple/private tasks.',
+          action_required: 'You can keep working, or set up Ollama later from Local Brain.',
+          type: 'local_model_unavailable',
+        });
+      }
     } else {
       setModelError('Local model detection API did not respond. Start the backend and retry.');
     }
@@ -298,6 +354,15 @@ export default function App() {
       setContextStatus(message);
       setCaption(kind === 'github' ? 'I found a GitHub repo. I can prepare a safe clone command when you are ready.' : kind === 'email' ? 'I found email context. I can draft, summarize, or create a follow-up, but I will ask before paste or send.' : message);
       setAssistantMode(kind === 'github' || kind === 'email' ? 'protected' : 'idle');
+      if (!context?.active_app && !context?.browser_url && !context?.input_text) {
+        emitLocalGuardianEvent({
+          severity: 'notice',
+          title: 'Guardian cannot inspect enough context yet.',
+          explanation: 'AURA did not receive a visible app, browser URL, or selected text from the current Mac context.',
+          action_required: 'Open the target app, grant Accessibility or Screen Recording if prompted, then refresh context.',
+          type: 'missing_context',
+        });
+      }
     } catch (error: any) {
       try {
         const context = await captureAssistContext();
@@ -309,6 +374,13 @@ export default function App() {
         setContextStatus(`Context unavailable: ${error?.message || 'permission or backend issue'}. Enable Accessibility/Screen Recording, then retry.`);
         setCaption('I cannot see the current app yet. Enable Accessibility or Screen Recording, then refresh context.');
         setAssistantMode('error');
+        emitLocalGuardianEvent({
+          severity: 'notice',
+          title: 'Guardian cannot inspect the current app.',
+          explanation: 'Context capture failed, usually because macOS permissions or backend connectivity are missing.',
+          action_required: 'Enable Accessibility/Screen Recording if needed, then press Refresh context.',
+          type: 'context_capture_failure',
+        });
       }
     }
   }
@@ -324,7 +396,7 @@ export default function App() {
     }
   }
 
-  function speak(text: string, mode: 'idle' | 'speaking' | 'listening' | 'thinking' | 'protected' | 'blocked' | 'error' = 'speaking') {
+  function speak(text: string, mode: AssistantMode = 'speaking') {
     setCaption(text);
     setAssistantMode(mode);
     if (!('speechSynthesis' in window) || typeof SpeechSynthesisUtterance === 'undefined') {
@@ -505,6 +577,14 @@ export default function App() {
       setNeedsUser(missing);
       setCaption(missing);
       setAssistantMode('protected');
+      emitLocalGuardianEvent({
+        severity: 'notice',
+        title: requirement === 'github' ? 'Guardian needs GitHub context.' : 'Guardian needs email context.',
+        explanation: missing,
+        action_required: 'Open the required app/page, then press Refresh Context or use the hotkey.',
+        type: 'missing_context',
+        context: { requirement, context_kind: kind },
+      });
       return null;
     }
     return context;
@@ -512,12 +592,19 @@ export default function App() {
 
   async function executeCommand(command: string, choices: Record<string, string> = {}, useMacro = false, context?: any) {
     setRunStatus('thinking');
-    setAssistantMode('thinking');
+    setAssistantMode('acting');
     setCaption(`I heard you. I'm planning this safely. Guardian will pause anything sensitive.`);
     setNeedsUser('');
     const res = await sendCommand(command, choices, useMacro, context);
     setOut(JSON.stringify(res, null, 2));
     setRunStatus(res.status || (res.ok ? 'running' : 'waiting'));
+    const immediateGuardianEvents = asArray(res?.run_state?.guardian_events);
+    if (immediateGuardianEvents.length) {
+      setLocalGuardianEvents((prev) => [...immediateGuardianEvents, ...prev].slice(0, 12));
+      const top = immediateGuardianEvents[immediateGuardianEvents.length - 1];
+      setAssistantMode(eventSeverityMode(top));
+      setCaption(top.explanation || top.summary || 'Guardian updated protection state.');
+    }
     if (voiceEnabled) speak('I am working on it. Guardian will pause anything risky.');
     if (res.run_id) {
       setRunId(res.run_id);
@@ -539,7 +626,17 @@ export default function App() {
           setCaption('Approval required before I continue.');
           setAssistantMode('protected');
         }
-        if (evt.type === 'guardian_event') setGuardianStatus(await getGuardianStatus(res.run_id));
+        if (evt.type === 'guardian_event') {
+          setLocalGuardianEvents((prev) => [evt, ...prev].slice(0, 12));
+          setAssistantMode(eventSeverityMode(evt));
+          setCaption(evt.explanation || evt.message || 'Guardian updated protection state.');
+          setGuardianStatus(await getGuardianStatus(res.run_id));
+        }
+        if (evt.status === 'running' && evt.type === 'step_status') setAssistantMode('acting');
+        if (evt.status === 'success') {
+          setCaption(evt.message || 'Done.');
+          setAssistantMode('protected');
+        }
         if (evt.type === 'resumed') setNeedsUser('');
         await refreshRunState(res.run_id);
       });
@@ -554,6 +651,10 @@ export default function App() {
       setNeedsUser('Draft ready for approval.');
       setCaption('Approval required before I continue.');
       setAssistantMode('protected');
+    }
+    if (res.status === 'blocked' || res?.run_state?.status === 'blocked') {
+      setCaption('Guardian blocked this action before it could run.');
+      setAssistantMode('blocked');
     }
     if (res.ok && res.run_id && !res.status) {
       const job = res?.run_state?.last_observation?.agent_job_id || res?.steps?.[0]?.result?.result?.agent_job?.job_dir;
@@ -586,9 +687,17 @@ export default function App() {
   const selectedLocalModel = onboardingPrefs.selectedLocalModel || recommendedModel;
   const selectedModelId = localModelStatus?.selected_model?.id || localModelStatus?.selected_model?.model;
   const localReady = Boolean((localModelStatus?.selected_model?.available && selectedModelId !== 'simple') || localModelStatus?.runtime_ready || localModelStatus?.assist_drafting_ready);
-  const guardianEvents = asArray(guardianStatus?.events);
+  const guardianEvents = [...localGuardianEvents, ...asArray(guardianStatus?.events)];
   const liveActivity = events.length
-    ? events.slice(-8).reverse().map((event) => ({ kind: event.type || event.status || 'run', title: event.message || event.type || 'AURA updated run state', detail: event.status || runId }))
+    ? events.slice(-8).reverse().map((event) => ({
+      kind: event.type || event.status || 'run',
+      title: event.type === 'context_captured'
+        ? `${assistantName} checked current context.`
+        : event.type === 'step_status'
+          ? `${assistantName} ${event.status === 'running' ? 'is acting' : event.status === 'planned' ? 'planned a step' : event.status || 'updated a step'}: ${event.name || 'workflow step'}`
+          : event.message || event.type || 'AURA updated run state',
+      detail: event.guardian_reason || event.risk_reason || event.status || runId,
+    }))
     : EXAMPLE_ACTIVITY;
   const memoryFeed = [
     ...memoryItems.slice(0, 3).map((item: any) => ({ title: `Remembered: ${item.memory_key || item.kind || 'memory'}`, detail: shortText(item.value || item.summary || item.scope, 'Scoped memory item') })),
@@ -605,7 +714,7 @@ export default function App() {
     { kind: 'thinking', title: `${assistantName} status: ${runStatus === 'thinking' ? 'thinking' : assistantMode === 'listening' ? 'listening' : 'ready'}`, detail: caption },
     ...(needsUser ? [{ kind: 'needs', title: `${assistantName} needs: user confirmation`, detail: needsUser }] : []),
     ...(pendingApproval ? [{ kind: 'guardian', title: 'Guardian: approval required', detail: pendingRisk || 'A sensitive action is paused until you approve it.' }] : []),
-    ...guardianEvents.slice(0, 3).map((event: any) => ({ kind: 'guardian', title: `Guardian: ${event.status || event.kind || 'protection event'}`, detail: event.explanation || event.message || event.action || 'Protection state updated.' })),
+    ...guardianEvents.slice(0, 5).map((event: any) => ({ kind: `guardian ${event.severity || event.risk || ''}`, title: `Guardian: ${guardianTitle(event)}`, detail: guardianDetail(event) })),
     ...liveActivity.slice(0, 5).map((item) => ({ kind: item.kind, title: item.title, detail: item.detail })),
     ...(memoryFeed.length ? memoryFeed.slice(0, 2).map((item) => ({ kind: 'memory', title: item.title, detail: item.detail })) : [{ kind: 'empty', title: 'Try opening a GitHub repo and saying clone this repo.', detail: 'AURA will refresh context first, then ask before shell/file actions.' }]),
   ];
@@ -755,14 +864,14 @@ export default function App() {
         <AssistantAvatar name={assistantName} mode={assistantMode} />
         <div className="presence-dialogue">
           <div className="eyebrow">AI operating layer</div>
-          <h1>{assistantMode === 'listening' ? "I'm listening." : assistantMode === 'thinking' ? "I'm checking context." : coreStatus === 'connected' ? "I'm online." : "I'm here."}</h1>
+          <h1>{assistantMode === 'listening' ? "I'm listening." : assistantMode === 'thinking' ? "I'm checking context." : assistantMode === 'acting' ? "I'm operating." : assistantMode === 'blocked' ? 'Guardian blocked that.' : assistantMode === 'error' ? 'I need repair.' : coreStatus === 'connected' ? "I'm online." : "I'm here."}</h1>
           <div className={`caption-card home-caption ${assistantMode}`} aria-live="polite">
             <span>{assistantName} says</span>
             <strong>{caption}</strong>
           </div>
           <div className="command-bar command-bar-large">
             <button className="voice-button" onClick={pushToTalk} title="Push to talk">{isListening ? 'Listening...' : 'Mic'}</button>
-            <input ref={commandRef} aria-label="command input" value={input} onChange={e => setInput(e.target.value)} placeholder={`Tell ${assistantName} what you want done`} onKeyDown={e => { if (e.key === 'Enter') run(); }} />
+            <input ref={commandRef} aria-label="command input" value={input} onFocus={() => setAssistantMode('listening')} onChange={e => { setInput(e.target.value); setAssistantMode(e.target.value.trim() ? 'listening' : 'idle'); }} placeholder={`Tell ${assistantName} what you want done`} onKeyDown={e => { if (e.key === 'Enter') run(); }} />
             <button className="primary-button" aria-label="run command" onClick={() => run()}>Ask</button>
           </div>
           <div className="micro-status">
@@ -866,10 +975,16 @@ function StatusPill(props: { label: string; tone: string }) {
 function AssistantAvatar(props: { name: string; mode: string; compact?: boolean }) {
   return <div className={props.compact ? `assistant-avatar compact ${props.mode}` : `assistant-avatar ${props.mode}`} aria-label={`${props.name} avatar`}>
     <div className="avatar-halo" />
-    <div className="avatar-face">
-      <span className="avatar-eye left" />
-      <span className="avatar-eye right" />
-      <span className="avatar-mouth" />
+    <div className="avatar-core">
+      <span className="core-ring ring-one" />
+      <span className="core-ring ring-two" />
+      <span className="core-ring ring-three" />
+      <span className="core-pulse" />
+      <span className="core-scan" />
+      <span className="core-particle p1" />
+      <span className="core-particle p2" />
+      <span className="core-particle p3" />
+      <span className="core-particle p4" />
     </div>
     <div className="avatar-name">{props.name}</div>
   </div>;

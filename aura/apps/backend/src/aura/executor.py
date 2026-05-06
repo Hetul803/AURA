@@ -5,7 +5,7 @@ from copy import deepcopy
 
 from . import observer
 from .evaluator import evaluate_step
-from .guardian import record_step_events
+from .guardian import decision_event, record_step_events
 from .repair import build_repair_step, strategy_for_failure
 from .safety import step_risk
 from .state import (
@@ -15,6 +15,7 @@ from .state import (
     increment_run_counter,
     is_step_approved,
     is_run_cancelled,
+    record_guardian_event,
     record_run_event,
     record_safety_event,
     update_run_context,
@@ -241,6 +242,17 @@ def execute_steps(run_id: str, steps, event_cb, wait_poll_ms: int = 100, start_i
         guard = risk_decision['decision']
         if guard == 'blocked':
             out.append({'step': step.id, 'status': 'blocked', 'step_index': idx})
+            guardian_event = decision_event(
+                run_id,
+                step,
+                risk_decision,
+                severity='blocked',
+                event_type='blocked',
+                title=f'Guardian blocked {step.name}.',
+                action_required='Choose a safer command or edit the requested action.',
+            )
+            record_guardian_event(guardian_event)
+            append_run_history(run_id, 'guardian_events', guardian_event, limit=40)
             event = {
                 'kind': 'blocked',
                 'run_id': run_id,
@@ -252,11 +264,23 @@ def execute_steps(run_id: str, steps, event_cb, wait_poll_ms: int = 100, start_i
             _record_safety_history(run_id, event)
             _record_step_history(run_id, step, 'blocked')
             update_run_context(run_id, {'terminal_outcome': 'blocked', 'status': 'blocked'})
+            event_cb({**guardian_event, 'type': 'guardian_event', 'guardian_type': guardian_event.get('type'), 'run_id': run_id, 'status': 'blocked'})
             _emit_step(event_cb, run_id, step, 'failed', message=f"AURA Guardian blocked this action: {event['message']}", url=last_obs.get('url', ''), guardian_reason=event['message'])
             return out
         if guard == 'confirm' and step.action_type not in (ASSIST_APPROVAL, ASSIST_PASTE) and not is_step_approved(run_id, step.id):
             approval = create_approval_request(run_id, step, risk_decision.get('reason') or 'confirmation_required')
             out.append({'step': step.id, 'status': 'awaiting_approval', 'step_index': idx, 'approval': approval})
+            guardian_event = decision_event(
+                run_id,
+                step,
+                risk_decision,
+                severity='approval_required',
+                event_type='approval_required',
+                title=f'Guardian needs approval for {step.name}.',
+                action_required='Approve, reject, or edit this action before AURA continues.',
+            )
+            record_guardian_event(guardian_event)
+            append_run_history(run_id, 'guardian_events', guardian_event, limit=40)
             event = {'kind': 'confirmation', 'run_id': run_id, 'step_id': step.id, 'action': step.action_type, 'risk_level': risk_decision.get('risk') or step.safety_level, 'approval_id': approval['approval_id'], 'message': approval['risk_reason']}
             _record_safety_history(run_id, event)
             _record_step_history(run_id, step, 'needs_confirmation')
@@ -294,6 +318,7 @@ def execute_steps(run_id: str, steps, event_cb, wait_poll_ms: int = 100, start_i
                 'url': last_obs.get('url', ''),
             }
             record_run_event(payload)
+            event_cb({**guardian_event, 'type': 'guardian_event', 'guardian_type': guardian_event.get('type'), 'run_id': run_id, 'status': 'awaiting_approval'})
             event_cb(payload)
             return out
 
@@ -342,7 +367,7 @@ def execute_steps(run_id: str, steps, event_cb, wait_poll_ms: int = 100, start_i
             _update_assist_context(run_id, step, result)
             guardian_events = record_step_events(run_id, step, result, get_run_context(run_id) or {})
             for guardian_event in guardian_events:
-                event_cb({'type': 'guardian_event', 'run_id': run_id, 'status': 'running', **guardian_event})
+                event_cb({**guardian_event, 'type': 'guardian_event', 'guardian_type': guardian_event.get('type'), 'run_id': run_id, 'status': 'running'})
 
             if step.action_type in ('OS_PASTE', 'OS_WRITE_CLIPBOARD', 'OS_COPY_SELECTION', ASSIST_PASTE):
                 _record_safety_history(run_id, {'kind': 'clipboard', 'run_id': run_id, 'step_id': step.id, 'action': step.action_type, 'ok': result.get('ok', False)})
@@ -370,6 +395,18 @@ def execute_steps(run_id: str, steps, event_cb, wait_poll_ms: int = 100, start_i
                     paused_patch.update({'paused_step_index': idx + 1, 'approval_state': approval_state, 'status': 'awaiting_approval', 'user_intervention_required': False})
                     event_type = 'approval_required'
                     message = 'Draft ready for approval.'
+                    guardian_event = decision_event(
+                        run_id,
+                        step,
+                        {'risk': 'high', 'reason': 'assist_paste_back_requires_approval'},
+                        severity='approval_required',
+                        event_type='approval_required',
+                        title='Guardian needs approval before paste-back.',
+                        action_required='Review the draft, edit if needed, then approve paste-back.',
+                    )
+                    record_guardian_event(guardian_event)
+                    append_run_history(run_id, 'guardian_events', guardian_event, limit=40)
+                    event_cb({**guardian_event, 'type': 'guardian_event', 'guardian_type': guardian_event.get('type'), 'run_id': run_id, 'status': 'awaiting_approval'})
                 update_run_context(run_id, paused_patch)
                 payload = {'type': event_type, 'run_id': run_id, 'status': paused_patch.get('status', 'needs_user'), 'step_id': step.id, 'step_index': idx, 'message': message, 'url': observation_map.get('url', ''), 'session': 'login_required', 'failure_class': decision.get('failure_class')}
                 record_run_event(payload)

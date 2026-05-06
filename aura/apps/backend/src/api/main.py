@@ -21,6 +21,7 @@ from aura.cost_router import (
     set_budget,
     usage_summary,
 )
+from aura.guardian import record_human_guardian_event
 from aura.device_handoff import create_handoff, get_handoff, list_handoffs, update_handoff
 from aura.identity_boundary import (
     check_boundary,
@@ -792,6 +793,16 @@ def workflows_run(workflow_id: str, body: WorkflowRunBody):
         raise HTTPException(404, 'workflow not found')
     preflight = validate_workflow_run(rendered['workflow'], command=rendered['command'], context=body.context)
     if not preflight['ok']:
+        record_human_guardian_event(
+            severity='blocked' if preflight.get('blocked') else 'notice',
+            title='Guardian stopped workflow replay.' if preflight.get('blocked') else 'Guardian needs more context before workflow replay.',
+            explanation='Workflow replay contains a secret or unsafe input.' if preflight.get('blocked') else 'Workflow replay is missing required context, so AURA will not blindly continue.',
+            action_required='Edit the workflow or remove sensitive input.' if preflight.get('blocked') else 'Open the required app/page, refresh context, then replay again.',
+            event_type='workflow_replay_blocked' if preflight.get('blocked') else 'missing_context',
+            action='WORKFLOW_REPLAY',
+            risk='blocked' if preflight.get('blocked') else 'medium',
+            context={'workflow_id': workflow_id, 'reason': preflight.get('reason'), 'missing_context': preflight.get('missing_context', [])},
+        )
         if preflight.get('blocked'):
             raise HTTPException(403, preflight)
         raise HTTPException(400, preflight)
@@ -1085,7 +1096,7 @@ def memory_items_list(q: str | None = None, kind: str | None = None, scope: str 
 
 @app.post('/memory/items')
 def memory_items_create(body: MemoryItemCreate):
-    return remember_item(
+    result = remember_item(
         kind=body.kind,
         key=body.key,
         value=body.value,
@@ -1099,6 +1110,20 @@ def memory_items_create(body: MemoryItemCreate):
         user_notes=body.user_notes,
         metadata=body.metadata,
     )
+    if result.get('rejected'):
+        reasons = result.get('reasons') or []
+        secret = 'secret_never_stored' in reasons
+        record_human_guardian_event(
+            severity='blocked' if secret else 'notice',
+            title='Guardian rejected unsafe memory.' if secret else 'Guardian declined this memory.',
+            explanation='This looked like a password, API key, token, or secret, so AURA did not store it.' if secret else 'The memory did not meet AURA privacy or quality rules.',
+            action_required='Remove secrets and save only safe preferences, workflow patterns, or non-sensitive facts.',
+            event_type='memory_rejected',
+            action='MEMORY_WRITE',
+            risk='blocked' if secret else 'medium',
+            context={'memory_key': body.key, 'kind': body.kind, 'scope': body.scope, 'reasons': reasons},
+        )
+    return result
 
 
 @app.patch('/memory/items/{memory_id}')
@@ -1146,7 +1171,19 @@ def retention_sweep():
 
 
 @app.post('/profile/export')
-def profile_export(path: str):
+def profile_export(path: str, approved: bool = False):
+    if not approved:
+        record_human_guardian_event(
+            severity='approval_required',
+            title='Guardian needs approval before memory export.',
+            explanation='Exporting memory can move private personal, work, or company context outside AURA.',
+            action_required='Approve export only after checking the destination path.',
+            event_type='approval_required',
+            action='PROFILE_EXPORT',
+            risk='high',
+            context={'path': path},
+        )
+        raise HTTPException(403, {'requires_approval': True, 'reason': 'profile_memory_transfer_requires_approval'})
     try:
         return {'path': export_profile(path)}
     except ValueError as exc:
@@ -1154,7 +1191,19 @@ def profile_export(path: str):
 
 
 @app.post('/profile/import')
-def profile_import(path: str):
+def profile_import(path: str, approved: bool = False):
+    if not approved:
+        record_human_guardian_event(
+            severity='approval_required',
+            title='Guardian needs approval before memory import.',
+            explanation='Importing memory can merge untrusted or incorrectly scoped data into AURA.',
+            action_required='Approve import only after checking the source file.',
+            event_type='approval_required',
+            action='PROFILE_IMPORT',
+            risk='high',
+            context={'path': path},
+        )
+        raise HTTPException(403, {'requires_approval': True, 'reason': 'profile_memory_transfer_requires_approval'})
     try:
         import_profile(path)
     except ValueError as exc:

@@ -59,4 +59,13 @@ describe('desktop startup paths', () => {
     expect(indexHtml).toContain('AURA is starting.');
     expect(indexHtml).toContain('boot-fallback');
   });
+
+  it('packages the preload bridge as CommonJS so Electron can load it', () => {
+    const mainSource = fs.readFileSync(path.join(process.cwd(), 'src/main/index.ts'), 'utf8');
+    const preloadBridge = fs.readFileSync(path.join(process.cwd(), 'src/main/preload.cjs'), 'utf8');
+    const packageJson = fs.readFileSync(path.join(process.cwd(), 'package.json'), 'utf8');
+    expect(mainSource).toContain('preload.cjs');
+    expect(preloadBridge).toContain("require('electron')");
+    expect(packageJson).toContain('scripts/copy-preload.mjs');
+  });
 });

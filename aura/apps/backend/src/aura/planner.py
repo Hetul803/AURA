@@ -18,6 +18,8 @@ def intent_signature(text: str) -> str:
     t = text.lower().strip()
     if 'clone' in t and ('repo' in t or 'repository' in t or 'this' in t):
         return 'github:clone'
+    if t.startswith('run shell command:') or t.startswith('run command:'):
+        return 'shell:run'
     if t.startswith('fix and run python script at') or t.startswith('run python script at'):
         return 'code:python_script'
     if 'open cursor' in t:
@@ -157,6 +159,28 @@ def _agent_coding_plan(text: str, context: dict | None = None) -> dict:
         success_criteria=[{'type': 'agent_route_ready', 'expected': True}],
         memory_scope='agent:coding',
         slots={'agent_id': route['agent_id']},
+    )
+
+
+def _shell_command_plan(text: str, context: dict | None = None) -> dict:
+    command = text.split(':', 1)[1].strip() if ':' in text else text
+    workspace = (context or {}).get('workspace_hint') or ((context or {}).get('project') or {}).get('current_folder') or default_workspace_root()
+    return _build_plan(
+        goal='Run a shell command only after Guardian risk review',
+        signature='shell:run',
+        steps=[
+            Step(
+                id='s1',
+                name='Run shell command',
+                action_type='CODE_RUN',
+                tool='code',
+                args={'kind': 'shell', 'command': command, 'workspace': workspace},
+                expected_outcome={'exit_code': 0},
+                safety_level='CONFIRM',
+            ),
+        ],
+        context={'request_text': text, 'command': command, 'workspace': workspace, 'context_snapshot': context or {}},
+        success_criteria=[{'type': 'exit_code', 'expected': 0}],
     )
 
 
@@ -349,6 +373,9 @@ def plan_from_text(text: str, choices: dict | None = None, context: dict | None 
 
     if intent_signature(text) == 'github:clone':
         return _clone_github_repo_plan(text, context)
+
+    if intent_signature(text) == 'shell:run':
+        return _shell_command_plan(text, context)
 
     if t.startswith('fix and run python script at') or t.startswith('run python script at'):
         return _code_plan(text)

@@ -44,6 +44,10 @@ def classify_shell_command(command: str, workspace: str | None = None) -> dict:
         tokens = command.split()
     first = tokens[0].lower() if tokens else ''
     first_two = ' '.join(token.lower() for token in tokens[:2])
+    if first == 'rm' and any('r' in token.lower().lstrip('-') for token in tokens[1:] if token.startswith('-')):
+        dangerous_targets = {'/', '~', '$HOME', '/Users', '/System', '/Library'}
+        if any(token in dangerous_targets or token.startswith('/Users/') or token.startswith('/System/') or token.startswith('/Library/') for token in tokens[1:] if not token.startswith('-')):
+            return {'risk': 'blocked', 'requires_approval': False, 'blocked': True, 'reason': 'destructive_or_exfiltrating_shell_command'}
     if first in HIGH_RISK_TOKENS or first_two in HIGH_RISK_TOKENS:
         return {'risk': 'high', 'requires_approval': True, 'blocked': False, 'reason': f'high_risk_shell_command:{first_two or first}'}
     if lowered.startswith('git push'):
@@ -101,7 +105,7 @@ def step_risk(step, task_type: str | None = None) -> dict:
     learned_block = any(item.get('policy') == 'blocked' for item in safety_hints['safety'])
 
     if learned_block or registry_risk == 'blocked':
-        return {'decision': 'blocked', 'risk': 'blocked', 'reason': 'learned_or_registry_block'}
+        return {'decision': 'blocked', 'risk': 'blocked', 'reason': reason if registry_risk == 'blocked' else 'learned_or_registry_block'}
     if (
         step.safety_level == 'CONFIRM'
         or registry_requires_approval

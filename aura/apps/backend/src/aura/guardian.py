@@ -15,6 +15,22 @@ CLIPBOARD_WRITE_ACTIONS = {'OS_WRITE_CLIPBOARD', 'OS_PASTE', 'ASSIST_PASTE_BACK'
 FILE_ACTIONS = {'FS_EXISTS', 'FS_READ_TEXT', 'FS_WRITE_TEXT'}
 BROWSER_ACTIONS = {'OS_OPEN_URL', 'WEB_NAVIGATE', 'WEB_READ', 'WEB_UPLOAD', 'ASSIST_RESEARCH_CONTEXT'}
 
+SEVERITY_TO_RISK = {
+    'safe': LOW,
+    'notice': MEDIUM,
+    'approval_required': HIGH,
+    'blocked': 'blocked',
+    'error': HIGH,
+}
+
+RISK_TO_SEVERITY = {
+    LOW: 'safe',
+    MEDIUM: 'notice',
+    HIGH: 'approval_required',
+    'critical': 'approval_required',
+    'blocked': 'blocked',
+}
+
 
 def _domain(value: str | None) -> str | None:
     if not value:
@@ -51,19 +67,115 @@ def _size_hint(value: Any) -> int:
         return 0
 
 
-def _base_event(*, run_id: str, step, event_type: str, risk: str, summary: str, explanation: str, context: dict | None = None) -> dict:
+def _base_event(*, run_id: str | None, step, event_type: str, risk: str, summary: str, explanation: str, context: dict | None = None, severity: str | None = None, action_required: str = 'No action needed.') -> dict:
+    severity = severity or RISK_TO_SEVERITY.get(risk, 'notice')
     return {
         'run_id': run_id,
         'step_id': getattr(step, 'id', None),
         'action': getattr(step, 'action_type', ''),
         'type': event_type,
+        'severity': severity,
         'source': 'AURA',
         'risk': risk,
+        'title': summary,
         'summary': summary,
         'explanation': explanation,
+        'action_required': action_required,
         'context': context or {},
         'timestamp': time.time(),
     }
+
+
+def human_guardian_event(
+    *,
+    severity: str,
+    title: str,
+    explanation: str,
+    action_required: str,
+    run_id: str | None = None,
+    step_id: str | None = None,
+    action: str = '',
+    risk: str | None = None,
+    event_type: str = 'notice',
+    context: dict | None = None,
+) -> dict:
+    return {
+        'run_id': run_id,
+        'step_id': step_id,
+        'action': action,
+        'type': event_type,
+        'severity': severity,
+        'source': 'AURA Guardian',
+        'risk': risk or SEVERITY_TO_RISK.get(severity, MEDIUM),
+        'title': title,
+        'summary': title,
+        'explanation': explanation,
+        'action_required': action_required,
+        'context': context or {},
+        'timestamp': time.time(),
+    }
+
+
+def record_human_guardian_event(**kwargs) -> dict:
+    event = human_guardian_event(**kwargs)
+    record_guardian_event(event)
+    if event.get('run_id'):
+        append_run_history(event['run_id'], 'guardian_events', event, limit=40)
+    return event
+
+
+def explain_risk_reason(reason: str | None, action: str = '') -> str:
+    reason = reason or 'confirmation_required'
+    if reason == 'destructive_or_exfiltrating_shell_command':
+        return 'This command looks destructive or tries to pipe remote/secret data into another command.'
+    if reason == 'command_contains_secret':
+        return 'This command appears to contain a secret, API key, password, or token.'
+    if reason.startswith('high_risk_shell_command:sudo'):
+        return 'This command uses elevated privileges, so it can modify system-level state.'
+    if reason.startswith('high_risk_shell_command:rm') or reason.startswith('high_risk_shell_command:del') or reason.startswith('high_risk_shell_command:rmdir'):
+        return 'This command can delete files or folders.'
+    if reason.startswith('high_risk_shell_command:mv'):
+        return 'This command can move or overwrite files.'
+    if reason == 'github_push_requires_approval':
+        return 'Pushing code changes crosses a repository trust boundary.'
+    if reason == 'dependency_or_branch_change':
+        return 'This action can change installed dependencies, project state, or checked-out code.'
+    if reason == 'shell_command_may_write_files':
+        return 'This shell command may create or overwrite local files.'
+    if reason == 'unclassified_shell_command_requires_review':
+        return 'Guardian does not classify this command as read-only, so it needs your review.'
+    if reason in {'os_paste_requires_approval', 'assist_paste_back_requires_approval', 'web_type_requires_approval'}:
+        return 'Pasting or typing into another app can change user-visible content.'
+    if reason == 'web_upload_requires_approval':
+        return 'Uploading can send a local file to an external destination.'
+    if reason == 'profile_memory_transfer_requires_approval':
+        return 'Exporting or importing memory can move private user data across trust boundaries.'
+    if reason == 'external_url_requires_approval':
+        return 'Workflow replay wants to open an external URL.'
+    if action:
+        return f'Guardian requires review before {action}.'
+    return reason.replace('_', ' ')
+
+
+def decision_event(run_id: str, step, risk_decision: dict, *, severity: str, event_type: str, title: str, action_required: str) -> dict:
+    reason = risk_decision.get('reason') or 'confirmation_required'
+    return human_guardian_event(
+        severity=severity,
+        title=title,
+        explanation=explain_risk_reason(reason, getattr(step, 'action_type', '')),
+        action_required=action_required,
+        run_id=run_id,
+        step_id=getattr(step, 'id', None),
+        action=getattr(step, 'action_type', ''),
+        risk=risk_decision.get('risk'),
+        event_type=event_type,
+        context={
+            'risk_reason': reason,
+            'tool': getattr(step, 'tool', ''),
+            'step_name': getattr(step, 'name', ''),
+            'args_preview': str(getattr(step, 'args', {}) or {})[:600],
+        },
+    )
 
 
 def _clipboard_event(run_id: str, step, result: dict, run_context: dict) -> list[dict]:
@@ -77,11 +189,13 @@ def _clipboard_event(run_id: str, step, result: dict, run_context: dict) -> list
         source = capture.get('capture_path_used') or outcome.get('capture_path_used') or observation.get('capture_path_used') or 'clipboard'
         summary = 'AURA read from the clipboard to capture context.' if action == 'ASSIST_CAPTURE_CONTEXT' else 'AURA accessed clipboard content.'
         explanation = 'This happened during context capture or selection copy so AURA could work with the active text.'
+        action_required = 'No action needed.'
         risk = LOW
         if source == 'clipboard_fallback' or size >= 800:
             risk = MEDIUM
             summary = 'AURA used the clipboard fallback to capture context.'
             explanation = 'No reliable text selection was available, so AURA relied on clipboard contents from the active app.'
+            action_required = 'Grant better app/browser context permissions if this was unexpected.'
         if _repetition_count(run_id, event_type) >= 1:
             risk = MEDIUM
             explanation = 'AURA accessed clipboard content multiple times during this run.'
@@ -91,13 +205,14 @@ def _clipboard_event(run_id: str, step, result: dict, run_context: dict) -> list
             'clipboard_preserved': observation.get('clipboard_preserved', (capture.get('capture_method') or {}).get('clipboard_preserved')),
             'clipboard_restored': observation.get('clipboard_restored_after_capture', (capture.get('capture_method') or {}).get('clipboard_restored_after_capture')),
         }
-        return [_base_event(run_id=run_id, step=step, event_type=event_type, risk=risk, summary=summary, explanation=explanation, context=context)]
+        return [_base_event(run_id=run_id, step=step, event_type=event_type, risk=risk, summary=summary, explanation=explanation, context=context, action_required=action_required)]
 
     size = _size_hint(outcome.get('written') or outcome.get('pasted') or step.args.get('text') or observation.get('clipboard_length'))
     target = ((run_context.get('captured_context') or {}).get('target_fingerprint') or {}).get('browser_domain') or ((observation.get('target_fingerprint') or {}).get('browser_domain')) or (run_context.get('captured_context') or {}).get('active_app') or 'active_app'
     risk = LOW
     summary = 'AURA prepared clipboard content for paste-back.' if action == 'ASSIST_PASTE_BACK' else 'AURA wrote content to the clipboard.'
     explanation = 'This is part of AURA placing generated or requested text into the active app.'
+    action_required = 'Review the target and approve paste-back before AURA changes another app.'
     if size >= 600 or action in {'OS_PASTE', 'ASSIST_PASTE_BACK'}:
         risk = MEDIUM
         summary = 'AURA pasted or staged a larger block of content.'
@@ -116,7 +231,7 @@ def _clipboard_event(run_id: str, step, result: dict, run_context: dict) -> list
         'clipboard_restored': observation.get('clipboard_restored_after_paste'),
         'target_validation_result': observation.get('target_validation_result') or observation.get('target_validation'),
     }
-    return [_base_event(run_id=run_id, step=step, event_type='clipboard_write', risk=risk, summary=summary, explanation=explanation, context=context)]
+    return [_base_event(run_id=run_id, step=step, event_type='clipboard_write', risk=risk, summary=summary, explanation=explanation, context=context, action_required=action_required)]
 
 
 def _file_event(run_id: str, step, result: dict) -> list[dict]:
@@ -129,8 +244,9 @@ def _file_event(run_id: str, step, result: dict) -> list[dict]:
         risk = MEDIUM
     summary = f"AURA {operation} a local file."
     explanation = 'This event is limited to filesystem actions AURA performed inside its own workflow.'
+    action_required = 'No action needed.' if operation != 'write' else 'Review file writes before approving workflow replay or shell/file actions.'
     context = {'target': path, 'operation': operation, 'size': size, 'file_exists': observation.get('file_exists')}
-    return [_base_event(run_id=run_id, step=step, event_type='file_access', risk=risk, summary=summary, explanation=explanation, context=context)]
+    return [_base_event(run_id=run_id, step=step, event_type='file_access', risk=risk, summary=summary, explanation=explanation, context=context, action_required=action_required)]
 
 
 def _browser_events(run_id: str, step, result: dict, run_context: dict) -> list[dict]:
@@ -157,6 +273,7 @@ def _browser_events(run_id: str, step, result: dict, run_context: dict) -> list[
             risk=risk,
             summary=summary,
             explanation=explanation,
+            action_required='Review external research results before using them in sensitive drafts.',
             context={'target': str(target), 'sources': list(research.get('sources') or [])[:3], 'search_results_count': research.get('search_results_count', 0)},
         ))
         return events
@@ -178,6 +295,7 @@ def _browser_events(run_id: str, step, result: dict, run_context: dict) -> list[
             risk=HIGH,
             summary='AURA prepared a browser upload action.',
             explanation='Uploading through a browser can move a local file into an external destination, so AURA flags it as high risk.',
+            action_required='Approve only if the destination and file are correct.',
             context={'target': step.args.get('url') or step.args.get('selector') or 'upload', 'file_path': step.args.get('file_path')},
         ))
     events.insert(0, _base_event(
@@ -187,6 +305,7 @@ def _browser_events(run_id: str, step, result: dict, run_context: dict) -> list[
         risk=risk,
         summary=summary,
         explanation=explanation,
+        action_required='Review external browser actions before approving workflow replay.',
         context={'target': str(target), 'url': url, 'domain': _domain(url), 'active_domain': ((run_context.get('captured_context') or {}).get('target_fingerprint') or {}).get('browser_domain')},
     ))
     return events

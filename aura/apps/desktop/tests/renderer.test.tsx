@@ -21,7 +21,7 @@ function setupSpeech() {
   });
 }
 
-function setupFetch(commandResponses: any[], contextOverride?: any, localModelOverride?: any) {
+function setupFetch(commandResponses: any[], contextOverride?: any, localModelOverride?: any, guardianOverride?: any) {
   let i = 0;
   const context = contextOverride || { active_app: 'Notes', input_text: 'Captured text', input_source: 'clipboard_fallback', capture_path_used: 'clipboard_fallback', capture_method: { clipboard_preserved: true, clipboard_restored_after_capture: true } };
   vi.stubGlobal('fetch', vi.fn(async (url: string, options?: any) => {
@@ -38,7 +38,7 @@ function setupFetch(commandResponses: any[], contextOverride?: any, localModelOv
     if (url.includes('/browser/sessions')) return { ok: true, json: async () => [] } as any;
     if (url.includes('/storage/stats')) return { ok: true, json: async () => ({}) } as any;
     if (url.includes('/safety/events')) return { ok: true, json: async () => [] } as any;
-    if (url.includes('/guardian/status')) return { ok: true, json: async () => ({ status: 'protected', events: [] }) } as any;
+    if (url.includes('/guardian/status')) return { ok: true, json: async () => (guardianOverride || { status: 'protected', events: [] }) } as any;
     if (url.includes('/cost/summary')) return { ok: true, json: async () => ({ total_estimated_cost_usd: 0, estimated_savings_usd: 0, budget: {} }) } as any;
     if (url.includes('/cost/models')) return { ok: true, json: async () => [] } as any;
     if (url.includes('/local-model/status')) return { ok: true, json: async () => (localModelOverride || {
@@ -179,6 +179,25 @@ describe('renderer', () => {
     expect(screen.getAllByText(/No memory updates yet/).length).toBeGreaterThan(0);
   });
 
+  it('renders rich Guardian events in the main action stream', async () => {
+    localStorage.setItem('aura:onboarding-complete', '1');
+    setupSpeech();
+    setupFetch([{ ok: true, run_id: 'r1' }], undefined, undefined, {
+      status: 'protected',
+      events: [{
+        severity: 'blocked',
+        title: 'Guardian blocked remote shell installer.',
+        explanation: 'This command pipes a remote script into your shell.',
+        action_required: 'Choose a safer command.',
+        risk: 'blocked',
+      }],
+    });
+    vi.stubGlobal('EventSource', class { onmessage: any; close() {} } as any);
+    render(<App />);
+    await waitFor(() => expect(screen.getByText(/Guardian: blocked remote shell installer/)).toBeTruthy());
+    expect(screen.getByText(/pipes a remote script into your shell/)).toBeTruthy();
+  });
+
   it('shows backend fallback when health check fails', async () => {
     localStorage.setItem('aura:onboarding-complete', '1');
     setupSpeech();
@@ -189,7 +208,8 @@ describe('renderer', () => {
     vi.stubGlobal('EventSource', class { onmessage: any; close() {} } as any);
     render(<App />);
     await waitFor(() => expect(screen.getAllByText(/AURA Core disconnected/).length).toBeGreaterThan(0));
-    expect(screen.getByText(/Repair Backend/)).toBeTruthy();
+    expect(screen.getAllByText(/Repair Backend/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Guardian: cannot reach AURA Core/).length).toBeGreaterThan(0);
   });
 
   it('renders hotkey active status from desktop bridge', async () => {
@@ -285,6 +305,7 @@ describe('renderer', () => {
     await waitFor(() => expect(screen.getByText(/What I can do now/)).toBeTruthy());
     fireEvent.click(screen.getAllByRole('button', { name: /Show setup needed/i })[0]);
     await waitFor(() => expect(screen.getAllByText(/I don't see a GitHub repo yet/).length).toBeGreaterThan(0));
+    expect(screen.getAllByText(/Guardian: needs GitHub context/).length).toBeGreaterThan(0);
   });
 
   it('shows GitHub context actions when URL is supplied', async () => {
@@ -319,6 +340,33 @@ describe('renderer', () => {
     fireEvent.change(screen.getByLabelText('command input'), { target: { value: 'Reply to this email' } });
     fireEvent.click(screen.getByRole('button', { name: 'run command' }));
     await waitFor(() => expect(screen.getAllByText(/I don't see an email thread yet/).length).toBeGreaterThan(0));
+    expect(screen.getAllByText(/Guardian: needs email context/).length).toBeGreaterThan(0);
+  });
+
+  it('reacts to blocked Guardian events with blocked presence state', async () => {
+    localStorage.setItem('aura:onboarding-complete', '1');
+    setupSpeech();
+    setupFetch([{ ok: false, run_id: 'r-blocked', status: 'blocked', run_state: { status: 'blocked' } }]);
+    vi.stubGlobal('EventSource', class {
+      onmessage: any;
+      constructor() {
+        setTimeout(() => this.onmessage?.({ data: JSON.stringify({
+          run_id: 'r-blocked',
+          type: 'guardian_event',
+          status: 'blocked',
+          severity: 'blocked',
+          title: 'Guardian blocked dangerous shell command.',
+          explanation: 'This command can delete files.',
+          action_required: 'Edit the command.',
+        }) }), 0);
+      }
+      close() {}
+    } as any);
+    render(<App />);
+    fireEvent.change(screen.getByLabelText('command input'), { target: { value: 'Run shell command: rm -rf ~' } });
+    fireEvent.click(screen.getByRole('button', { name: 'run command' }));
+    await waitFor(() => expect(screen.getByText(/Guardian blocked that/)).toBeTruthy());
+    expect(screen.getByText(/Guardian: blocked dangerous shell command/)).toBeTruthy();
   });
 
   it('build app voice or card path creates coding job feedback', async () => {

@@ -7,13 +7,16 @@ import uuid
 from .assist import apply_feedback_preferences, draft_from_state
 from .context_engine import capture_current_context
 from .executor import execute_steps
+from .guardian import record_human_guardian_event
 from .learning import record_run_learning
 from .macros import match_macro, record_macro, render_macro_steps, touch_macro
 from .memory import remember_execution, write_memory
+from .memory_engine import remember_item
 from .planner import plan_from_text
 from .prefs import set_pref
 from .state import decide_approval, get_run_context, record_run_event, set_run_context, update_run_context
 from .steps import Step
+from .workflow_engine import create_workflow
 
 
 def _send_event(event_cb, event: dict):
@@ -43,6 +46,10 @@ def _status_from_result(result: list[dict]) -> str:
         return 'awaiting_approval'
     if last['status'] == 'rejected':
         return 'rejected'
+    if last['status'] == 'blocked':
+        return 'blocked'
+    if last['status'] == 'cancelled':
+        return 'cancelled'
     return 'done' if all(r['status'] == 'success' for r in result) else 'partial'
 
 
@@ -53,11 +60,102 @@ def _capture_planning_context() -> dict:
         return {'ok': False, 'source': 'command', 'error': str(exc), 'context_refs': []}
 
 
+def _memory_request_payload(text: str) -> tuple[str, str] | None:
+    low = text.lower().strip()
+    if low.startswith('remember this '):
+        value = text[len('remember this '):].strip()
+    elif low.startswith('remember '):
+        value = text[len('remember '):].strip()
+    else:
+        return None
+    if not value:
+        return None
+    key = 'user.note'
+    if '=' in value:
+        key = value.split('=', 1)[0].strip().replace(' ', '_') or key
+    return key, value
+
+
+def _run_memory_request(run_id: str, text: str, planning_context: dict, event_cb) -> dict | None:
+    payload = _memory_request_payload(text)
+    if not payload:
+        return None
+    key, value = payload
+    result = remember_item(kind='note', key=key, value=value, scope='personal', permission='private', source='user', confidence=0.75, provenance={'run_id': run_id, 'source': 'command'})
+    status = 'blocked' if result.get('rejected') else 'done'
+    set_run_context(run_id, {
+        'text': text,
+        'choices': {},
+        'use_macro': False,
+        'status': status,
+        'planning_context': planning_context,
+        'plan': {'signature': 'memory:write', 'goal': 'Save useful memory safely', 'steps': []},
+        'steps': [],
+        'current_step_index': 0,
+        'terminal_outcome': 'blocked' if result.get('rejected') else 'success',
+        'approval_state': {'required': False, 'status': 'not_requested'},
+        'memory_result': result,
+    })
+    if result.get('rejected'):
+        reasons = result.get('reasons') or []
+        event = record_human_guardian_event(
+            severity='blocked' if 'secret_never_stored' in reasons else 'notice',
+            title='Guardian rejected unsafe memory.',
+            explanation='This looked like a password, API key, token, or secret, so AURA did not store it.' if 'secret_never_stored' in reasons else 'The memory did not meet AURA privacy or quality rules.',
+            action_required='Remove secrets and save only safe preferences, workflow patterns, or non-sensitive facts.',
+            run_id=run_id,
+            event_type='memory_rejected',
+            action='MEMORY_WRITE',
+            risk='blocked' if 'secret_never_stored' in reasons else 'medium',
+            context={'memory_key': key, 'reasons': reasons},
+        )
+        event_cb({**event, 'type': 'guardian_event', 'guardian_type': event.get('type'), 'run_id': run_id, 'status': 'blocked'})
+        _send_event(event_cb, {'type': 'step_status', 'run_id': run_id, 'status': 'blocked', 'message': 'Guardian rejected this memory before storage.'})
+        return {'ok': False, 'run_id': run_id, 'status': 'blocked', 'run_state': get_run_context(run_id), 'memory_result': result}
+    _send_event(event_cb, {'type': 'step_status', 'run_id': run_id, 'status': 'success', 'message': 'Memory saved safely.'})
+    return {'ok': True, 'run_id': run_id, 'steps': [], 'run_state': get_run_context(run_id), 'memory_result': result}
+
+
+def _run_workflow_save_request(run_id: str, text: str, planning_context: dict, event_cb) -> dict | None:
+    low = text.lower().strip()
+    if 'reusable workflow' not in low and 'save a workflow' not in low and 'save workflow' not in low:
+        return None
+    workflow = create_workflow(
+        name='Manual workflow suggestion',
+        command_template='Reply to this email' if 'email' in low or 'reply' in low else 'Clone this repo locally',
+        description='Created from the command layer for manual replay testing.',
+        trigger_type='manual',
+        source='command_layer',
+        confidence=0.5,
+        required_context=['selected_text_or_clipboard'] if 'email' in low or 'reply' in low else ['browser_url:github_repo'],
+        safety_class='high',
+        metadata={'created_from': text, 'context_snapshot_id': planning_context.get('snapshot_id')},
+    )
+    set_run_context(run_id, {
+        'text': text,
+        'choices': {},
+        'use_macro': False,
+        'status': 'done',
+        'planning_context': planning_context,
+        'plan': {'signature': 'workflow:save', 'goal': 'Save a replayable workflow suggestion', 'steps': []},
+        'steps': [],
+        'current_step_index': 0,
+        'terminal_outcome': 'success',
+        'approval_state': {'required': False, 'status': 'not_requested'},
+        'workflow_result': workflow,
+    })
+    _send_event(event_cb, {'type': 'step_status', 'run_id': run_id, 'status': 'success', 'message': f"Workflow saved: {workflow['name']}."})
+    return {'ok': True, 'run_id': run_id, 'steps': [], 'run_state': get_run_context(run_id), 'workflow': workflow}
+
+
 def run_command(text: str, event_cb=lambda e: None, choices: dict | None = None, use_macro: bool = False, run_id: str | None = None, context: dict | None = None, proactive: dict | None = None):
     run_id = run_id or str(uuid.uuid4())
     _send_event(event_cb, {'type': 'run_start', 'run_id': run_id, 'status': 'running', 'message': text})
     planning_context = {**context, 'client_supplied': True} if context is not None else _capture_planning_context()
     _send_event(event_cb, {'type': 'context_captured', 'run_id': run_id, 'status': 'running', 'message': 'Context snapshot captured.', 'context_snapshot_id': planning_context.get('snapshot_id')})
+    special = _run_memory_request(run_id, text, planning_context, event_cb) or _run_workflow_save_request(run_id, text, planning_context, event_cb)
+    if special:
+        return special
     plan = plan_from_text(text, choices, planning_context)
 
     if plan['clarifications']:
@@ -118,7 +216,7 @@ def run_command(text: str, event_cb=lambda e: None, choices: dict | None = None,
     status = _status_from_result(result)
 
     ctx = get_run_context(run_id) or {}
-    terminal_outcome = 'success' if status == 'done' else ('needs_user' if status == 'awaiting_approval' else (ctx.get('terminal_outcome') or 'failed'))
+    terminal_outcome = 'success' if status == 'done' else ('needs_user' if status == 'awaiting_approval' else ('blocked' if status == 'blocked' else (ctx.get('terminal_outcome') or 'failed')))
     update_run_context(run_id, {'status': status, 'current_step_index': last.get('step_index', 0), 'terminal_outcome': terminal_outcome})
     learning = record_run_learning(run_id, get_run_context(run_id) or {})
     update_run_context(run_id, {'learning': learning})
@@ -134,6 +232,10 @@ def run_command(text: str, event_cb=lambda e: None, choices: dict | None = None,
 
     if last['status'] == 'awaiting_approval':
         return {'ok': False, 'run_id': run_id, 'status': 'awaiting_approval', 'resume_token': run_id, 'steps': result, 'plan': ctx.get('plan'), 'run_state': get_run_context(run_id)}
+
+    if last['status'] == 'blocked':
+        remember_execution(plan['signature'], 'blocked', _memory_detail('guardian_blocked', {'run_id': run_id, 'failure_class': ctx.get('last_failure_class')}), tags=['workflow'])
+        return {'ok': False, 'run_id': run_id, 'status': 'blocked', 'steps': result, 'plan': ctx.get('plan'), 'run_state': get_run_context(run_id)}
 
     if status != 'done':
         remember_execution(plan['signature'], 'failure', _memory_detail('terminal_failure', {'run_id': run_id, 'failure_class': ctx.get('last_failure_class'), 'terminal_outcome': terminal_outcome}), tags=['workflow'])
