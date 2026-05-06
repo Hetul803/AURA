@@ -225,10 +225,10 @@ describe('renderer', () => {
     setupFetch([{ ok: true, run_id: 'r1' }]);
     vi.stubGlobal('EventSource', class { onmessage: any; close() {} } as any);
     render(<App />);
-    fireEvent.click(screen.getByText(/Permissions/));
+    fireEvent.click(screen.getByText(/Start Using AURA/));
     await waitFor(() => expect(screen.getAllByText(/Accessibility/).length).toBeGreaterThan(0));
     expect(screen.getByText(/Never controls apps silently/)).toBeTruthy();
-    fireEvent.click(screen.getByText(/Finish/));
+    fireEvent.click(screen.getByText(/Start Using AURA/));
     await waitFor(() => expect(screen.getAllByText(/Hotkey unavailable/).length).toBeGreaterThan(0));
     expect(screen.getAllByText(/enable Accessibility permission/i).length).toBeGreaterThan(0);
   });

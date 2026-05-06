@@ -69,12 +69,10 @@ First launch should feel like meeting the assistant, not filling out a developer
 
 1. Meet AURA: verify the dark encounter screen, animated avatar, spoken/captioned intro, and the line "I'm your personal AI operating layer."
 2. Rename Me: rename AURA to a test name such as Alice, save it, and verify the caption says "Good choice. I'm Alice now."
-3. What I Can Do: verify AURA explains email replies, GitHub clone, app builds, ChatGPT/Claude handoff, workflow memory, and Guardian.
-4. Approval Promise: verify AURA says it will not send, paste, delete, run dangerous shell, spend money, export memory, import memory, replay risky workflows, or push code without approval.
-5. Guardian: verify Guardian is shown as the safety layer for blocking, redaction, approvals, and panic stop.
-6. Permissions: review Accessibility, Automation, Microphone, Screen Recording, and browser handoff cards. Press Check permissions / refresh context.
-7. Local Brain: verify OS, chip, RAM, Ollama installed/running state, available models, recommendation, and approval-gated model pull.
-8. Finish: enable spoken guidance if desired, test push-to-talk, and verify the app is honest that Hey AURA wake word is not implemented yet.
+3. Privacy + Guardian: verify AURA explains useful memory, local-first defaults, secret rejection, approval before sensitive actions, and Guardian as the safety layer for blocking, redaction, approvals, and panic stop.
+4. Workspace: accept the default workspace or choose another folder. This should be fast and skippable.
+5. Local Brain: verify OS, chip, RAM, Ollama installed/running state, available models, recommendation, and approval-gated model pull. Skipping local model setup must not block first use.
+6. Start Using AURA: verify hotkey status, speech output, push-to-talk status, and that AURA is honest that Hey AURA wake word is not implemented yet.
 
 Success: pressing Enter command layer opens the operating-layer home with the animated assistant, one big command input, "AURA sees", action stream, Guardian, and context-aware actions. Memory/workflow/model status should be secondary, and raw diagnostics should be hidden behind Advanced / Diagnostics.
 The home screen should show `AURA Core online`, Guardian protection, local model status, visible build ID, current context, and a natural action stream.
@@ -167,12 +165,12 @@ Run these from Test First Task or the home command layer:
 
 Use this exact script for a clean first-user pass:
 
-1. Reset local app data if needed: `rm -rf ~/Library/Application\ Support/AURA`
+1. Reset local app data if needed: `scripts/reset-aura-local.sh`
 2. Launch AURA.
 3. Confirm you meet AURA on a cinematic first-launch screen with animated avatar and captions.
 4. Turn on spoken guidance if desired and press Speak this step.
 5. Rename AURA to Alice, then verify the interface changes name and saves it after restart.
-6. Step through Guardian, privacy, permissions, workspace, local model, workers, and voice/hotkey.
+6. Step through Privacy + Guardian, workspace, local model, and Start Using AURA.
 7. Press Enter command layer.
 8. Open a GitHub repo in your browser.
 9. Press `Command/Control+Shift+Space` or Refresh context.
@@ -209,17 +207,23 @@ Development reset:
 scripts/reset-aura-local.sh
 ```
 
-The reset script prints these targets and asks for confirmation before deleting:
+The reset script prints these targets and asks for confirmation before archiving:
 
 - `/Applications/AURA.app`
 - `~/Library/Application Support/aura-desktop`
 - `~/Library/Logs/aura-desktop`
 - `~/.aura`
 
-For non-interactive local test cleanup:
+For non-interactive local test cleanup that still archives first:
 
 ```bash
 scripts/reset-aura-local.sh --yes
+```
+
+Permanent deletion is available only when you intentionally ask for it:
+
+```bash
+scripts/reset-aura-local.sh --yes --delete
 ```
 
 ## Known Limitations

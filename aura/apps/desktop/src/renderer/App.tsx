@@ -23,6 +23,7 @@ declare global {
       getHotkeyStatus?: () => Promise<{ ok: boolean; accelerator: string; error?: string }>;
       getDiagnostics?: () => Promise<any>;
       repairBackend?: () => Promise<{ ok: boolean; message: string }>;
+      reportRendererIssue?: (issue: any) => Promise<any>;
       onHotkey?: (callback: (payload: any) => void) => () => void;
     };
     SpeechRecognition?: any;
@@ -41,12 +42,10 @@ const QUICK_ACTIONS = [
 const ONBOARDING_STEPS = [
   'Meet AURA',
   'Rename Me',
-  'What I Can Do',
-  'Approval Promise',
-  'Guardian',
-  'Permissions',
+  'Privacy + Guardian',
+  'Workspace',
   'Local Brain',
-  'Finish',
+  'Start Using AURA',
 ];
 
 const FIRST_USER_TESTS = [
@@ -460,7 +459,7 @@ export default function App() {
     const step = ONBOARDING_STEPS[onboardingStep] || ONBOARDING_STEPS[0];
     const copy = onboardingCopy(step);
     setCaption(copy.spoken || copy.body);
-    setAssistantMode(step === 'Guardian' || step === 'Approval Promise' ? 'protected' : step === 'Finish' ? 'listening' : 'speaking');
+    setAssistantMode(step === 'Privacy + Guardian' ? 'protected' : step === 'Start Using AURA' ? 'listening' : 'speaking');
   }, [onboardingOpen, onboardingStep, assistantName]);
 
   useEffect(() => {
@@ -677,12 +676,10 @@ export default function App() {
   function onboardingCopy(step: string) {
     if (step === 'Meet AURA') return { title: `Hello. I'm ${assistantName}.`, body: "I'm your personal AI operating layer. Think of me as your hands on this computer: you tell me what you want done, I plan it, use the right tools, and ask before anything sensitive.", does: 'Introduces the assistant before showing controls.', why: 'The product should feel like meeting an operator, not opening a settings screen.', spoken: `Hello. I'm ${assistantName}. Nice to meet you. I'm your personal AI operating layer. Think of me as your hands on this computer. You tell me what you want done, I plan it, use the right tools, and ask before anything sensitive.` };
     if (step === 'Rename Me') return { title: `${assistantName} is yours to name.`, body: 'Keep the default or choose a name like Alice, Jarvis, or anything that feels natural. The name is saved locally and used across the interface.', does: 'Saves a local assistant identity.', why: 'A personal operating layer should feel personal without requiring a cloud account.', spoken: assistantName === 'AURA' ? `I'm yours. You can rename me. Would you like to give me a name?` : `Good choice. I'm ${assistantName} now.` };
-    if (step === 'What I Can Do') return { title: 'Give intent. I figure out tools.', body: "I can write replies, clone repos, build apps, summarize email, use ChatGPT or Claude for you, remember workflows, and protect your computer through Guardian.", does: 'Explains launch flows in human language.', why: 'The user should understand what AURA does within 30 seconds.', spoken: "I can help you write emails without opening a blank reply. If you're looking at a GitHub repo, say clone this repo and I'll handle the terminal steps. If you want an app built, I can prepare a workspace and delegate coding work to Codex. Over time, I'll learn repeated workflows and offer to automate them." };
-    if (step === 'Approval Promise') return { title: 'I ask before trust-boundary actions.', body: 'I will not send emails, paste into apps, delete files, run dangerous commands, spend money, export memory, import memory, replay risky workflows, or push code without approval.', does: 'Sets the approval philosophy before permissions.', why: 'Power without visible consent is not trustworthy.', spoken: 'I will not send emails, paste into apps, delete files, run dangerous commands, spend money, export memory, or push code without approval.' };
-    if (step === 'Guardian') return { title: 'Guardian is my safety layer.', body: 'Guardian blocks destructive actions, redacts secrets, detects passwords and API keys, explains why approval is needed, and supports panic stop.', does: 'Makes protection visible and part of the product identity.', why: 'AURA does the work. Guardian protects the user.', spoken: 'Guardian is my safety layer. I watch for secrets, API keys, passwords, risky paste actions, dangerous shell commands, and data leaks.' };
-    if (step === 'Permissions') return { title: 'Permissions are guided, not assumed.', body: 'Accessibility helps me control apps. Microphone enables voice checks. Screen Recording is only for visual context when needed. Automation is requested by macOS per app.', does: 'Shows each permission, why it is needed, and what AURA will never do silently.', why: 'Without permissions, AURA can still run, but computer control is limited.', spoken: 'I need permission before I can control apps. Without it, I can still guide and draft, but I cannot operate your computer reliably.' };
+    if (step === 'Privacy + Guardian') return { title: 'Private by default. Protected by Guardian.', body: 'I can write replies, clone repos, build apps, summarize email, use optional workers, remember safe preferences, and learn workflows. I will not send, paste, delete, run dangerous shell commands, spend money, export memory, or push code without approval.', does: 'Combines the privacy, memory, capability, and approval promise into one clear trust step.', why: 'AURA should earn trust quickly instead of forcing a setup tour.', spoken: 'Guardian is my safety layer. I can help operate your computer, but I will ask before sensitive actions and I will not save passwords or secrets.' };
+    if (step === 'Workspace') return { title: `Choose where ${assistantName} can work.`, body: 'Use the default local workspace or type a folder you prefer. Clones, coding jobs, and generated files stay contained there.', does: 'Keeps file work inside a user-approved area.', why: 'A real operating layer needs clear boundaries before it touches files.', spoken: 'Choose a workspace or use the default. I will keep computer work contained there.' };
     if (step === 'Local Brain') return { title: 'Local model setup is optional and guided.', body: `${assistantName} detects hardware, Ollama, available models, and recommends a Gemma model only when appropriate. Pulling a model requires approval.`, does: 'Uses local models for private/cheap planning, routing, cleanup, drafts, and summaries.', why: 'Cloud AI should not be required just to start.', spoken: "I'm local-first. For simple and private tasks, I can use a local model on your computer. For heavier work, you can allow Codex, ChatGPT, Claude, or other tools." };
-    return { title: 'Open something and tell me what to do.', body: 'Use the hotkey, mic, or command box. Open a GitHub repo or email, then ask in plain language. If context is missing, I will say exactly what I need.', does: 'Drops you into the operating layer, not a settings dashboard.', why: 'AURA should become the way you ask your computer to act.', spoken: 'Open something and tell me what to do. I will refresh context first, choose the right tool, and ask before sensitive actions.' };
+    return { title: 'Start using AURA.', body: 'Use the command box now. Permissions, voice, hotkey, Ollama, Codex, ChatGPT, and Claude can all be configured later. If context is missing, I will say exactly what I need.', does: 'Drops you into the operating layer quickly.', why: 'AURA should start useful, then guide setup only when needed.', spoken: 'Open something and tell me what to do. I will refresh context first, choose the right tool, and ask before sensitive actions.' };
   }
 
   function renderOnboarding() {
@@ -721,11 +718,13 @@ export default function App() {
             <label>What should I call myself?<input aria-label="assistant name" value={draftAssistantName} onChange={e => setDraftAssistantName(e.target.value)} placeholder="AURA" /></label>
             <button className="primary-button" onClick={saveAssistantName}>Save name</button>
           </div>}
-          {step === 'Approval Promise' && <BoundaryList />}
-          {step === 'Guardian' && <GuardianPromise />}
-          {step === 'Permissions' && <div><PermissionCards contextStatus={contextStatus} hotkeyStatus={hotkeyStatus} refreshContext={refreshContext} /><div className="callout"><strong>Current context check:</strong> {contextStatus}</div></div>}
+          {step === 'Privacy + Guardian' && <div className="persona-stack"><BoundaryList /><GuardianPromise /></div>}
+          {step === 'Workspace' && <div className="rename-panel">
+            <label>Workspace folder<input aria-label="workspace folder" value={onboardingPrefs.workspace} onChange={e => setOnboardingPrefs({ ...onboardingPrefs, workspace: e.target.value })} placeholder="~/AURA/workspaces" /></label>
+            <button className="primary-button" onClick={() => setOnboardingPrefs({ ...onboardingPrefs, workspace: '~/AURA/workspaces' })}>Use default</button>
+          </div>}
           {step === 'Local Brain' && <details open className="persona-details"><summary>Local brain and model choice</summary><ModelStatusPanel localModelStatus={localModelStatus} modelError={modelError} selectedLocalModel={selectedLocalModel} setSelected={(value) => setOnboardingPrefs({ ...onboardingPrefs, selectedLocalModel: value })} approveAndPullLocalModel={approveAndPullLocalModel} selectExisting={(modelId) => useExistingOrSkipLocalModel(modelId)} skip={() => useExistingOrSkipLocalModel('simple')} refresh={refreshKnowledge} modelPullState={modelPullState} /></details>}
-          {step === 'Finish' && <div><VoiceHotkeyPanel voiceStatus={voiceStatus} voiceEnabled={voiceEnabled} setVoiceEnabled={setVoiceEnabled} voiceCommandEnabled={voiceCommandEnabled} setVoiceCommandEnabled={setVoiceCommandEnabled} isListening={isListening} voiceTranscript={voiceTranscript} voiceUnsupportedReason={voiceUnsupportedReason} speak={speak} pushToTalk={pushToTalk} hotkeyStatus={hotkeyStatus} assistantName={assistantName} /><TestAuraCards startAction={startAction} localReady={localReady} coreOnline={coreStatus === 'connected'} context={capturedContext} assistantName={assistantName} /></div>}
+          {step === 'Start Using AURA' && <div className="persona-stack"><PermissionCards contextStatus={contextStatus} hotkeyStatus={hotkeyStatus} refreshContext={refreshContext} /><VoiceHotkeyPanel voiceStatus={voiceStatus} voiceEnabled={voiceEnabled} setVoiceEnabled={setVoiceEnabled} voiceCommandEnabled={voiceCommandEnabled} setVoiceCommandEnabled={setVoiceCommandEnabled} isListening={isListening} voiceTranscript={voiceTranscript} voiceUnsupportedReason={voiceUnsupportedReason} speak={speak} pushToTalk={pushToTalk} hotkeyStatus={hotkeyStatus} assistantName={assistantName} /><TestAuraCards startAction={startAction} localReady={localReady} coreOnline={coreStatus === 'connected'} context={capturedContext} assistantName={assistantName} /></div>}
         </section>
 
         <div className="persona-actions">
@@ -756,7 +755,7 @@ export default function App() {
         <AssistantAvatar name={assistantName} mode={assistantMode} />
         <div className="presence-dialogue">
           <div className="eyebrow">AI operating layer</div>
-          <h1>{assistantMode === 'listening' ? "I'm listening." : assistantMode === 'thinking' ? "I'm thinking." : "I'm ready."}</h1>
+          <h1>{assistantMode === 'listening' ? "I'm listening." : assistantMode === 'thinking' ? "I'm checking context." : coreStatus === 'connected' ? "I'm online." : "I'm here."}</h1>
           <div className={`caption-card home-caption ${assistantMode}`} aria-live="polite">
             <span>{assistantName} says</span>
             <strong>{caption}</strong>
@@ -849,7 +848,7 @@ export default function App() {
       </section>
 
       {advancedOpen && <section className="panel-body advanced-diagnostics">
-        <details className="glass-panel" open><summary>Diagnostics / Freshness</summary><p>Build ID: {buildLabel}</p><p>Backend URL: {BACKEND_URL}</p><p>Installed app path: {diagnostics?.installedAppPath || '-'}</p><p>Profile path: {diagnostics?.profilePath || '~/.aura'}</p><p>App data path: {diagnostics?.userDataPath || '-'}</p><p>Logs: {logsPath || diagnostics?.logsPath || '-'}</p><p>Backend command: {diagnostics?.backend?.command || '-'}</p><p>Reset app state: run `scripts/reset-aura-local.sh` from the repo root. It asks before deleting local state.</p><button onClick={refreshDiagnostics}>Refresh diagnostics</button><button onClick={async () => setLogsPath(window.auraDesktop?.openLogs ? await window.auraDesktop.openLogs() : 'No desktop bridge.')}>Open logs folder</button></details>
+        <details className="glass-panel" open><summary>Diagnostics / Freshness</summary><p>Build ID: {buildLabel}</p><p>Backend URL: {BACKEND_URL}</p><p>Installed app path: {diagnostics?.installedAppPath || '-'}</p><p>Profile path: {diagnostics?.profilePath || '~/.aura'}</p><p>App data path: {diagnostics?.userDataPath || '-'}</p><p>Logs: {logsPath || diagnostics?.logsPath || '-'}</p><p>Backend command: {diagnostics?.backend?.command || '-'}</p><p>Reset app state: run `scripts/reset-aura-local.sh` from the repo root. It asks first and archives local state by default.</p><button onClick={refreshDiagnostics}>Refresh diagnostics</button><button onClick={async () => setLogsPath(window.auraDesktop?.openLogs ? await window.auraDesktop.openLogs() : 'No desktop bridge.')}>Open logs folder</button></details>
         <details className="glass-panel"><summary>Raw run timeline</summary><ActionPanel events={events} /></details>
         <details className="glass-panel"><summary>Raw context JSON</summary><pre>{JSON.stringify(capturedContext, null, 2)}</pre></details>
         <details className="glass-panel"><summary>System, model, and backend internals</summary><p>Backend: {BACKEND_URL} / {coreStatus} / Flow: {launchFlow} / Session: {sessionState}</p><pre>{JSON.stringify({ diagnostics, profileStatus, costSummary, costModels, tools, devices, sessions, storage, workflows, workflowSuggestions, out }, null, 2)}</pre></details>

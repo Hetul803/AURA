@@ -34,6 +34,11 @@ function createWindow() {
       win.loadURL(rendererFallbackUrl(`Renderer load failed: ${errorCode} ${errorDescription}\n${validatedUrl}`));
     }
   });
+  win.webContents.on('render-process-gone', (_event, details) => {
+    if (!devUrl) {
+      win.loadURL(rendererFallbackUrl(`Renderer process failed: ${details.reason}\nExit code: ${details.exitCode}`));
+    }
+  });
   mainWindow = win;
   return win;
 }

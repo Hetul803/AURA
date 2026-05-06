@@ -5,6 +5,7 @@ contextBridge.exposeInMainWorld('auraDesktop', {
   getHotkeyStatus: () => ipcRenderer.invoke('aura:get-hotkey-status'),
   getDiagnostics: () => ipcRenderer.invoke('aura:get-diagnostics'),
   repairBackend: () => ipcRenderer.invoke('aura:repair-backend'),
+  reportRendererIssue: (issue: any) => ipcRenderer.invoke('aura:renderer-issue', issue),
   onHotkey: (callback: (payload: any) => void) => {
     const listener = (_event: IpcRendererEvent, payload: any) => callback(payload);
     ipcRenderer.on('aura:hotkey', listener);

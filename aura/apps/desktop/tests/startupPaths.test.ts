@@ -51,4 +51,12 @@ describe('desktop startup paths', () => {
     expect(html).toContain('Missing &lt;renderer&gt;');
     expect(rendererFallbackUrl('missing')).toMatch(/^data:text\/html/);
   });
+
+  it('keeps packaged renderer assets relative and has a visible boot fallback', () => {
+    const viteConfig = fs.readFileSync(path.join(process.cwd(), 'vite.config.ts'), 'utf8');
+    const indexHtml = fs.readFileSync(path.join(process.cwd(), 'index.html'), 'utf8');
+    expect(viteConfig).toContain("base: './'");
+    expect(indexHtml).toContain('AURA is starting.');
+    expect(indexHtml).toContain('boot-fallback');
+  });
 });

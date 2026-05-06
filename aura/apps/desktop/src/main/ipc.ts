@@ -1,4 +1,5 @@
 import { ipcMain, shell, app } from 'electron';
+import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { backendDiagnostics, ensureBackendStarted, repairBackendDependencies } from './backendManager.js';
@@ -43,5 +44,12 @@ export function registerIpcHandlers() {
     const result = await repairBackendDependencies();
     if (result.ok) await ensureBackendStarted();
     return result;
+  });
+  ipcMain.handle('aura:renderer-issue', async (_event, issue) => {
+    const logsPath = app.getPath('logs');
+    fs.mkdirSync(logsPath, { recursive: true });
+    const line = JSON.stringify({ at: new Date().toISOString(), source: 'renderer', issue }) + '\n';
+    fs.appendFileSync(path.join(logsPath, 'aura-renderer.log'), line);
+    return { ok: true };
   });
 }

@@ -19,6 +19,7 @@ function gitCommit() {
 const buildTimestamp = new Date().toISOString();
 
 export default defineConfig({
+  base: './',
   plugins: [react()],
   server: { port: 5173 },
   define: {

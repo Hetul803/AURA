@@ -65,7 +65,7 @@ Then rerun `./start-aura.sh`.
 - Electron failed to install correctly: run `pnpm approve-builds --all`, then `pnpm rebuild electron esbuild`, then `pnpm aura:verify-electron`.
 - Blank white packaged app: rebuild with `pnpm aura:package`. The app shows visible build metadata in the UI and an explicit startup error page if the renderer is missing instead of staying blank.
 - Stale installed app: quit AURA, run `scripts/reset-aura-local.sh`, rebuild with `pnpm aura:package`, then reinstall from the new DMG.
-- Reset local desktop data: quit AURA, then run `scripts/reset-aura-local.sh`. It prints every target and asks before deleting app/profile/log data.
+- Reset local desktop data: quit AURA, then run `scripts/reset-aura-local.sh`. It prints every target and asks before archiving app/profile/log data. Add `--delete` only when you intentionally want permanent deletion.
 
 ## Tests
 ```bash
@@ -94,12 +94,13 @@ It runs backend tests, backend compile checks, and private-alpha readiness. Desk
 1. Install and start with `./start-aura.sh`.
 2. Or start backend and desktop separately with `pnpm aura:backend` and `pnpm aura:desktop`.
 3. Package a first-user build with `pnpm aura:package`, then open `apps/desktop/release/AURA-1.0.0-mac-arm64.dmg` on Apple Silicon Macs.
-4. Meet AURA in the persona-led onboarding, optionally rename it, then enter the command layer.
-5. On Local Brain, verify hardware detection, model choices, and approval-gated Ollama pull. Skipping should still let AURA start.
-6. On Finish, verify hotkey status, speech output, and push-to-talk. If Web Speech API is unavailable, AURA should say so and keep typed commands working.
-7. Run `Clone this repo locally` while viewing a GitHub repo and verify the launch flow asks for approval before shell/file execution.
-8. Run `Reply to this email` while viewing email and verify AURA pauses before paste/send.
-9. Verify Guardian is visible on the main shell and that Panic Stop is available when a run exists.
-10. Open **Memory, workflows, and model status** for secondary intelligence; open **Advanced / Diagnostics** only for raw logs, build ID, backend paths, and reset instructions.
+4. Meet AURA in the persona-led onboarding, optionally rename it, then enter the command layer quickly.
+5. On Privacy + Guardian, verify AURA explains the approval promise before computer-control actions.
+6. On Local Brain, verify hardware detection, model choices, and approval-gated Ollama pull. Skipping should still let AURA start.
+7. On Start Using AURA, verify hotkey status, speech output, and push-to-talk. If Web Speech API is unavailable, AURA should say so and keep typed commands working.
+8. Run `Clone this repo locally` while viewing a GitHub repo and verify the launch flow asks for approval before shell/file execution.
+9. Run `Reply to this email` while viewing email and verify AURA pauses before paste/send.
+10. Verify Guardian is visible on the main shell and that Panic Stop is available when a run exists.
+11. Open **Memory, workflows, and model status** for secondary intelligence; open **Advanced / Diagnostics** only for raw logs, build ID, backend paths, and reset instructions.
 
 For install-like first-time Mac testing, use `docs/FIRST_USER_MAC_TEST.md`.
