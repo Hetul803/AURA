@@ -72,6 +72,15 @@ function setupFetch(commandResponses: any[], contextOverride?: any, localModelOv
   }) as any);
 }
 
+async function advanceOnboardingTo(text: RegExp | string) {
+  for (let i = 0; i < 10; i += 1) {
+    if (screen.queryAllByText(text).length) return;
+    fireEvent.click(screen.getByText('Continue'));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  }
+  await waitFor(() => expect(screen.queryAllByText(text).length).toBeGreaterThan(0));
+}
+
 describe('renderer', () => {
   afterEach(() => localStorage.clear());
 
@@ -109,7 +118,8 @@ describe('renderer', () => {
     render(<App />);
     await waitFor(() => expect(screen.getByText(/First Launch Encounter/)).toBeTruthy());
     expect(screen.getByText(/Hello. I'm AURA/)).toBeTruthy();
-    fireEvent.click(screen.getByText(/Local Brain/));
+    expect((window.speechSynthesis.speak as any).mock.calls.length).toBeGreaterThan(0);
+    await advanceOnboardingTo(/Local model setup is optional/);
     await waitFor(() => expect(screen.getByText(/Recommended local model/)).toBeTruthy());
     expect(screen.getByText(/Darwin/)).toBeTruthy();
     expect(screen.getByText(/Apple Silicon/)).toBeTruthy();
@@ -118,6 +128,22 @@ describe('renderer', () => {
     expect(screen.getByText(/Choose model size/)).toBeTruthy();
     expect(screen.getAllByText(/Gemma 4 compact/).length).toBeGreaterThan(0);
     expect(screen.getByText(/Skip local model for now/)).toBeTruthy();
+  });
+
+  it('forces onboarding before home and can restart onboarding later', async () => {
+    setupSpeech();
+    setupFetch([{ ok: true, run_id: 'r1' }]);
+    vi.stubGlobal('EventSource', class { onmessage: any; close() {} } as any);
+    const { unmount } = render(<App />);
+    await waitFor(() => expect(screen.getByText(/First Launch Encounter/)).toBeTruthy());
+    expect(screen.queryByText(/Restart onboarding/)).toBeNull();
+    unmount();
+    cleanup();
+    localStorage.setItem('aura:onboarding-complete', '1');
+    render(<App />);
+    await waitFor(() => expect(screen.getByText(/Restart onboarding/)).toBeTruthy());
+    fireEvent.click(screen.getByText(/Restart onboarding/));
+    await waitFor(() => expect(screen.getByText(/First Launch Encounter/)).toBeTruthy());
   });
 
   it('can finish onboarding when hardware or model detection fails', async () => {
@@ -140,7 +166,7 @@ describe('renderer', () => {
     setupFetch([{ ok: true, run_id: 'r1' }]);
     vi.stubGlobal('EventSource', class { onmessage: any; close() {} } as any);
     render(<App />);
-    fireEvent.click(await screen.findByText(/Local Brain/));
+    await advanceOnboardingTo(/Local model setup is optional/);
     await waitFor(() => expect(screen.getAllByText(/Approve download/).length).toBeGreaterThan(0));
     fireEvent.click(screen.getByText(/Use fallback/));
     await waitFor(() => expect((fetch as any).mock.calls.some((call: any[]) => String(call[0]).includes('/models/select?model_id=simple'))).toBe(true));
@@ -164,18 +190,21 @@ describe('renderer', () => {
     fireEvent.click(screen.getByText('Approve & Paste'));
   });
 
-  it('renders Guardian, activity, memory, and launch flow cards', async () => {
+  it('renders presence-first home and Guardian Watchtower without dashboard panels', async () => {
     localStorage.setItem('aura:onboarding-complete', '1');
     setupSpeech();
     setupFetch([{ ok: true, run_id: 'r1' }]);
     vi.stubGlobal('EventSource', class { onmessage: any; close() {} } as any);
     render(<App />);
-    await waitFor(() => expect(screen.getByText(/AURA Guardian/)).toBeTruthy());
-    expect(screen.getAllByText(/Protected/).length).toBeGreaterThan(0);
-    expect(screen.getByText(/AURA captured browser context/)).toBeTruthy();
-    expect(screen.getByText(/Try opening a GitHub repo/)).toBeTruthy();
-    fireEvent.click(screen.getByText(/Memory, workflows, and model status/));
-    await waitFor(() => expect(screen.getByText(/Memory intelligence/)).toBeTruthy());
+    await waitFor(() => expect(screen.getByText(/Guardian Watchtower|Watchtower active/)).toBeTruthy());
+    expect(screen.getByText(/Conversation/)).toBeTruthy();
+    expect(screen.getByText(/Watching shell\/file actions/)).toBeTruthy();
+    expect(screen.getByText(/Website permission monitoring is planned/)).toBeTruthy();
+    expect(screen.queryByText(/Memory intelligence/)).toBeNull();
+    fireEvent.click(screen.getByText(/Advanced \/ Diagnostics/));
+    await waitFor(() => expect(screen.getByText(/Memory/)).toBeTruthy());
+    fireEvent.click(screen.getByText(/^Memory$/));
+    await waitFor(() => expect(screen.getByText(/No memory updates yet/)).toBeTruthy());
     expect(screen.getAllByText(/No memory updates yet/).length).toBeGreaterThan(0);
   });
 
@@ -194,7 +223,7 @@ describe('renderer', () => {
     });
     vi.stubGlobal('EventSource', class { onmessage: any; close() {} } as any);
     render(<App />);
-    await waitFor(() => expect(screen.getByText(/Guardian: blocked remote shell installer/)).toBeTruthy());
+    await waitFor(() => expect(screen.getByText(/blocked remote shell installer/)).toBeTruthy());
     expect(screen.getByText(/pipes a remote script into your shell/)).toBeTruthy();
   });
 
@@ -209,7 +238,7 @@ describe('renderer', () => {
     render(<App />);
     await waitFor(() => expect(screen.getAllByText(/AURA Core disconnected/).length).toBeGreaterThan(0));
     expect(screen.getAllByText(/Repair Backend/).length).toBeGreaterThan(0);
-    expect(screen.getAllByText(/Guardian: cannot reach AURA Core/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/cannot reach AURA Core/).length).toBeGreaterThan(0);
   });
 
   it('renders hotkey active status from desktop bridge', async () => {
@@ -224,7 +253,7 @@ describe('renderer', () => {
     };
     render(<App />);
     await waitFor(() => expect(screen.getByText(/Hotkey active/)).toBeTruthy());
-    expect(screen.getByText(/CommandOrControl\+Shift\+Space opens command mode/)).toBeTruthy();
+    expect(screen.getByText(/Restart onboarding/)).toBeTruthy();
   });
 
   it('persists assistant rename during persona onboarding', async () => {
@@ -233,7 +262,7 @@ describe('renderer', () => {
     vi.stubGlobal('EventSource', class { onmessage: any; close() {} } as any);
     render(<App />);
     await waitFor(() => expect(screen.getByText(/First Launch Encounter/)).toBeTruthy());
-    fireEvent.click(screen.getByText(/Rename Me/));
+    await advanceOnboardingTo(/yours to name/);
     fireEvent.change(screen.getByLabelText('assistant name'), { target: { value: 'Alice' } });
     fireEvent.click(screen.getByText('Save name'));
     await waitFor(() => expect(localStorage.getItem('aura:assistant-name')).toBe('Alice'));
@@ -245,10 +274,9 @@ describe('renderer', () => {
     setupFetch([{ ok: true, run_id: 'r1' }]);
     vi.stubGlobal('EventSource', class { onmessage: any; close() {} } as any);
     render(<App />);
-    fireEvent.click(screen.getByText(/Start Using AURA/));
+    await advanceOnboardingTo(/Let's set up only what I need/);
     await waitFor(() => expect(screen.getAllByText(/Accessibility/).length).toBeGreaterThan(0));
     expect(screen.getByText(/Never controls apps silently/)).toBeTruthy();
-    fireEvent.click(screen.getByText(/Start Using AURA/));
     await waitFor(() => expect(screen.getAllByText(/Hotkey unavailable/).length).toBeGreaterThan(0));
     expect(screen.getAllByText(/enable Accessibility permission/i).length).toBeGreaterThan(0);
   });
@@ -263,8 +291,8 @@ describe('renderer', () => {
     render(<App />);
     await waitFor(() => expect(screen.getByText(/AI operating layer/)).toBeTruthy());
     fireEvent.click(screen.getByText('Mic'));
-    await waitFor(() => expect(screen.getAllByText(/Voice recognition is unavailable/).length).toBeGreaterThan(0));
-    expect(screen.getAllByText(/Wake word is coming soon/).length).toBeGreaterThan(0);
+    await waitFor(() => expect(screen.getAllByText(/Voice input is not available in this build/).length).toBeGreaterThan(0));
+    expect(screen.getAllByText(/You can still type commands/).length).toBeGreaterThan(0);
   });
 
   it('submits a transcribed push-to-talk command', async () => {
@@ -288,7 +316,7 @@ describe('renderer', () => {
     }
     Object.defineProperty(window, 'webkitSpeechRecognition', { value: FakeRecognition, configurable: true });
     render(<App />);
-    await waitFor(() => expect(screen.getByText(/Clone this repo/)).toBeTruthy());
+    await waitFor(() => expect(screen.getByText(/clone this repo/)).toBeTruthy());
     fireEvent.click(screen.getByText('Mic'));
     await waitFor(() => expect((fetch as any).mock.calls.some((call: any[]) => {
       const body = call[1]?.body ? JSON.parse(call[1].body) : {};
@@ -302,10 +330,11 @@ describe('renderer', () => {
     setupFetch([{ ok: true, run_id: 'r1' }]);
     vi.stubGlobal('EventSource', class { onmessage: any; close() {} } as any);
     render(<App />);
-    await waitFor(() => expect(screen.getByText(/What I can do now/)).toBeTruthy());
-    fireEvent.click(screen.getAllByRole('button', { name: /Show setup needed/i })[0]);
+    await waitFor(() => expect(screen.getByText(/AI operating layer/)).toBeTruthy());
+    fireEvent.change(screen.getByLabelText('command input'), { target: { value: 'clone this repo' } });
+    fireEvent.click(screen.getByRole('button', { name: 'run command' }));
     await waitFor(() => expect(screen.getAllByText(/I don't see a GitHub repo yet/).length).toBeGreaterThan(0));
-    expect(screen.getAllByText(/Guardian: needs GitHub context/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/needs GitHub context/).length).toBeGreaterThan(0);
   });
 
   it('shows GitHub context actions when URL is supplied', async () => {
@@ -314,9 +343,8 @@ describe('renderer', () => {
     setupFetch([{ ok: true, run_id: 'r1' }], { active_app: 'Arc', browser_url: 'https://github.com/Hetul803/AURA', window_title: 'Hetul803/AURA: GitHub' });
     vi.stubGlobal('EventSource', class { onmessage: any; close() {} } as any);
     render(<App />);
-    await waitFor(() => expect(screen.getByText(/Clone this repo/)).toBeTruthy());
-    expect(screen.getByText(/Summarize README/)).toBeTruthy();
-    expect(screen.getAllByText(/GitHub context found/).length).toBeGreaterThan(0);
+    await waitFor(() => expect(screen.getAllByText(/GitHub repo/).length).toBeGreaterThan(0));
+    expect(screen.getByText(/github.com\/Hetul803\/AURA/)).toBeTruthy();
   });
 
   it('shows email context actions when mail context is supplied', async () => {
@@ -325,9 +353,8 @@ describe('renderer', () => {
     setupFetch([{ ok: true, run_id: 'r1' }], { active_app: 'Gmail', browser_url: 'https://mail.google.com/mail/u/0/#inbox', window_title: 'Gmail - Inbox', input_text: 'Can you send the proposal?' });
     vi.stubGlobal('EventSource', class { onmessage: any; close() {} } as any);
     render(<App />);
-    await waitFor(() => expect(screen.getByText(/Draft reply/)).toBeTruthy());
-    expect(screen.getByText(/Summarize thread/)).toBeTruthy();
-    expect(screen.getAllByText(/Email context found/).length).toBeGreaterThan(0);
+    await waitFor(() => expect(screen.getAllByText(/Email thread/).length).toBeGreaterThan(0));
+    expect(screen.getByText(/Can you send the proposal/)).toBeTruthy();
   });
 
   it('explains missing email context before reply flow', async () => {
@@ -336,11 +363,11 @@ describe('renderer', () => {
     setupFetch([{ ok: true, run_id: 'r1' }]);
     vi.stubGlobal('EventSource', class { onmessage: any; close() {} } as any);
     render(<App />);
-    await waitFor(() => expect(screen.getByText(/What I can do now/)).toBeTruthy());
+    await waitFor(() => expect(screen.getByText(/AI operating layer/)).toBeTruthy());
     fireEvent.change(screen.getByLabelText('command input'), { target: { value: 'Reply to this email' } });
     fireEvent.click(screen.getByRole('button', { name: 'run command' }));
     await waitFor(() => expect(screen.getAllByText(/I don't see an email thread yet/).length).toBeGreaterThan(0));
-    expect(screen.getAllByText(/Guardian: needs email context/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/needs email context/).length).toBeGreaterThan(0);
   });
 
   it('reacts to blocked Guardian events with blocked presence state', async () => {
@@ -366,7 +393,7 @@ describe('renderer', () => {
     fireEvent.change(screen.getByLabelText('command input'), { target: { value: 'Run shell command: rm -rf ~' } });
     fireEvent.click(screen.getByRole('button', { name: 'run command' }));
     await waitFor(() => expect(screen.getByText(/Guardian blocked that/)).toBeTruthy());
-    expect(screen.getByText(/Guardian: blocked dangerous shell command/)).toBeTruthy();
+    expect(screen.getAllByText(/blocked dangerous shell command/).length).toBeGreaterThan(0);
   });
 
   it('build app voice or card path creates coding job feedback', async () => {
@@ -375,8 +402,9 @@ describe('renderer', () => {
     setupFetch([{ ok: true, run_id: 'r-build', steps: [{ result: { result: { agent_job: { job_dir: '/tmp/aura-job' } } } }] }]);
     vi.stubGlobal('EventSource', class { onmessage: any; close() {} } as any);
     render(<App />);
-    await waitFor(() => expect(screen.getByText(/Build app/)).toBeTruthy());
-    fireEvent.click(screen.getByText(/Build app/).closest('article')!.querySelector('button')!);
+    await waitFor(() => expect(screen.getByText(/AI operating layer/)).toBeTruthy());
+    fireEvent.click(screen.getByText(/build app/));
+    fireEvent.click(screen.getByRole('button', { name: 'run command' }));
     await waitFor(() => expect(screen.getAllByText(/Done. I created a coding job at \/tmp\/aura-job/).length).toBeGreaterThan(0));
   });
 

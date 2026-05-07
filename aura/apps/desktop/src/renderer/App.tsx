@@ -41,10 +41,14 @@ const QUICK_ACTIONS = [
 
 const ONBOARDING_STEPS = [
   'Meet AURA',
-  'Rename Me',
-  'Privacy + Guardian',
+  'Rename AURA',
+  'What I Can Do',
+  'Guardian',
+  'Local-First Privacy',
   'Workspace',
   'Local Brain',
+  'Optional Workers',
+  'Permissions',
   'Start Using AURA',
 ];
 
@@ -62,6 +66,21 @@ const EXAMPLE_ACTIVITY = [
   { kind: 'example', title: 'Guardian blocked risky command', detail: 'Dangerous shell actions stop before execution.' },
   { kind: 'example', title: 'Memory updated: prefers local-first mode', detail: 'Memory writes stay scoped and redacted.' },
   { kind: 'example', title: 'Workflow suggested: clone repo locally', detail: 'Frequent patterns become approval-gated shortcuts.' },
+];
+
+const WATCHTOWER_SIGNALS = [
+  { label: 'Watching apps', status: 'context-aware when permissions allow' },
+  { label: 'Watching browser permissions', status: 'planned, not active yet' },
+  { label: 'Watching shell/file actions', status: 'active' },
+  { label: 'Watching memory/secrets', status: 'active' },
+  { label: 'Watching paste/send', status: 'approval-gated' },
+  { label: 'Watching model cost/privacy', status: 'approval-gated' },
+];
+
+const WATCHTOWER_EXAMPLES = [
+  { kind: 'example notice', title: 'Example: Google is requesting your location.', detail: 'Website permission monitoring is planned. It is not active in this build.' },
+  { kind: 'example notice', title: 'Example: Cursor is accessing private project files.', detail: 'App file-access monitoring is planned. Current protection covers AURA-run shell/file steps.' },
+  { kind: 'example blocked', title: 'Example: This command can delete files. I blocked it.', detail: 'Real shell command blocking is active today.' },
 ];
 
 function asArray(value: any) {
@@ -149,6 +168,7 @@ function requirementForCommand(command: string) {
 }
 
 type AssistantMode = 'idle' | 'speaking' | 'listening' | 'thinking' | 'acting' | 'protected' | 'blocked' | 'error';
+type ConversationMessage = { speaker: 'User' | 'AURA' | 'Guardian'; text: string; tone?: string; example?: boolean };
 
 function guardianTitle(event: any) {
   const title = event?.title || event?.summary || event?.message || event?.kind || event?.type || 'Protection event';
@@ -168,6 +188,12 @@ function eventSeverityMode(event: any): AssistantMode {
   return 'protected';
 }
 
+function githubRepoLabel(context: any) {
+  const url = context?.browser_url || context?.url || '';
+  const match = String(url).match(/github\.com\/([^/?#]+)\/([^/?#]+)/i);
+  return match ? `${match[1]}/${match[2].replace(/\.git$/, '')}` : 'a GitHub repo';
+}
+
 export default function App() {
   const commandRef = useRef<HTMLInputElement>(null);
   const recognitionRef = useRef<any>(null);
@@ -185,7 +211,7 @@ export default function App() {
   const [hotkeyStatus, setHotkeyStatus] = useState({ ok: false, accelerator: 'CommandOrControl+Shift+Space', error: 'enable Accessibility permission for AURA/Electron in System Settings, then relaunch.' });
   const [compactCommand, setCompactCommand] = useState(false);
   const [voiceStatus, setVoiceStatus] = useState('Voice output ready. Wake word is not implemented yet.');
-  const [voiceEnabled, setVoiceEnabled] = useState(() => localStorage.getItem('aura:voice-enabled') === '1');
+  const [voiceEnabled, setVoiceEnabled] = useState(() => localStorage.getItem('aura:voice-muted') !== '1');
   const [voiceCommandEnabled, setVoiceCommandEnabled] = useState(() => localStorage.getItem('aura:voice-command-enabled') === '1');
   const [isListening, setIsListening] = useState(false);
   const [voiceTranscript, setVoiceTranscript] = useState('');
@@ -194,6 +220,10 @@ export default function App() {
   const [draftAssistantName, setDraftAssistantName] = useState(() => localStorage.getItem('aura:assistant-name') || 'AURA');
   const [caption, setCaption] = useState('Hello. I am AURA. Nice to meet you.');
   const [assistantMode, setAssistantMode] = useState<AssistantMode>('idle');
+  const [conversationMessages, setConversationMessages] = useState<ConversationMessage[]>([
+    { speaker: 'AURA', text: "I'm here. Tell me what you want done, and I will check context before acting.", tone: 'ready' },
+    { speaker: 'Guardian', text: 'Guardian is watching shell, file, paste/send, memory, workflow, and model-cost actions.', tone: 'protected' },
+  ]);
   const [contextStatus, setContextStatus] = useState('AURA is checking what it can see.');
   const [clarifications, setClarifications] = useState<any[]>([]);
   const [events, setEvents] = useState<any[]>([]);
@@ -243,9 +273,16 @@ export default function App() {
       ...event,
     };
     setLocalGuardianEvents((prev) => [item, ...prev].slice(0, 12));
-    setAssistantMode(eventSeverityMode(item));
-    setCaption(item.explanation);
+    if (!onboardingOpen) {
+      setAssistantMode(eventSeverityMode(item));
+      setCaption(item.explanation);
+      addConversation('Guardian', `${guardianTitle(item)}. ${item.explanation}`, item.severity || item.risk);
+    }
     return item;
+  }
+
+  function addConversation(speaker: ConversationMessage['speaker'], text: string, tone = 'notice', example = false) {
+    setConversationMessages((prev) => [...prev, { speaker, text, tone, example }].slice(-18));
   }
 
   async function refreshConnection() {
@@ -399,6 +436,10 @@ export default function App() {
   function speak(text: string, mode: AssistantMode = 'speaking') {
     setCaption(text);
     setAssistantMode(mode);
+    if (!voiceEnabled) {
+      setVoiceStatus('Voice output muted. Captions remain on.');
+      return;
+    }
     if (!('speechSynthesis' in window) || typeof SpeechSynthesisUtterance === 'undefined') {
       setVoiceStatus('Speech synthesis is unavailable in this renderer.');
       return;
@@ -423,11 +464,12 @@ export default function App() {
   async function pushToTalk() {
     const Recognition = speechRecognitionCtor();
     if (!Recognition) {
-      const reason = 'Voice recognition is unavailable in this Electron/WebView build. Type the command or try a Chromium build with Web Speech API support.';
+      const reason = "Voice input is not available in this build. You can still type commands. I'll keep speaking responses.";
       setVoiceUnsupportedReason(reason);
       setVoiceStatus(reason);
-      setCaption('Wake word is coming soon. For now, press the mic or hotkey and speak when voice recognition is supported, or type the command.');
+      setCaption(reason);
       setAssistantMode('error');
+      addConversation('AURA', reason, 'error');
       return;
     }
     if (isListening) {
@@ -465,12 +507,15 @@ export default function App() {
         }
       };
       recognition.onerror = (event: any) => {
-        const message = event?.error === 'not-allowed'
+        const message = event?.error === 'network' || event?.error === 'service-not-allowed'
+          ? "Voice input is not available in this build. You can still type commands. I'll keep speaking responses."
+          : event?.error === 'not-allowed'
           ? 'Microphone permission denied. Enable Microphone permission for AURA/Electron in System Settings, then try again.'
           : `Voice recognition failed: ${event?.error || 'unknown error'}. Type the command as fallback.`;
         setVoiceStatus(message);
         setCaption(message);
         setAssistantMode('error');
+        addConversation('AURA', message, 'error');
         setIsListening(false);
       };
       recognition.onend = () => setIsListening(false);
@@ -500,7 +545,7 @@ export default function App() {
     window.auraDesktop?.getHotkeyStatus?.().then(setHotkeyStatus).catch(() => undefined);
     const unsubscribe = window.auraDesktop?.onHotkey?.(() => {
       setCompactCommand(true);
-      setOnboardingOpen(false);
+      if (localStorage.getItem('aura:onboarding-complete') === '1') setOnboardingOpen(false);
       refreshContext();
       speak("I'm listening. Tell me what you want done.", 'listening');
       if (voiceCommandEnabledRef.current) pushToTalk();
@@ -515,6 +560,7 @@ export default function App() {
 
   useEffect(() => {
     localStorage.setItem('aura:voice-enabled', voiceEnabled ? '1' : '0');
+    localStorage.setItem('aura:voice-muted', voiceEnabled ? '0' : '1');
   }, [voiceEnabled]);
 
   useEffect(() => {
@@ -530,8 +576,7 @@ export default function App() {
     if (!onboardingOpen) return;
     const step = ONBOARDING_STEPS[onboardingStep] || ONBOARDING_STEPS[0];
     const copy = onboardingCopy(step);
-    setCaption(copy.spoken || copy.body);
-    setAssistantMode(step === 'Privacy + Guardian' ? 'protected' : step === 'Start Using AURA' ? 'listening' : 'speaking');
+    speak(copy.spoken || copy.body, step === 'Guardian' ? 'protected' : step === 'Start Using AURA' ? 'listening' : 'speaking');
   }, [onboardingOpen, onboardingStep, assistantName]);
 
   useEffect(() => {
@@ -544,6 +589,7 @@ export default function App() {
     setCaption("I'm checking your current context.");
     setAssistantMode('thinking');
     setContextStatus('Checking current app, browser, selection, and workspace...');
+    addConversation('AURA', "I'm checking what you're looking at.", 'thinking');
     let context: any = null;
     try {
       context = await getCurrentContext();
@@ -562,8 +608,16 @@ export default function App() {
         : kind === 'email'
           ? 'I found email context.'
           : 'I refreshed what I can see.');
+      addConversation('AURA', kind === 'github'
+        ? `I found this repo: ${githubRepoLabel(context)}.`
+        : kind === 'email'
+          ? 'I found email context. I will ask before paste or send.'
+          : context?.active_app
+            ? `I can see ${context.active_app}.`
+            : 'I refreshed what I can see.', kind === 'github' || kind === 'email' ? 'protected' : 'notice');
     } else {
       setContextStatus('I could not capture context. Check Accessibility, browser, or backend permissions.');
+      addConversation('AURA', 'I do not have enough context yet. Open the target app or page, then refresh context.', 'notice');
     }
 
     const requirement = requirementForCommand(command);
@@ -577,6 +631,7 @@ export default function App() {
       setNeedsUser(missing);
       setCaption(missing);
       setAssistantMode('protected');
+      addConversation('AURA', missing, 'notice');
       emitLocalGuardianEvent({
         severity: 'notice',
         title: requirement === 'github' ? 'Guardian needs GitHub context.' : 'Guardian needs email context.',
@@ -595,6 +650,7 @@ export default function App() {
     setAssistantMode('acting');
     setCaption(`I heard you. I'm planning this safely. Guardian will pause anything sensitive.`);
     setNeedsUser('');
+    addConversation('AURA', "I heard you. I'm planning this safely.", 'thinking');
     const res = await sendCommand(command, choices, useMacro, context);
     setOut(JSON.stringify(res, null, 2));
     setRunStatus(res.status || (res.ok ? 'running' : 'waiting'));
@@ -620,22 +676,26 @@ export default function App() {
           setNeedsUser(evt.message || 'User action required.');
           setCaption(evt.message || 'I need your help before I continue.');
           setAssistantMode('protected');
+          addConversation('AURA', evt.message || 'I need your help before I continue.', 'needs');
         }
         if (evt.type === 'approval_required') {
           setNeedsUser('Draft ready for approval.');
           setCaption('Approval required before I continue.');
           setAssistantMode('protected');
+          addConversation('Guardian', 'I need your approval before AURA continues.', 'approval_required');
         }
         if (evt.type === 'guardian_event') {
           setLocalGuardianEvents((prev) => [evt, ...prev].slice(0, 12));
           setAssistantMode(eventSeverityMode(evt));
           setCaption(evt.explanation || evt.message || 'Guardian updated protection state.');
+          addConversation('Guardian', `${guardianTitle(evt)}. ${evt.explanation || evt.message || 'Protection state updated.'}`, evt.severity || evt.risk || 'notice');
           setGuardianStatus(await getGuardianStatus(res.run_id));
         }
         if (evt.status === 'running' && evt.type === 'step_status') setAssistantMode('acting');
         if (evt.status === 'success') {
           setCaption(evt.message || 'Done.');
           setAssistantMode('protected');
+          addConversation('AURA', evt.message || 'Done.', 'done');
         }
         if (evt.type === 'resumed') setNeedsUser('');
         await refreshRunState(res.run_id);
@@ -646,20 +706,24 @@ export default function App() {
       setNeedsUser('Please complete the required manual action, then continue.');
       setCaption('I need a manual step before I can continue.');
       setAssistantMode('protected');
+      addConversation('AURA', 'I need a manual step before I can continue.', 'needs');
     }
     if (res.status === 'awaiting_approval') {
       setNeedsUser('Draft ready for approval.');
       setCaption('Approval required before I continue.');
       setAssistantMode('protected');
+      addConversation('Guardian', 'Approval required before I continue.', 'approval_required');
     }
     if (res.status === 'blocked' || res?.run_state?.status === 'blocked') {
       setCaption('Guardian blocked this action before it could run.');
       setAssistantMode('blocked');
+      addConversation('Guardian', 'I blocked this action before it could run.', 'blocked');
     }
     if (res.ok && res.run_id && !res.status) {
       const job = res?.run_state?.last_observation?.agent_job_id || res?.steps?.[0]?.result?.result?.agent_job?.job_dir;
       setCaption(job ? `Done. I created a coding job at ${job}.` : 'Done.');
       setAssistantMode('protected');
+      addConversation('AURA', job ? `Done. I created a coding job at ${job}.` : 'Done.', 'done');
       if (voiceEnabled) speak(job ? `Done. I created a coding job.` : 'Done.', 'protected');
     }
     refreshKnowledge();
@@ -668,6 +732,7 @@ export default function App() {
   async function run(choices: Record<string, string> = {}, useMacro = false) {
     const command = input.trim() || 'Summarize this';
     setInput(command);
+    addConversation('User', command, 'user');
     const context = await captureContextForCommand(command);
     if (context === null && requirementForCommand(command) !== 'none') return;
     await executeCommand(command, choices, useMacro, context);
@@ -729,12 +794,22 @@ export default function App() {
     if (voiceEnabled) speak(`Setup saved. Guardian is active. ${assistantName} is ready when AURA Core is connected.`, 'protected');
   }
 
+  function restartOnboarding() {
+    localStorage.removeItem('aura:onboarding-complete');
+    localStorage.setItem('aura:onboarding-step', '0');
+    setOnboardingStep(0);
+    setOnboardingOpen(true);
+    speak(`Hello. I'm ${assistantName}. Nice to meet you.`, 'speaking');
+  }
+
   async function saveAssistantName() {
     const cleanName = draftAssistantName.trim() || 'AURA';
     setAssistantName(cleanName);
     localStorage.setItem('aura:assistant-name', cleanName);
     setCaption(`Good choice. I'm ${cleanName} now.`);
     setAssistantMode('speaking');
+    addConversation('User', cleanName, 'user');
+    addConversation('AURA', `Good choice. I'm ${cleanName} now.`, 'speaking');
     const metadata = { ...(profileStatus?.metadata || {}), assistant_name: cleanName };
     try {
       const updated = await updateProfileStatus({ metadata });
@@ -777,18 +852,23 @@ export default function App() {
     setInput(card.command);
     setCompactCommand(true);
     setCaption(`I'm preparing ${card.title.toLowerCase()}.`);
+    addConversation('User', card.command, 'user');
     const context = await captureContextForCommand(card.command);
     if (context === null && requirementForCommand(card.command) !== 'none') return;
     await executeCommand(card.command, {}, false, context);
   }
 
   function onboardingCopy(step: string) {
-    if (step === 'Meet AURA') return { title: `Hello. I'm ${assistantName}.`, body: "I'm your personal AI operating layer. Think of me as your hands on this computer: you tell me what you want done, I plan it, use the right tools, and ask before anything sensitive.", does: 'Introduces the assistant before showing controls.', why: 'The product should feel like meeting an operator, not opening a settings screen.', spoken: `Hello. I'm ${assistantName}. Nice to meet you. I'm your personal AI operating layer. Think of me as your hands on this computer. You tell me what you want done, I plan it, use the right tools, and ask before anything sensitive.` };
-    if (step === 'Rename Me') return { title: `${assistantName} is yours to name.`, body: 'Keep the default or choose a name like Alice, Jarvis, or anything that feels natural. The name is saved locally and used across the interface.', does: 'Saves a local assistant identity.', why: 'A personal operating layer should feel personal without requiring a cloud account.', spoken: assistantName === 'AURA' ? `I'm yours. You can rename me. Would you like to give me a name?` : `Good choice. I'm ${assistantName} now.` };
-    if (step === 'Privacy + Guardian') return { title: 'Private by default. Protected by Guardian.', body: 'I can write replies, clone repos, build apps, summarize email, use optional workers, remember safe preferences, and learn workflows. I will not send, paste, delete, run dangerous shell commands, spend money, export memory, or push code without approval.', does: 'Combines the privacy, memory, capability, and approval promise into one clear trust step.', why: 'AURA should earn trust quickly instead of forcing a setup tour.', spoken: 'Guardian is my safety layer. I can help operate your computer, but I will ask before sensitive actions and I will not save passwords or secrets.' };
+    if (step === 'Meet AURA') return { title: `Hello. I'm ${assistantName}.`, body: "I'm your personal AI operating layer. Think of me as your hands on this computer. You tell me what you want done. I plan it, use the right tools, and ask before anything sensitive.", does: 'Starts with AURA as a presence, not a dashboard.', why: 'The user should feel they are meeting an assistant that can operate the computer.', spoken: `Hello. I'm ${assistantName}. Nice to meet you. I'm your personal AI operating layer. Think of me as your hands on this computer. You tell me what you want done. I plan it, use the right tools, and ask before anything sensitive.` };
+    if (step === 'Rename AURA') return { title: `${assistantName} is yours to name.`, body: 'You can keep AURA, or choose a name like Alice or Jarvis. The name is saved locally and used everywhere.', does: 'Saves a local assistant identity.', why: 'A personal operating layer should feel personal without requiring a cloud account.', spoken: assistantName === 'AURA' ? `You can rename me. What would you like to call me?` : `Good choice. I'm ${assistantName} now.` };
+    if (step === 'What I Can Do') return { title: 'Tell me intent. I choose the tools.', body: "I can write emails, clone repos, build apps, summarize documents, use ChatGPT or Claude for you, create workflows, and remember how you work. Some abilities are active now; deeper app and website monitoring will arrive later.", does: "Explains AURA as the user's hands, not a menu of buttons.", why: 'The product should feel open-ended while staying honest about current capabilities.', spoken: "I can write emails, clone repos, build apps, summarize documents, use ChatGPT or Claude for you, create workflows, and remember how you work." };
+    if (step === 'Guardian') return { title: 'Guardian is my watchtower.', body: 'Guardian watches risky commands, file access through AURA tools, paste and send actions, memory storage, workflow replay, model cost, and privacy boundaries. Website permission monitoring and third-party app file-access monitoring are planned, not active yet.', does: 'Turns safety into a visible product layer.', why: 'AURA should feel powerful because Guardian is clearly watching.', spoken: 'My Guardian protects you. I will not send emails, paste into apps, delete files, run risky commands, spend money, export memory, or save secrets without approval.' };
+    if (step === 'Local-First Privacy') return { title: 'Local-first. Permission-first.', body: 'For private and simple tasks I can use a local model when available. For heavier work, you can allow Codex, ChatGPT, Claude, or other tools. You stay in control.', does: 'Keeps cloud AI optional and explicit.', why: 'AURA must be useful without forcing accounts or hidden data movement.', spoken: "I'm local-first. I can use a local model for private and simple tasks, and Codex, ChatGPT, or Claude for heavier work if you allow it." };
     if (step === 'Workspace') return { title: `Choose where ${assistantName} can work.`, body: 'Use the default local workspace or type a folder you prefer. Clones, coding jobs, and generated files stay contained there.', does: 'Keeps file work inside a user-approved area.', why: 'A real operating layer needs clear boundaries before it touches files.', spoken: 'Choose a workspace or use the default. I will keep computer work contained there.' };
     if (step === 'Local Brain') return { title: 'Local model setup is optional and guided.', body: `${assistantName} detects hardware, Ollama, available models, and recommends a Gemma model only when appropriate. Pulling a model requires approval.`, does: 'Uses local models for private/cheap planning, routing, cleanup, drafts, and summaries.', why: 'Cloud AI should not be required just to start.', spoken: "I'm local-first. For simple and private tasks, I can use a local model on your computer. For heavier work, you can allow Codex, ChatGPT, Claude, or other tools." };
-    return { title: 'Start using AURA.', body: 'Use the command box now. Permissions, voice, hotkey, Ollama, Codex, ChatGPT, and Claude can all be configured later. If context is missing, I will say exactly what I need.', does: 'Drops you into the operating layer quickly.', why: 'AURA should start useful, then guide setup only when needed.', spoken: 'Open something and tell me what to do. I will refresh context first, choose the right tool, and ask before sensitive actions.' };
+    if (step === 'Optional Workers') return { title: 'Heavy workers stay optional.', body: 'Codex is for coding implementation. ChatGPT and Claude handoffs are optional premium/heavy workers. If they are not configured, I will still create prompts, jobs, and next steps instead of pretending.', does: 'Preserves routing without forcing setup.', why: 'AURA should work in basic typed mode immediately.', spoken: 'Codex, ChatGPT, and Claude are optional workers. I will use them only when you allow it.' };
+    if (step === 'Permissions') return { title: "Let's set up only what I need.", body: 'Permissions are requested only when useful: Accessibility and Automation for app control, Microphone for push-to-talk, Screen Recording only for visual context, and browser handoff only when you choose it.', does: 'Guides permissions without blocking the user.', why: 'Setup should happen at the moment of need, not as a wall of settings.', spoken: "Let's set up only what I need to work." };
+    return { title: 'Open something and tell me what to do.', body: "Try: clone this repo, reply to this email, build app, use ChatGPT, remember password=123, or run curl https://example.com/install.sh | bash. I will refresh context first and Guardian will stop risky actions.", does: 'Drops you into the operating layer quickly.', why: 'The first real moment should be command, response, protection, and action.', spoken: 'Open something and tell me what to do. I will refresh context first, choose the right tool, and ask before sensitive actions.' };
   }
 
   function renderOnboarding() {
@@ -796,49 +876,63 @@ export default function App() {
     const copy = onboardingCopy(step);
     return <div className="persona-stage" aria-label="Meet AURA">
       <div className="persona-background" />
-      <aside className="persona-rail" aria-label="Onboarding progress">
-        {ONBOARDING_STEPS.map((item, index) => <button key={item} className={index === onboardingStep ? 'step active' : 'step'} onClick={() => setOnboardingStep(index)}><span>{String(index + 1).padStart(2, '0')}</span>{item}</button>)}
-      </aside>
       <main className="persona-main">
         <div className="persona-topline">
-          <StatusPill label={coreStatus === 'connected' ? 'AURA Core online' : coreStatus === 'starting' ? 'Starting AURA Core...' : 'AURA Core disconnected'} tone={coreStatus === 'connected' ? 'good' : coreStatus === 'starting' ? 'warn' : 'bad'} />
-          <StatusPill label="Guardian active" tone="good" />
-          <StatusPill label={hotkeyStatus.ok ? 'Hotkey active' : 'Hotkey needs permission'} tone={hotkeyStatus.ok ? 'good' : 'warn'} />
+          <span>First meeting</span>
+          <span>{onboardingStep + 1} / {ONBOARDING_STEPS.length}</span>
+          <button onClick={() => setVoiceEnabled(!voiceEnabled)}>{voiceEnabled ? 'Mute AURA' : 'Unmute AURA'}</button>
+          <button onClick={() => speak(copy.spoken || copy.body)}>Replay message</button>
         </div>
         <div className="persona-encounter">
           <AssistantAvatar name={assistantName} mode={assistantMode} />
           <section className="persona-dialogue">
             <div className="eyebrow">First Launch Encounter</div>
             <h1>{copy.title}</h1>
-            <p>{copy.body}</p>
             <div className={`caption-card ${assistantMode}`} aria-live="polite">
               <span>{assistantName} says</span>
               <strong>{caption}</strong>
             </div>
-            <div className="persona-grid">
-              <div className="glass-panel"><span>What I will do</span><p>{copy.does}</p></div>
-              <div className="glass-panel"><span>Why it matters</span><p>{copy.why}</p></div>
-            </div>
+            <p className="persona-body">{copy.body}</p>
           </section>
         </div>
 
-        <section className="persona-step-panel">
-          {step === 'Rename Me' && <div className="rename-panel">
-            <label>What should I call myself?<input aria-label="assistant name" value={draftAssistantName} onChange={e => setDraftAssistantName(e.target.value)} placeholder="AURA" /></label>
+        <section className="conversation-choice-panel">
+          {step === 'Rename AURA' && <div className="rename-panel conversational-control">
+            <label>What would you like to call me?<input aria-label="assistant name" value={draftAssistantName} onChange={e => setDraftAssistantName(e.target.value)} placeholder="Alice" /></label>
             <button className="primary-button" onClick={saveAssistantName}>Save name</button>
           </div>}
-          {step === 'Privacy + Guardian' && <div className="persona-stack"><BoundaryList /><GuardianPromise /></div>}
-          {step === 'Workspace' && <div className="rename-panel">
+          {step === 'What I Can Do' && <div className="onboarding-examples">
+            <p>While you watch Netflix, you can tell me: <strong>Summarize my last 10 work emails and tell me if anything needs my attention.</strong></p>
+            <p>If there are appointments, I can prepare calendar entries and ask before saving.</p>
+            <p>If you're looking at GitHub, say: <strong>Clone this repo and prepare a workspace.</strong></p>
+            <p>If you're working in Cursor, say: <strong>Fix this part of the app</strong>, and I can prepare the coding job.</p>
+            <p className="helper-text">Current build: context refresh, clone planning, email draft approval, coding jobs, ChatGPT/Claude handoff prompts, workflow save/replay, Guardian blocking, and safe memory. Future: deeper website/app permission monitoring.</p>
+          </div>}
+          {step === 'Guardian' && <div className="persona-stack watchtower-onboarding"><GuardianWatchtower guardianEvents={guardianEvents} pendingApproval={pendingApproval} panic={() => panicStop(runId)} runId={runId} /></div>}
+          {step === 'Local-First Privacy' && <div className="onboarding-examples">
+            <p>Simple/private tasks can stay local when Ollama is ready.</p>
+            <p>Heavy coding should use Codex when you enable it.</p>
+            <p>ChatGPT and Claude handoff are optional. I will not spend money or paste into another app without approval.</p>
+          </div>}
+          {step === 'Workspace' && <div className="rename-panel conversational-control">
             <label>Workspace folder<input aria-label="workspace folder" value={onboardingPrefs.workspace} onChange={e => setOnboardingPrefs({ ...onboardingPrefs, workspace: e.target.value })} placeholder="~/AURA/workspaces" /></label>
             <button className="primary-button" onClick={() => setOnboardingPrefs({ ...onboardingPrefs, workspace: '~/AURA/workspaces' })}>Use default</button>
           </div>}
-          {step === 'Local Brain' && <details open className="persona-details"><summary>Local brain and model choice</summary><ModelStatusPanel localModelStatus={localModelStatus} modelError={modelError} selectedLocalModel={selectedLocalModel} setSelected={(value) => setOnboardingPrefs({ ...onboardingPrefs, selectedLocalModel: value })} approveAndPullLocalModel={approveAndPullLocalModel} selectExisting={(modelId) => useExistingOrSkipLocalModel(modelId)} skip={() => useExistingOrSkipLocalModel('simple')} refresh={refreshKnowledge} modelPullState={modelPullState} /></details>}
-          {step === 'Start Using AURA' && <div className="persona-stack"><PermissionCards contextStatus={contextStatus} hotkeyStatus={hotkeyStatus} refreshContext={refreshContext} /><VoiceHotkeyPanel voiceStatus={voiceStatus} voiceEnabled={voiceEnabled} setVoiceEnabled={setVoiceEnabled} voiceCommandEnabled={voiceCommandEnabled} setVoiceCommandEnabled={setVoiceCommandEnabled} isListening={isListening} voiceTranscript={voiceTranscript} voiceUnsupportedReason={voiceUnsupportedReason} speak={speak} pushToTalk={pushToTalk} hotkeyStatus={hotkeyStatus} assistantName={assistantName} /><TestAuraCards startAction={startAction} localReady={localReady} coreOnline={coreStatus === 'connected'} context={capturedContext} assistantName={assistantName} /></div>}
+          {step === 'Local Brain' && <div className="persona-details slim"><ModelStatusPanel localModelStatus={localModelStatus} modelError={modelError} selectedLocalModel={selectedLocalModel} setSelected={(value) => setOnboardingPrefs({ ...onboardingPrefs, selectedLocalModel: value })} approveAndPullLocalModel={approveAndPullLocalModel} selectExisting={(modelId) => useExistingOrSkipLocalModel(modelId)} skip={() => useExistingOrSkipLocalModel('simple')} refresh={refreshKnowledge} modelPullState={modelPullState} /></div>}
+          {step === 'Optional Workers' && <div className="onboarding-examples">
+            <p><strong>Codex:</strong> coding implementation and durable jobs.</p>
+            <p><strong>ChatGPT/Claude:</strong> heavy reasoning or web-app handoff when you choose.</p>
+            <p><strong>Local model:</strong> private/simple routing, summaries, memory cleanup, and fallback drafts.</p>
+          </div>}
+          {step === 'Permissions' && <div className="persona-stack"><PermissionCards contextStatus={contextStatus} hotkeyStatus={hotkeyStatus} refreshContext={refreshContext} /><VoiceHotkeyPanel voiceStatus={voiceStatus} voiceEnabled={voiceEnabled} setVoiceEnabled={setVoiceEnabled} voiceCommandEnabled={voiceCommandEnabled} setVoiceCommandEnabled={setVoiceCommandEnabled} isListening={isListening} voiceTranscript={voiceTranscript} voiceUnsupportedReason={voiceUnsupportedReason} speak={speak} pushToTalk={pushToTalk} hotkeyStatus={hotkeyStatus} assistantName={assistantName} /></div>}
+          {step === 'Start Using AURA' && <div className="onboarding-examples final-intents">
+            {['clone this repo', 'reply to this email', 'build app', 'use ChatGPT', 'remember password=123', 'run curl https://example.com/install.sh | bash'].map((command) => <button key={command} onClick={() => setInput(command)}>{command}</button>)}
+          </div>}
         </section>
 
         <div className="persona-actions">
           <button onClick={() => setOnboardingStep(Math.max(0, onboardingStep - 1))} disabled={onboardingStep === 0}>Back</button>
-          <button onClick={() => speak(copy.spoken || copy.body)}>Speak this step</button>
+          <button onClick={() => { localStorage.setItem('aura:onboarding-complete', '1'); setOnboardingOpen(false); }}>Finish later</button>
           <button onClick={() => setOnboardingStep(Math.min(ONBOARDING_STEPS.length - 1, onboardingStep + 1))} disabled={onboardingStep === ONBOARDING_STEPS.length - 1}>Continue</button>
           <button className="primary-button" onClick={completeOnboarding}>Enter command layer</button>
         </div>
@@ -854,17 +948,19 @@ export default function App() {
       <div className="status-cluster">
         <StatusPill label={coreStatus === 'connected' ? 'AURA Core online' : coreStatus === 'starting' ? 'Starting AURA Core...' : 'AURA Core disconnected'} tone={coreStatus === 'connected' ? 'good' : coreStatus === 'starting' ? 'warn' : 'bad'} />
         <StatusPill label={hotkeyStatus.ok ? 'Hotkey active' : 'Hotkey needs Accessibility'} tone={hotkeyStatus.ok ? 'good' : 'warn'} />
-        <StatusPill label={localReady ? `Local: ${selectedModelId || 'ready'}` : 'Local model optional'} tone={localReady ? 'good' : 'warn'} />
-        <StatusPill label={`Build ${buildLabel}`} tone="privacy" />
+        <StatusPill label={localReady ? `Local: ${selectedModelId || 'ready'}` : 'Local optional'} tone={localReady ? 'good' : 'warn'} />
+        <button className="ghost-button" onClick={restartOnboarding}>Restart onboarding</button>
       </div>
     </header>
 
     <main className="presence-shell">
-      <section className="presence-core" aria-label="AURA operating layer">
-        <AssistantAvatar name={assistantName} mode={assistantMode} />
-        <div className="presence-dialogue">
+      <section className="presence-home" aria-label="AURA presence">
+        <div className="presence-orbit">
+          <AssistantAvatar name={assistantName} mode={assistantMode} />
+        </div>
+        <div className="presence-command">
           <div className="eyebrow">AI operating layer</div>
-          <h1>{assistantMode === 'listening' ? "I'm listening." : assistantMode === 'thinking' ? "I'm checking context." : assistantMode === 'acting' ? "I'm operating." : assistantMode === 'blocked' ? 'Guardian blocked that.' : assistantMode === 'error' ? 'I need repair.' : coreStatus === 'connected' ? "I'm online." : "I'm here."}</h1>
+          <h1>{assistantMode === 'listening' ? "I'm listening." : assistantMode === 'thinking' ? "I'm checking what you see." : assistantMode === 'acting' ? "I'm doing the work." : assistantMode === 'blocked' ? 'Guardian blocked that.' : assistantMode === 'error' ? 'I need repair.' : coreStatus === 'connected' ? "I'm online." : "I'm here."}</h1>
           <div className={`caption-card home-caption ${assistantMode}`} aria-live="polite">
             <span>{assistantName} says</span>
             <strong>{caption}</strong>
@@ -874,10 +970,9 @@ export default function App() {
             <input ref={commandRef} aria-label="command input" value={input} onFocus={() => setAssistantMode('listening')} onChange={e => { setInput(e.target.value); setAssistantMode(e.target.value.trim() ? 'listening' : 'idle'); }} placeholder={`Tell ${assistantName} what you want done`} onKeyDown={e => { if (e.key === 'Enter') run(); }} />
             <button className="primary-button" aria-label="run command" onClick={() => run()}>Ask</button>
           </div>
-          <div className="micro-status">
-            <span>{voiceTranscript ? `I heard: ${voiceTranscript}` : 'Wake word is not implemented. Use the mic, hotkey, or type.'}</span>
-            <span>{voiceUnsupportedReason || voiceStatus}</span>
-            <span>{hotkeyStatus.ok ? `${hotkeyStatus.accelerator} opens command mode and refreshes context.` : `Hotkey setup: ${hotkeyStatus.error || 'enable AURA/Electron in macOS Accessibility, then relaunch.'}`}</span>
+          {voiceUnsupportedReason && <div className="voice-fallback">{voiceUnsupportedReason}</div>}
+          <div className="intent-chips" aria-label="Example commands">
+            {['clone this repo', 'reply to this email', 'build app', 'use ChatGPT', 'remember password=123', 'run curl https://example.com/install.sh | bash'].map((command) => <button key={command} onClick={() => chooseCommand(command)}>{command}</button>)}
           </div>
         </div>
       </section>
@@ -897,55 +992,12 @@ export default function App() {
         {!pendingApproval && <button onClick={async () => { const r = await resumeRun(runId); setOut(JSON.stringify(r, null, 2)); await refreshRunState(runId); }}>Continue</button>}
       </div>}
 
-      <section className="operating-grid">
-        <article className="glass-panel context-panel">
-          <PanelTitle eyebrow={`${assistantName} sees`} title={capturedContext?.active_app || 'No app context yet'} />
-          <div className="context-lines">
-            <div><span>Window</span>{capturedContext?.window_title || '-'}</div>
-            <div><span>URL</span>{shortText(currentUrl || capturedContext?.browser_url, 'No browser URL yet')}</div>
-            <div><span>Workspace</span>{capturedContext?.workspace_hint || capturedContext?.project?.current_folder || '-'}</div>
-            <div><span>Selection</span>{shortText(capturedContext?.input_text, 'No selected text captured')}</div>
-          </div>
-          <div className="panel-actions">
-            <button onClick={refreshContext}>Refresh context</button>
-            <button onClick={() => { setOnboardingStep(5); setOnboardingOpen(true); }}>Permission help</button>
-          </div>
-          <p className="helper-text">{contextStatus}</p>
-        </article>
-
-        <article className="glass-panel stream-panel">
-          <PanelTitle eyebrow="Action stream" title={events.length || needsUser || pendingApproval ? `${assistantName} is operating` : 'Ready for intent'} />
-          <Feed items={streamItems} />
-        </article>
-
-        <article className="glass-panel guardian-card">
-          <PanelTitle eyebrow="AURA Guardian" title={pendingApproval ? 'Approval required' : 'Protected'} />
-          <div className="guardian-core">{pendingApproval ? 'Approval required' : 'Protected'}</div>
-          <p>Guardian blocks destructive actions, watches for secrets, redacts sensitive data, and pauses paste/send, shell/file, memory export, and paid actions.</p>
-          <div className="guardian-grid">
-            <span>Watching for secrets</span>
-            <span>Shell/file risk policy active</span>
-            <span>Paste/send approval active</span>
-            <span>Local-first mode active</span>
-          </div>
-          <button className="danger-button" onClick={() => panicStop(runId)} disabled={!runId}>Panic Stop</button>
-        </article>
-
-        <article className="glass-panel action-panel">
-          <PanelTitle eyebrow="What I can do now" title={contextKind(capturedContext) === 'none' ? 'Open context or ask directly' : 'Context-aware actions'} />
-          <ContextActionCards cards={contextActions} startAction={startAction} coreOnline={coreStatus === 'connected'} contextKindValue={contextKind(capturedContext)} assistantName={assistantName} />
-        </article>
-      </section>
-
-      <section className="secondary-intelligence">
-        <details className="glass-panel">
-          <summary>Memory, workflows, and model status</summary>
-          <div className="two-column">
-            <div><PanelTitle eyebrow="Memory intelligence" title={memoryFeed.length ? 'Useful learning' : 'No memory updates yet'} /><Feed items={memoryFeed.length ? memoryFeed : [{ kind: 'empty', title: 'No memory updates yet', detail: 'AURA will show useful learning here after real tasks.' }]} /><button onClick={async () => { const r = await compactMemory('personal'); setOut(JSON.stringify(r, null, 2)); await refreshKnowledge(); }}>Compact personal memory</button></div>
-            <div><PanelTitle eyebrow="Work handled" title={`${conservativeMinutesSaved} min estimated`} /><div className="metric-grid"><Metric label="Runs" value={events.length || 0} /><Metric label="Approvals" value={approvalsHandled} /><Metric label="Workflows" value={workflowsReplayed} /><Metric label="Blocked" value={blockedCount} /></div><p className="helper-text">Conservative estimate from completed run events, replayed workflows, and useful memory signals.</p></div>
-          </div>
-          <ModelStatusPanel localModelStatus={localModelStatus} modelError={modelError} selectedLocalModel={selectedLocalModel} setSelected={(value) => setOnboardingPrefs({ ...onboardingPrefs, selectedLocalModel: value })} approveAndPullLocalModel={approveAndPullLocalModel} selectExisting={(modelId) => useExistingOrSkipLocalModel(modelId)} skip={() => useExistingOrSkipLocalModel('simple')} refresh={refreshKnowledge} modelPullState={modelPullState} />
-        </details>
+      <section className="presence-layout">
+        <ConversationStream messages={conversationMessages} fallbackItems={streamItems} assistantName={assistantName} />
+        <aside className="watchtower-column">
+          <ContextSummary assistantName={assistantName} context={capturedContext} currentUrl={currentUrl} contextStatus={contextStatus} refreshContext={refreshContext} openPermissions={() => { setOnboardingStep(ONBOARDING_STEPS.indexOf('Permissions')); setOnboardingOpen(true); }} />
+          <GuardianWatchtower guardianEvents={guardianEvents} pendingApproval={pendingApproval} panic={() => panicStop(runId)} runId={runId} />
+        </aside>
       </section>
 
       {(pendingApproval || draftText || runId) && <section className="approval-workspace">
@@ -957,6 +1009,9 @@ export default function App() {
       </section>
 
       {advancedOpen && <section className="panel-body advanced-diagnostics">
+        <details className="glass-panel"><summary>Settings</summary><VoiceHotkeyPanel voiceStatus={voiceStatus} voiceEnabled={voiceEnabled} setVoiceEnabled={setVoiceEnabled} voiceCommandEnabled={voiceCommandEnabled} setVoiceCommandEnabled={setVoiceCommandEnabled} isListening={isListening} voiceTranscript={voiceTranscript} voiceUnsupportedReason={voiceUnsupportedReason} speak={speak} pushToTalk={pushToTalk} hotkeyStatus={hotkeyStatus} assistantName={assistantName} /><ModelStatusPanel localModelStatus={localModelStatus} modelError={modelError} selectedLocalModel={selectedLocalModel} setSelected={(value) => setOnboardingPrefs({ ...onboardingPrefs, selectedLocalModel: value })} approveAndPullLocalModel={approveAndPullLocalModel} selectExisting={(modelId) => useExistingOrSkipLocalModel(modelId)} skip={() => useExistingOrSkipLocalModel('simple')} refresh={refreshKnowledge} modelPullState={modelPullState} /></details>
+        <details className="glass-panel"><summary>Memory</summary><Feed items={memoryFeed.length ? memoryFeed : [{ kind: 'empty', title: 'No memory updates yet', detail: 'AURA will show useful learning here after real tasks.' }]} /><button onClick={async () => { const r = await compactMemory('personal'); setOut(JSON.stringify(r, null, 2)); await refreshKnowledge(); }}>Compact personal memory</button></details>
+        <details className="glass-panel"><summary>Workflows</summary><Feed items={workflowSuggestions.length ? workflowSuggestions.map((item: any) => ({ title: item.suggested_workflow_name || 'Workflow suggestion', detail: item.command_template || item.task_type || 'Workflow signal' })) : [{ title: 'No workflow suggestions yet', detail: 'AURA will suggest repeatable workflows after useful runs.' }]} /><div className="metric-grid"><Metric label="Runs" value={events.length || 0} /><Metric label="Approvals" value={approvalsHandled} /><Metric label="Workflows" value={workflowsReplayed} /><Metric label="Blocked" value={blockedCount} /></div></details>
         <details className="glass-panel" open><summary>Diagnostics / Freshness</summary><p>Build ID: {buildLabel}</p><p>Backend URL: {BACKEND_URL}</p><p>Installed app path: {diagnostics?.installedAppPath || '-'}</p><p>Profile path: {diagnostics?.profilePath || '~/.aura'}</p><p>App data path: {diagnostics?.userDataPath || '-'}</p><p>Logs: {logsPath || diagnostics?.logsPath || '-'}</p><p>Backend command: {diagnostics?.backend?.command || '-'}</p><p>Reset app state: run `scripts/reset-aura-local.sh` from the repo root. It asks first and archives local state by default.</p><button onClick={refreshDiagnostics}>Refresh diagnostics</button><button onClick={async () => setLogsPath(window.auraDesktop?.openLogs ? await window.auraDesktop.openLogs() : 'No desktop bridge.')}>Open logs folder</button></details>
         <details className="glass-panel"><summary>Raw run timeline</summary><ActionPanel events={events} /></details>
         <details className="glass-panel"><summary>Raw context JSON</summary><pre>{JSON.stringify(capturedContext, null, 2)}</pre></details>
@@ -1035,6 +1090,76 @@ function Metric(props: { label: string; value: any }) {
 
 function Feed(props: { items: Array<{ kind?: string; title: string; detail?: string }> }) {
   return <div className="feed-list">{props.items.map((item, index) => <div className={`feed-item ${item.kind || ''}`} key={`${item.title}-${index}`}><div className="feed-dot" /><div><strong>{item.title}</strong><p>{item.detail}</p></div></div>)}</div>;
+}
+
+function ConversationStream(props: { messages: ConversationMessage[]; fallbackItems: Array<{ kind?: string; title: string; detail?: string }>; assistantName: string }) {
+  const messages = props.messages.length
+    ? props.messages
+    : props.fallbackItems.slice(0, 5).map((item) => ({ speaker: item.kind?.includes('guardian') ? 'Guardian' : 'AURA', text: `${item.title}. ${item.detail || ''}`, tone: item.kind || 'notice' } as ConversationMessage));
+  return <section className="conversation-stream" aria-label="AURA conversation">
+    <div className="stream-heading">
+      <span>Conversation</span>
+      <strong>{props.assistantName} remembers this session</strong>
+    </div>
+    <div className="dialogue-list">
+      {messages.map((message, index) => <article className={`dialogue-turn ${message.speaker.toLowerCase()} ${message.tone || ''}`} key={`${message.speaker}-${index}-${message.text.slice(0, 18)}`}>
+        <span>{message.speaker}</span>
+        <p>{message.text}</p>
+        {message.example && <em>Example</em>}
+      </article>)}
+    </div>
+  </section>;
+}
+
+function ContextSummary(props: { assistantName: string; context: any; currentUrl: string; contextStatus: string; refreshContext: () => void; openPermissions: () => void }) {
+  const kind = contextKind(props.context);
+  const title = kind === 'github'
+    ? 'GitHub repo'
+    : kind === 'email'
+      ? 'Email thread'
+      : kind === 'code'
+        ? 'Project context'
+        : props.context?.active_app || 'Not enough context yet';
+  return <section className="context-summary" aria-label={`${props.assistantName} sees`}>
+    <div className="stream-heading">
+      <span>{props.assistantName} sees</span>
+      <strong>{title}</strong>
+    </div>
+    <p>{kind === 'none' ? "I don't have enough context yet." : props.context?.window_title || props.contextStatus}</p>
+    <dl>
+      <div><dt>App</dt><dd>{props.context?.active_app || '-'}</dd></div>
+      <div><dt>URL</dt><dd>{shortText(props.currentUrl || props.context?.browser_url, '-')}</dd></div>
+      <div><dt>Selection</dt><dd>{shortText(props.context?.input_text, '-')}</dd></div>
+    </dl>
+    <div className="panel-actions">
+      <button onClick={props.refreshContext}>Refresh context</button>
+      <button onClick={props.openPermissions}>Permission help</button>
+    </div>
+  </section>;
+}
+
+function GuardianWatchtower(props: { guardianEvents: any[]; pendingApproval: boolean; panic: () => void; runId: string }) {
+  const realEvents = props.guardianEvents.slice(0, 5).map((event: any) => ({
+    kind: `guardian ${event.severity || event.risk || 'notice'}`,
+    title: guardianTitle(event),
+    detail: guardianDetail(event),
+  }));
+  const feed = realEvents.length ? realEvents : WATCHTOWER_EXAMPLES;
+  return <section className="guardian-watchtower" aria-label="Guardian Watchtower">
+    <div className="watchtower-header">
+      <span>AURA Guardian</span>
+      <strong>{props.pendingApproval ? 'Approval required' : 'Watchtower active'}</strong>
+    </div>
+    <div className="watch-grid">
+      {WATCHTOWER_SIGNALS.map((signal) => <div className={signal.status.includes('planned') ? 'watch-signal planned' : 'watch-signal'} key={signal.label}>
+        <span>{signal.label}</span>
+        <strong>{signal.status}</strong>
+      </div>)}
+    </div>
+    <p className="watchtower-roadmap">Website permission monitoring is planned. Current Guardian protection covers shell, file, memory, paste, workflow, and model-cost actions.</p>
+    <Feed items={feed} />
+    <button className="danger-button" onClick={props.panic} disabled={!props.runId}>Panic Stop</button>
+  </section>;
 }
 
 function ContextActionCards(props: { cards: Array<any>; startAction: (card: any) => void; coreOnline: boolean; contextKindValue: string; assistantName: string }) {

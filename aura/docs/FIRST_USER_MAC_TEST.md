@@ -65,17 +65,21 @@ Open System Settings -> Privacy & Security and enable permissions when macOS pro
 
 ## Persona Onboarding
 
-First launch should feel like meeting the assistant, not filling out a developer form. Complete these steps:
+First launch should feel like meeting the assistant, not filling out a developer form. If onboarding is incomplete, AURA must not open to the home surface first.
 
-1. Meet AURA: verify the dark encounter screen, animated avatar, spoken/captioned intro, and the line "I'm your personal AI operating layer."
-2. Rename Me: rename AURA to a test name such as Alice, save it, and verify the caption says "Good choice. I'm Alice now."
-3. Privacy + Guardian: verify AURA explains useful memory, local-first defaults, secret rejection, approval before sensitive actions, and Guardian as the safety layer for blocking, redaction, approvals, and panic stop.
-4. Workspace: accept the default workspace or choose another folder. This should be fast and skippable.
-5. Local Brain: verify OS, chip, RAM, Ollama installed/running state, available models, recommendation, and approval-gated model pull. Skipping local model setup must not block first use.
-6. Start Using AURA: verify hotkey status, speech output, push-to-talk status, and that AURA is honest that Hey AURA wake word is not implemented yet.
+1. Meet AURA: verify the centered encounter screen, living avatar, automatic spoken/captioned intro, and the line "I'm your personal AI operating layer."
+2. Rename AURA: rename it to a test name such as Alice, save it, and verify the caption says "Good choice. I'm Alice now."
+3. What I Can Do: verify AURA explains natural intent examples and clearly separates current abilities from future monitoring.
+4. Guardian: verify the Guardian Watchtower explains active protection and marks website/app permission monitoring as planned, not active.
+5. Local-First Privacy: verify local model, Codex, ChatGPT, and Claude routing is explained without forcing setup.
+6. Workspace: accept the default workspace or choose another folder. This should be fast and skippable.
+7. Local Brain: verify OS, chip, RAM, Ollama installed/running state, available models, recommendation, and approval-gated model pull. Skipping local model setup must not block first use.
+8. Optional Workers: verify Codex, ChatGPT, and Claude are optional.
+9. Permissions: verify Accessibility, Automation, Microphone, Screen Recording, and browser handoff are explained only as needed.
+10. Start Using AURA: enter the command layer.
 
-Success: pressing Enter command layer opens the operating-layer home with the animated assistant, one big command input, "AURA sees", action stream, Guardian, and context-aware actions. Memory/workflow/model status should be secondary, and raw diagnostics should be hidden behind Advanced / Diagnostics.
-The home screen should show `AURA Core online`, Guardian protection, local model status, visible build ID, current context, and a natural action stream.
+Success: pressing Enter command layer opens the presence-first home with the living assistant, one command input, captions, conversation stream, "AURA sees", and Guardian Watchtower. Memory, workflows, model setup, raw timeline, context JSON, and diagnostics should be hidden behind Advanced / Diagnostics.
+The home screen should show `AURA Core online`, Guardian Watchtower, local model status, a visible Restart onboarding button, current context, and a natural conversation/action stream.
 
 Failure: a blank white window. Rebuild the app with:
 
@@ -177,16 +181,20 @@ Drag AURA into Applications, then right-click Open because the private-alpha app
 - visible build ID with the latest commit;
 - animated living AURA presence;
 - one command input;
-- Guardian feed visible in the main action stream;
+- Guardian Watchtower visible with real events and clearly-labeled examples;
 - Advanced / Diagnostics hidden unless opened.
 
 4. Complete onboarding quickly:
 
 - Meet AURA;
 - Rename if desired;
-- Privacy + Guardian;
+- What I Can Do;
+- Guardian Watchtower;
+- Local-First Privacy;
 - Workspace;
 - Local Brain, skip if Ollama is not ready;
+- Optional Workers;
+- Permissions;
 - Start Using AURA.
 
 5. Type `Clone this repo locally` with no GitHub page visible.
@@ -239,7 +247,7 @@ Expected: the current run is cancelled, the presence changes state, and later st
 - If the app shows `Hotkey unavailable`, enable Accessibility permission for AURA/Electron in System Settings, then relaunch.
 - Voice output uses browser/Electron speech synthesis when available and captions always show the spoken text.
 - Push-to-talk uses the browser Web Speech API when Electron exposes it. Press Mic or the voice test button, say `Hey AURA clone this repo`, and AURA should strip the wake phrase, show the transcript, caption "I heard...", then submit `Clone this repo locally`.
-- If Web Speech API is unavailable in this Electron/WebView build, AURA should say `Voice recognition is unavailable...` and keep typed commands working.
+- If Web Speech API is unavailable in this Electron/WebView build, AURA should say `Voice input is not available in this build. You can still type commands. I'll keep speaking responses.` and keep typed commands working.
 - The `Hey AURA` always-listening wake word is not implemented yet and should not be treated as working.
 - Always-on mode is not implemented yet. For now, launch AURA at startup manually and use the hotkey or voice button.
 
@@ -250,13 +258,13 @@ Use this exact script for a clean first-user pass:
 1. Reset local app data if needed: `scripts/reset-aura-local.sh`
 2. Launch AURA.
 3. Confirm you meet AURA on a cinematic first-launch screen with animated avatar and captions.
-4. Turn on spoken guidance if desired and press Speak this step.
+4. Confirm AURA speaks automatically unless muted. Use Mute AURA / Replay message to test controls.
 5. Rename AURA to Alice, then verify the interface changes name and saves it after restart.
-6. Step through Privacy + Guardian, workspace, local model, and Start Using AURA.
+6. Step through What I Can Do, Guardian, Local-First Privacy, workspace, local model, Optional Workers, Permissions, and Start Using AURA.
 7. Press Enter command layer.
 8. Open a GitHub repo in your browser.
 9. Press `Command/Control+Shift+Space` or Refresh context.
-10. Confirm "What I can do right now" shows Clone this repo, Summarize README, and Open in local workspace.
+10. Confirm the home surface is not a dashboard: living AURA presence, one command input, conversation stream, context summary, Guardian Watchtower, and pending approval only.
 11. Press Mic and say `Hey AURA clone this repo`. If speech recognition is available, verify the transcript appears and AURA starts the clone flow. If not, type `Clone this repo locally`.
 12. Verify approval is required before shell/file execution.
 13. Open Gmail or email, refresh context, and verify Draft reply appears.
