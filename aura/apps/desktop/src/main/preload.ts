@@ -6,6 +6,11 @@ contextBridge.exposeInMainWorld('auraDesktop', {
   getDiagnostics: () => ipcRenderer.invoke('aura:get-diagnostics'),
   repairBackend: () => ipcRenderer.invoke('aura:repair-backend'),
   reportRendererIssue: (issue: any) => ipcRenderer.invoke('aura:renderer-issue', issue),
+  speakText: (text: string) => ipcRenderer.invoke('aura:speak-text', text),
+  showOverlay: () => ipcRenderer.invoke('aura:overlay-show'),
+  hideOverlay: () => ipcRenderer.invoke('aura:overlay-hide'),
+  toggleOverlay: () => ipcRenderer.invoke('aura:overlay-toggle'),
+  openFullApp: () => ipcRenderer.invoke('aura:open-full-app'),
   onHotkey: (callback: (payload: any) => void) => {
     const listener = (_event: IpcRendererEvent, payload: any) => callback(payload);
     ipcRenderer.on('aura:hotkey', listener);

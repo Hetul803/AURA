@@ -4,6 +4,7 @@ import platform
 import os
 import shutil
 import subprocess
+import time
 from typing import Any
 
 from llm.ollama_client import ollama_available, ollama_tags
@@ -217,12 +218,57 @@ def select_model(model_id: str) -> dict[str, Any]:
         conn.execute("INSERT INTO profile_meta(key,value) VALUES('selected_model',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value", (model_id,))
     return {'ok': True, 'model_id': model_id}
 
+def start_ollama_server(wait_seconds: float = 2.0) -> dict[str, Any]:
+    if shutil.which('ollama') is None:
+        return {
+            'ok': False,
+            'status': 'missing_ollama',
+            'install_url': 'https://ollama.com/download',
+            'install_command': 'brew install --cask ollama',
+            'message': 'Ollama is not installed, so AURA cannot start the local model runtime.',
+        }
+    if ollama_available():
+        return {'ok': True, 'status': 'already_running', 'command': 'ollama serve'}
+    try:
+        subprocess.Popen(['ollama', 'serve'], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
+    except Exception as exc:
+        return {'ok': False, 'status': 'start_failed', 'command': 'ollama serve', 'message': str(exc)}
+    deadline = time.time() + wait_seconds
+    while time.time() < deadline:
+        if ollama_available():
+            return {'ok': True, 'status': 'started', 'command': 'ollama serve'}
+        time.sleep(0.2)
+    return {
+        'ok': False,
+        'status': 'starting_or_blocked',
+        'command': 'ollama serve',
+        'message': 'AURA tried to start Ollama, but it was not reachable yet. Start the Ollama app or run `ollama serve`, then retry.',
+    }
+
 
 def pull_model(model: str, *, approved: bool = False, select_after_pull: bool = True, timeout: int = 1800) -> dict[str, Any]:
     if not approved:
         return {'ok': False, 'requires_approval': True, 'status': 'approval_required', 'model': model, 'reason': 'model_pull_download_requires_user_approval'}
     if shutil.which('ollama') is None:
-        return {'ok': False, 'status': 'missing_ollama', 'model': model, 'install_url': 'https://ollama.com/download'}
+        return {
+            'ok': False,
+            'status': 'missing_ollama',
+            'model': model,
+            'install_url': 'https://ollama.com/download',
+            'install_command': 'brew install --cask ollama',
+            'repair': 'Install Ollama, open it once, then retry the download in AURA.',
+        }
+    if not ollama_available():
+        started = start_ollama_server(wait_seconds=3.5)
+        if not started.get('ok'):
+            return {
+                'ok': False,
+                'status': 'ollama_not_running',
+                'model': model,
+                'command': 'ollama serve',
+                'start_result': started,
+                'repair': 'Start the Ollama app or run `ollama serve`, then retry the download in AURA.',
+            }
     proc = subprocess.run(['ollama', 'pull', model], capture_output=True, text=True, timeout=timeout)
     ok = proc.returncode == 0
     if ok and select_after_pull:

@@ -2,6 +2,7 @@ import { ipcMain, shell, app } from 'electron';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { spawn } from 'node:child_process';
 import { backendDiagnostics, ensureBackendStarted, repairBackendDependencies } from './backendManager.js';
 
 type HotkeyStatus = {
@@ -16,11 +17,32 @@ let hotkeyStatus: HotkeyStatus = {
   error: 'Hotkey has not registered yet.',
 };
 
+type WindowControls = {
+  showOverlay?: () => Promise<any> | any;
+  hideOverlay?: () => Promise<any> | any;
+  toggleOverlay?: () => Promise<any> | any;
+  openFullApp?: () => Promise<any> | any;
+};
+
+let windowControls: WindowControls = {};
+
 export function setHotkeyStatus(status: HotkeyStatus) {
   hotkeyStatus = status;
 }
 
-export function registerIpcHandlers() {
+function speakWithSystemVoice(text: string) {
+  const clean = String(text || '').replace(/\s+/g, ' ').trim().slice(0, 600);
+  if (!clean) return { ok: false, status: 'empty_text', message: 'Nothing to speak.' };
+  if (process.platform !== 'darwin') {
+    return { ok: false, status: 'unsupported_platform', message: 'System voice fallback is only implemented for macOS right now.' };
+  }
+  const child = spawn('say', [clean], { detached: true, stdio: 'ignore' });
+  child.unref();
+  return { ok: true, status: 'speaking', provider: 'macos_say' };
+}
+
+export function registerIpcHandlers(controls: WindowControls = {}) {
+  windowControls = controls;
   ipcMain.handle('aura:open-logs', async () => {
     const logsPath = app.getPath('logs');
     await shell.openPath(logsPath);
@@ -52,4 +74,9 @@ export function registerIpcHandlers() {
     fs.appendFileSync(path.join(logsPath, 'aura-renderer.log'), line);
     return { ok: true };
   });
+  ipcMain.handle('aura:speak-text', async (_event, text: string) => speakWithSystemVoice(text));
+  ipcMain.handle('aura:overlay-show', async () => windowControls.showOverlay?.() ?? { ok: false, message: 'Overlay controls are not ready.' });
+  ipcMain.handle('aura:overlay-hide', async () => windowControls.hideOverlay?.() ?? { ok: false, message: 'Overlay controls are not ready.' });
+  ipcMain.handle('aura:overlay-toggle', async () => windowControls.toggleOverlay?.() ?? { ok: false, message: 'Overlay controls are not ready.' });
+  ipcMain.handle('aura:open-full-app', async () => windowControls.openFullApp?.() ?? { ok: false, message: 'Main window controls are not ready.' });
 }

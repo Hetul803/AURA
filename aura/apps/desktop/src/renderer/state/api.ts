@@ -42,6 +42,15 @@ export async function getMemoryItems() {
   return r.json();
 }
 
+export async function searchMemoryItems(query: string, taskType?: string, limit = 4) {
+  const r = await fetch(`${BACKEND_URL}/memory/search`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ query, task_type: taskType, permission: 'private', limit })
+  });
+  return r.json();
+}
+
 export async function getWorkflows() {
   const r = await fetch(`${BACKEND_URL}/workflows`);
   return r.json();
@@ -96,6 +105,11 @@ export async function pullLocalModel(model: string, approved: boolean) {
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ model, approved, select_after_pull: true })
   });
+  return r.json();
+}
+
+export async function startLocalModelRuntime() {
+  const r = await fetch(`${BACKEND_URL}/local-model/start`, { method: 'POST' });
   return r.json();
 }
 

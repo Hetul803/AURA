@@ -68,4 +68,16 @@ describe('desktop startup paths', () => {
     expect(preloadBridge).toContain("require('electron')");
     expect(packageJson).toContain('scripts/copy-preload.mjs');
   });
+
+  it('creates a floating overlay window with persisted position and desktop bridge controls', () => {
+    const mainSource = fs.readFileSync(path.join(process.cwd(), 'src/main/index.ts'), 'utf8');
+    const preloadBridge = fs.readFileSync(path.join(process.cwd(), 'src/main/preload.cjs'), 'utf8');
+    expect(mainSource).toContain('createOverlayWindow');
+    expect(mainSource).toContain('alwaysOnTop: true');
+    expect(mainSource).toContain('overlay-state.json');
+    expect(mainSource).toContain('showInactive');
+    expect(preloadBridge).toContain('showOverlay');
+    expect(preloadBridge).toContain('openFullApp');
+    expect(preloadBridge).toContain('speakText');
+  });
 });

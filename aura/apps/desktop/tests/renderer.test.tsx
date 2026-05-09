@@ -30,6 +30,7 @@ function setupFetch(commandResponses: any[], contextOverride?: any, localModelOv
     if (url.includes('/assist/context')) return { ok: true, json: async () => context } as any;
     if (url.includes('/tools')) return { ok: true, json: async () => [{ action_type: 'OS_PASTE', tool: 'os', risk_level: 'high', requires_approval: true }] } as any;
     if (url.includes('/devices')) return { ok: true, json: async () => [{ adapter_id: 'desktop-local', name: 'Local Desktop', surface: 'desktop', status: 'available' }] } as any;
+    if (url.includes('/memory/search')) return { ok: true, json: async () => [{ memory_id: 'm1', memory_key: 'workspace.preference', value: 'prefers ~/AURA/workspaces', score: 0.8 }] } as any;
     if (url.includes('/memory/items')) return { ok: true, json: async () => [] } as any;
     if (url.includes('/workflows/suggestions')) return { ok: true, json: async () => [{ suggested_workflow_name: 'Clone repo locally', command_template: 'Clone this repo locally', task_type: 'github' }] } as any;
     if (url.includes('/workflows')) return { ok: true, json: async () => [] } as any;
@@ -60,6 +61,7 @@ function setupFetch(commandResponses: any[], contextOverride?: any, localModelOv
       summary: 'Ollama is not installed.',
     }) } as any;
     if (url.includes('/models/select')) return { ok: true, json: async () => ({ ok: true, model_id: 'simple' }) } as any;
+    if (url.includes('/local-model/start')) return { ok: true, json: async () => ({ ok: true, status: 'started', command: 'ollama serve' }) } as any;
     if (url.includes('/local-model/pull')) return { ok: true, json: async () => ({ ok: false, requires_approval: true }) } as any;
     if (url.includes('/profile/status') && options?.method === 'PATCH') return { ok: true, json: async () => ({ metadata: {}, usage_limits: {} }) } as any;
     if (url.match(/\/runs\/[^/]+$/)) return { ok: true, json: async () => ({ approval_state: { status: 'pending', draft_text: 'Draft response' }, captured_context: context, pasteback_state: { target_validation_result: 'exact_match', paste_blocked_reason: null } }) } as any;
@@ -256,6 +258,41 @@ describe('renderer', () => {
     expect(screen.getByText(/Restart onboarding/)).toBeTruthy();
   });
 
+  it('uses desktop voice fallback for audible speech test', async () => {
+    localStorage.setItem('aura:onboarding-complete', '1');
+    setupSpeech();
+    setupFetch([{ ok: true, run_id: 'r1' }]);
+    vi.stubGlobal('EventSource', class { onmessage: any; close() {} } as any);
+    const speakText = vi.fn(async () => ({ ok: true, status: 'speaking', provider: 'macos_say' }));
+    (window as any).auraDesktop = {
+      speakText,
+      getHotkeyStatus: async () => ({ ok: true, accelerator: 'Alt+Space' }),
+      onHotkey: () => () => undefined,
+    };
+    render(<App />);
+    await waitFor(() => expect(screen.getByText(/Test AURA voice/)).toBeTruthy());
+    fireEvent.click(screen.getByText(/Test AURA voice/));
+    await waitFor(() => expect(speakText).toHaveBeenCalled());
+    await waitFor(() => expect(screen.getByText(/macos_say/)).toBeTruthy());
+  });
+
+  it('renders overlay control and asks Electron to show it', async () => {
+    localStorage.setItem('aura:onboarding-complete', '1');
+    setupSpeech();
+    setupFetch([{ ok: true, run_id: 'r1' }]);
+    vi.stubGlobal('EventSource', class { onmessage: any; close() {} } as any);
+    const showOverlay = vi.fn(async () => ({ ok: true, visible: true }));
+    (window as any).auraDesktop = {
+      showOverlay,
+      getHotkeyStatus: async () => ({ ok: true, accelerator: 'Alt+Space' }),
+      onHotkey: () => () => undefined,
+    };
+    render(<App />);
+    await waitFor(() => expect(screen.getByText(/Show overlay/)).toBeTruthy());
+    fireEvent.click(screen.getByText(/Show overlay/));
+    await waitFor(() => expect(showOverlay).toHaveBeenCalled());
+  });
+
   it('persists assistant rename during persona onboarding', async () => {
     setupSpeech();
     setupFetch([{ ok: true, run_id: 'r1' }]);
@@ -335,6 +372,19 @@ describe('renderer', () => {
     fireEvent.click(screen.getByRole('button', { name: 'run command' }));
     await waitFor(() => expect(screen.getAllByText(/I don't see a GitHub repo yet/).length).toBeGreaterThan(0));
     expect(screen.getAllByText(/needs GitHub context/).length).toBeGreaterThan(0);
+  });
+
+  it('retrieves useful memory before command execution', async () => {
+    localStorage.setItem('aura:onboarding-complete', '1');
+    setupSpeech();
+    setupFetch([{ ok: true, run_id: 'r-memory' }]);
+    vi.stubGlobal('EventSource', class { onmessage: any; close() {} } as any);
+    render(<App />);
+    await waitFor(() => expect(screen.getByText(/AI operating layer/)).toBeTruthy());
+    fireEvent.change(screen.getByLabelText('command input'), { target: { value: 'build app' } });
+    fireEvent.click(screen.getByRole('button', { name: 'run command' }));
+    await waitFor(() => expect((fetch as any).mock.calls.some((call: any[]) => String(call[0]).includes('/memory/search'))).toBe(true));
+    await waitFor(() => expect(screen.getByText(/I remembered workspace preference/)).toBeTruthy());
   });
 
   it('shows GitHub context actions when URL is supplied', async () => {

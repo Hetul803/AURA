@@ -48,6 +48,8 @@ Then rerun `./start-aura.sh`.
 ## Desktop experience loop
 - AURA opens as an AI operating layer, not a dashboard: avatar, one command input, spoken/captioned status, action stream, context, and Guardian.
 - Type or speak one intent. AURA refreshes context first, then submits the command to the backend.
+- A floating always-on-top overlay orb appears when the main app is minimized or when you click **Show overlay**. Click it to expand quick command mode, refresh context, use the mic fallback, or reopen the full app.
+- Voice output uses the macOS `say` command through the Electron bridge when available, then falls back to browser speech synthesis. Use **Test AURA voice** before manual testing.
 - Guardian pauses approval-gated actions such as paste/send, risky shell/file operations, paid models, workflow replay, and memory export/import.
 - Advanced / Diagnostics contains raw run IDs, backend internals, build ID, paths, logs, and reset instructions.
 - If the packaged backend cannot start because dependencies such as `uvicorn` are missing, AURA shows a **Repair Backend** action that creates a local backend venv and installs bundled requirements with user approval.
@@ -59,7 +61,7 @@ Then rerun `./start-aura.sh`.
 
 ## Troubleshooting
 - Ollama missing: AURA still starts and falls back to deterministic `SimpleLLM`. Onboarding shows install/running status, available models, Gemma recommendation, and a skip option.
-- Ollama installed but stopped: start the Ollama app or run `ollama serve`, then use Retry detection in onboarding.
+- Ollama installed but stopped: click **Start Ollama** or approve a model pull so AURA can try `ollama serve`; if that fails, start the Ollama app or run `ollama serve`, then use Retry detection.
 - Playwright browser install: run `python -m playwright install chromium` for real-site browsing.
 - Permissions/hotkeys: desktop may require OS Accessibility permissions.
 - Electron failed to install correctly: run `pnpm approve-builds --all`, then `pnpm rebuild electron esbuild`, then `pnpm aura:verify-electron`.
@@ -97,10 +99,11 @@ It runs backend tests, backend compile checks, and private-alpha readiness. Desk
 4. Meet AURA in the persona-led onboarding, optionally rename it, then enter the command layer quickly.
 5. On Privacy + Guardian, verify AURA explains the approval promise before computer-control actions.
 6. On Local Brain, verify hardware detection, model choices, and approval-gated Ollama pull. Skipping should still let AURA start.
-7. On Start Using AURA, verify hotkey status, speech output, and push-to-talk. If Web Speech API is unavailable, AURA should say so and keep typed commands working.
-8. Run `Clone this repo locally` while viewing a GitHub repo and verify the launch flow asks for approval before shell/file execution.
-9. Run `Reply to this email` while viewing email and verify AURA pauses before paste/send.
-10. Verify Guardian is visible on the main shell and that Panic Stop is available when a run exists.
-11. Open **Memory, workflows, and model status** for secondary intelligence; open **Advanced / Diagnostics** only for raw logs, build ID, backend paths, and reset instructions.
+7. On Start Using AURA, verify hotkey status, **Test AURA voice**, and push-to-talk. If Web Speech API is unavailable, AURA should say so and keep typed commands working.
+8. Click **Show overlay**, minimize the app, move the orb, expand it, and send a typed command from the overlay.
+9. Run `Clone this repo locally` while viewing a GitHub repo and verify the launch flow asks for approval before shell/file execution.
+10. Run `Reply to this email` while viewing email and verify AURA pauses before paste/send.
+11. Verify Guardian is visible on the main shell and that Panic Stop is available when a run exists.
+12. Open **Memory, workflows, and model status** for secondary intelligence; open **Advanced / Diagnostics** only for raw logs, build ID, backend paths, and reset instructions.
 
 For install-like first-time Mac testing, use `docs/FIRST_USER_MAC_TEST.md`.

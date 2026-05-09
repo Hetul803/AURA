@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { approveRun, captureAssistContext, compactMemory, getCostModels, getCostSummary, getCurrentContext, getDevices, getGuardianStatus, getLocalModelStatus, getMemoryItems, getProfileStatus, getRunState, getTools, getWorkflowSuggestions, getWorkflows, panicStop, pullLocalModel, rejectRun, resumeRun, retryRun, selectModel, sendCommand, subscribeRun, updateProfileStatus } from './state/api';
+import { approveRun, captureAssistContext, compactMemory, getCostModels, getCostSummary, getCurrentContext, getDevices, getGuardianStatus, getLocalModelStatus, getMemoryItems, getProfileStatus, getRunState, getTools, getWorkflowSuggestions, getWorkflows, panicStop, pullLocalModel, rejectRun, resumeRun, retryRun, searchMemoryItems, selectModel, sendCommand, startLocalModelRuntime as startLocalModelRuntimeApi, subscribeRun, updateProfileStatus } from './state/api';
 import ActionPanel from './ui/ActionPanel';
 import { pushEvent, store } from './state/store';
 import { BACKEND_URL } from '../shared/constants';
@@ -24,12 +24,19 @@ declare global {
       getDiagnostics?: () => Promise<any>;
       repairBackend?: () => Promise<{ ok: boolean; message: string }>;
       reportRendererIssue?: (issue: any) => Promise<any>;
+      speakText?: (text: string) => Promise<{ ok: boolean; status: string; message?: string; provider?: string }>;
+      showOverlay?: () => Promise<any>;
+      hideOverlay?: () => Promise<any>;
+      toggleOverlay?: () => Promise<any>;
+      openFullApp?: () => Promise<any>;
       onHotkey?: (callback: (payload: any) => void) => () => void;
     };
     SpeechRecognition?: any;
     webkitSpeechRecognition?: any;
   }
 }
+
+const IS_OVERLAY = typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('overlay') === '1';
 
 const QUICK_ACTIONS = [
   'Clone this repo locally',
@@ -211,6 +218,7 @@ export default function App() {
   const [hotkeyStatus, setHotkeyStatus] = useState({ ok: false, accelerator: 'CommandOrControl+Shift+Space', error: 'enable Accessibility permission for AURA/Electron in System Settings, then relaunch.' });
   const [compactCommand, setCompactCommand] = useState(false);
   const [voiceStatus, setVoiceStatus] = useState('Voice output ready. Wake word is not implemented yet.');
+  const [speechOutputState, setSpeechOutputState] = useState('Voice not tested yet.');
   const [voiceEnabled, setVoiceEnabled] = useState(() => localStorage.getItem('aura:voice-muted') !== '1');
   const [voiceCommandEnabled, setVoiceCommandEnabled] = useState(() => localStorage.getItem('aura:voice-command-enabled') === '1');
   const [isListening, setIsListening] = useState(false);
@@ -260,6 +268,7 @@ export default function App() {
   const [localModelStatus, setLocalModelStatus] = useState<any>(null);
   const [diagnostics, setDiagnostics] = useState<any>(null);
   const [repairState, setRepairState] = useState('');
+  const [overlayExpanded, setOverlayExpanded] = useState(false);
 
   function emitLocalGuardianEvent(event: { severity: string; title: string; explanation: string; action_required: string; type?: string; risk?: string; context?: any }) {
     const key = `${event.type || 'notice'}:${event.title}`;
@@ -433,20 +442,51 @@ export default function App() {
     }
   }
 
-  function speak(text: string, mode: AssistantMode = 'speaking') {
+  async function speak(text: string, mode: AssistantMode = 'speaking') {
     setCaption(text);
     setAssistantMode(mode);
     if (!voiceEnabled) {
       setVoiceStatus('Voice output muted. Captions remain on.');
+      setSpeechOutputState('muted');
       return;
     }
-    if (!('speechSynthesis' in window) || typeof SpeechSynthesisUtterance === 'undefined') {
-      setVoiceStatus('Speech synthesis is unavailable in this renderer.');
-      return;
+    if (window.auraDesktop?.speakText) {
+      try {
+        const result = await window.auraDesktop.speakText(text);
+        if (result?.ok) {
+          setVoiceStatus(`${assistantName} is speaking through macOS voice.`);
+          setSpeechOutputState(result.provider || 'macos_say');
+          return;
+        }
+        setSpeechOutputState(result?.message || result?.status || 'system_voice_failed');
+      } catch (error: any) {
+        setSpeechOutputState(`macOS voice failed: ${error?.message || 'unknown error'}`);
+      }
     }
-    window.speechSynthesis.cancel();
-    window.speechSynthesis.speak(new SpeechSynthesisUtterance(text));
-    setVoiceStatus(`${assistantName} is speaking.`);
+    try {
+      if (!('speechSynthesis' in window) || typeof SpeechSynthesisUtterance === 'undefined') {
+        setVoiceStatus('Speech synthesis is unavailable in this renderer. Captions remain on.');
+        setSpeechOutputState('speech_unavailable');
+        return;
+      }
+      window.speechSynthesis.cancel();
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.onend = () => setSpeechOutputState('browser_speech_completed');
+      utterance.onerror = () => {
+        setVoiceStatus('Browser speech failed. Captions remain on.');
+        setSpeechOutputState('browser_speech_failed');
+      };
+      window.speechSynthesis.speak(utterance);
+      setVoiceStatus(`${assistantName} is speaking.`);
+      setSpeechOutputState('browser_speech');
+    } catch (error: any) {
+      setVoiceStatus(`Voice output failed: ${error?.message || 'unknown error'}. Captions remain on.`);
+      setSpeechOutputState('failed');
+    }
+  }
+
+  async function testVoice() {
+    await speak(`I'm ${assistantName}. I help you use your computer safely. Guardian is active.`, 'speaking');
   }
 
   function speechRecognitionCtor() {
@@ -645,12 +685,48 @@ export default function App() {
     return context;
   }
 
+  function taskTypeForCommand(command: string) {
+    const low = command.toLowerCase();
+    if (low.includes('clone') && low.includes('repo')) return 'github:clone';
+    if (low.includes('reply') || low.includes('email')) return 'assist:writing';
+    if (low.includes('build') || low.includes('codex') || low.includes('app')) return 'agent:coding';
+    if (low.includes('chatgpt') || low.includes('claude')) return 'user_ai:web';
+    return undefined;
+  }
+
+  function usefulMemoryLabel(item: any) {
+    const key = String(item?.memory_key || item?.key || item?.kind || '').replace(/[_:.]+/g, ' ');
+    const value = shortText(item?.value || item?.summary || item?.user_notes, '');
+    if (!key && !value) return '';
+    if (/failure|traceback|debug|internal|workflow success|terminal/i.test(key)) return '';
+    if (/password|api[_ -]?key|token|secret/i.test(`${key} ${value}`)) return '';
+    return value ? `${key}: ${value}` : key;
+  }
+
+  async function loadRelevantMemory(command: string) {
+    try {
+      const remembered = asArray(await searchMemoryItems(command, taskTypeForCommand(command), 3))
+        .filter((item: any) => Number(item.score || 0) > 0)
+        .map(usefulMemoryLabel)
+        .filter(Boolean);
+      if (remembered.length) {
+        const text = `I remembered ${remembered[0]}.`;
+        addConversation('AURA', text, 'memory');
+        setCaption(text);
+      }
+      return remembered;
+    } catch {
+      return [];
+    }
+  }
+
   async function executeCommand(command: string, choices: Record<string, string> = {}, useMacro = false, context?: any) {
     setRunStatus('thinking');
     setAssistantMode('acting');
     setCaption(`I heard you. I'm planning this safely. Guardian will pause anything sensitive.`);
     setNeedsUser('');
     addConversation('AURA', "I heard you. I'm planning this safely.", 'thinking');
+    await loadRelevantMemory(command);
     const res = await sendCommand(command, choices, useMacro, context);
     setOut(JSON.stringify(res, null, 2));
     setRunStatus(res.status || (res.ok ? 'running' : 'waiting'));
@@ -764,8 +840,9 @@ export default function App() {
       detail: event.guardian_reason || event.risk_reason || event.status || runId,
     }))
     : EXAMPLE_ACTIVITY;
+  const usefulMemoryItems = memoryItems.filter((item: any) => usefulMemoryLabel(item));
   const memoryFeed = [
-    ...memoryItems.slice(0, 3).map((item: any) => ({ title: `Remembered: ${item.memory_key || item.kind || 'memory'}`, detail: shortText(item.value || item.summary || item.scope, 'Scoped memory item') })),
+    ...usefulMemoryItems.slice(0, 3).map((item: any) => ({ title: `I remembered: ${String(item.memory_key || item.kind || 'memory').replace(/[_:.]+/g, ' ')}`, detail: shortText(item.value || item.summary || item.scope, 'Scoped memory item') })),
     ...prefs.slice(0, 2).map((item: any) => ({ title: `Learning: ${item.decision_key}`, detail: shortText(item.value, 'Preference signal') })),
   ];
   const blockedCount = safety.filter((item: any) => item.ok === false || item.decision === 'blocked' || item.status === 'blocked').length + guardianEvents.filter((item: any) => item.status === 'blocked' || item.decision === 'blocked').length;
@@ -826,11 +903,45 @@ export default function App() {
       await useExistingOrSkipLocalModel('simple');
       return;
     }
-    setModelPullState(`Approval accepted. Pulling ${modelToPull} with Ollama. This may take a while...`);
-    const result = await pullLocalModel(modelToPull, true);
-    const detail = result.detail || result;
-    setModelPullState(detail.ok ? `Pulled and selected ${modelToPull}. Local model is ready for private/simple tasks.` : JSON.stringify(detail, null, 2));
-    if (detail.ok) speak(`Local model ${modelToPull} is ready. I will use it for private and simple tasks.`, 'protected');
+    setModelPullState(`Approval accepted. Checking Ollama before pulling ${modelToPull}...`);
+    const status = localModelStatus || await getLocalModelStatus();
+    if (!status?.ollama?.installed) {
+      const message = `Ollama is not installed. Install it from ${status?.ollama?.install_url || 'https://ollama.com/download'} or run: ${status?.ollama?.install_command || 'brew install --cask ollama'}. AURA will keep using SimpleLLM fallback.`;
+      setModelPullState(message);
+      emitLocalGuardianEvent({
+        severity: 'notice',
+        title: 'Local model runtime is missing.',
+        explanation: message,
+        action_required: 'Install Ollama, open it once, then retry local model setup.',
+        type: 'local_model_unavailable',
+      });
+      return;
+    }
+    if (!status?.ollama?.running) {
+      setModelPullState('Ollama is installed but stopped. AURA is trying to start `ollama serve`...');
+      const started = await startLocalModelRuntimeApi();
+      if (!started?.ok) {
+        const message = started?.message || 'AURA could not start Ollama automatically. Start the Ollama app or run `ollama serve`, then retry.';
+        setModelPullState(`${message}\nCommand: ${started?.command || 'ollama serve'}`);
+        return;
+      }
+    }
+    setModelPullState(`Pulling ${modelToPull} with Ollama. This may take a while. AURA will select it after the download finishes...`);
+    try {
+      const result = await pullLocalModel(modelToPull, true);
+      const detail = result.detail || result;
+      setModelPullState(detail.ok ? `Pulled and selected ${modelToPull}. Local model is ready for private/simple tasks.` : `${detail.repair || 'Model pull failed.'}\n${JSON.stringify(detail, null, 2)}`);
+      if (detail.ok) speak(`Local model ${modelToPull} is ready. I will use it for private and simple tasks.`, 'protected');
+    } catch (error: any) {
+      setModelPullState(`Model pull failed: ${error?.message || 'unknown error'}. Try running: ollama pull ${modelToPull}`);
+    }
+    await refreshKnowledge();
+  }
+
+  async function startLocalModelRuntimeFromUi() {
+    setModelPullState('Trying to start Ollama with `ollama serve`...');
+    const result = await startLocalModelRuntimeApi();
+    setModelPullState(result.ok ? 'Ollama is starting or already running. Refreshing local model status...' : `${result.message || 'Could not start Ollama.'}\nCommand: ${result.command || result.install_command || 'ollama serve'}`);
     await refreshKnowledge();
   }
 
@@ -918,13 +1029,13 @@ export default function App() {
             <label>Workspace folder<input aria-label="workspace folder" value={onboardingPrefs.workspace} onChange={e => setOnboardingPrefs({ ...onboardingPrefs, workspace: e.target.value })} placeholder="~/AURA/workspaces" /></label>
             <button className="primary-button" onClick={() => setOnboardingPrefs({ ...onboardingPrefs, workspace: '~/AURA/workspaces' })}>Use default</button>
           </div>}
-          {step === 'Local Brain' && <div className="persona-details slim"><ModelStatusPanel localModelStatus={localModelStatus} modelError={modelError} selectedLocalModel={selectedLocalModel} setSelected={(value) => setOnboardingPrefs({ ...onboardingPrefs, selectedLocalModel: value })} approveAndPullLocalModel={approveAndPullLocalModel} selectExisting={(modelId) => useExistingOrSkipLocalModel(modelId)} skip={() => useExistingOrSkipLocalModel('simple')} refresh={refreshKnowledge} modelPullState={modelPullState} /></div>}
+          {step === 'Local Brain' && <div className="persona-details slim"><ModelStatusPanel localModelStatus={localModelStatus} modelError={modelError} selectedLocalModel={selectedLocalModel} setSelected={(value) => setOnboardingPrefs({ ...onboardingPrefs, selectedLocalModel: value })} approveAndPullLocalModel={approveAndPullLocalModel} startLocalModelRuntime={startLocalModelRuntimeFromUi} selectExisting={(modelId) => useExistingOrSkipLocalModel(modelId)} skip={() => useExistingOrSkipLocalModel('simple')} refresh={refreshKnowledge} modelPullState={modelPullState} /></div>}
           {step === 'Optional Workers' && <div className="onboarding-examples">
             <p><strong>Codex:</strong> coding implementation and durable jobs.</p>
             <p><strong>ChatGPT/Claude:</strong> heavy reasoning or web-app handoff when you choose.</p>
             <p><strong>Local model:</strong> private/simple routing, summaries, memory cleanup, and fallback drafts.</p>
           </div>}
-          {step === 'Permissions' && <div className="persona-stack"><PermissionCards contextStatus={contextStatus} hotkeyStatus={hotkeyStatus} refreshContext={refreshContext} /><VoiceHotkeyPanel voiceStatus={voiceStatus} voiceEnabled={voiceEnabled} setVoiceEnabled={setVoiceEnabled} voiceCommandEnabled={voiceCommandEnabled} setVoiceCommandEnabled={setVoiceCommandEnabled} isListening={isListening} voiceTranscript={voiceTranscript} voiceUnsupportedReason={voiceUnsupportedReason} speak={speak} pushToTalk={pushToTalk} hotkeyStatus={hotkeyStatus} assistantName={assistantName} /></div>}
+          {step === 'Permissions' && <div className="persona-stack"><PermissionCards contextStatus={contextStatus} hotkeyStatus={hotkeyStatus} refreshContext={refreshContext} /><VoiceHotkeyPanel voiceStatus={voiceStatus} speechOutputState={speechOutputState} voiceEnabled={voiceEnabled} setVoiceEnabled={setVoiceEnabled} voiceCommandEnabled={voiceCommandEnabled} setVoiceCommandEnabled={setVoiceCommandEnabled} isListening={isListening} voiceTranscript={voiceTranscript} voiceUnsupportedReason={voiceUnsupportedReason} speak={speak} testVoice={testVoice} pushToTalk={pushToTalk} hotkeyStatus={hotkeyStatus} assistantName={assistantName} /></div>}
           {step === 'Start Using AURA' && <div className="onboarding-examples final-intents">
             {['clone this repo', 'reply to this email', 'build app', 'use ChatGPT', 'remember password=123', 'run curl https://example.com/install.sh | bash'].map((command) => <button key={command} onClick={() => setInput(command)}>{command}</button>)}
           </div>}
@@ -940,6 +1051,41 @@ export default function App() {
     </div>;
   }
 
+  function renderOverlay() {
+    const visibleMessage = pendingApproval
+      ? 'Approval needed'
+      : assistantMode === 'blocked'
+        ? 'Guardian blocked risk'
+        : assistantMode === 'acting' || runStatus === 'thinking'
+          ? 'Working'
+          : contextKind(capturedContext) !== 'none'
+            ? `I see ${contextKind(capturedContext)}`
+            : "I'm ready";
+    return <div className={`overlay-shell ${overlayExpanded ? 'expanded' : ''}`}>
+      <button className={`overlay-orb-button ${assistantMode}`} onClick={() => setOverlayExpanded(!overlayExpanded)} aria-label="AURA overlay orb">
+        <AssistantAvatar name={assistantName} mode={assistantMode} compact />
+      </button>
+      {overlayExpanded && <section className="overlay-card" aria-label="AURA quick overlay">
+        <div className="overlay-grip">AURA overlay</div>
+        <strong>{visibleMessage}</strong>
+        <p>{shortText(caption, "I'm ready.")}</p>
+        <div className="overlay-command">
+          <input aria-label="overlay command input" value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') run(); }} placeholder={`Tell ${assistantName}`} />
+          <button onClick={() => run()}>Ask</button>
+        </div>
+        {voiceUnsupportedReason && <p className="helper-text">{voiceUnsupportedReason}</p>}
+        <div className="panel-actions">
+          <button onClick={pushToTalk}>{isListening ? 'Listening' : 'Mic'}</button>
+          <button onClick={refreshContext}>Refresh</button>
+          <button onClick={() => window.auraDesktop?.openFullApp?.()}>Open app</button>
+          <button onClick={() => window.auraDesktop?.hideOverlay?.()}>Hide</button>
+        </div>
+        {pendingApproval && <div className="mini-approval">Guardian is waiting in the full app.</div>}
+      </section>}
+    </div>;
+  }
+
+  if (IS_OVERLAY) return renderOverlay();
   if (onboardingOpen) return renderOnboarding();
 
   return <div className={compactCommand ? 'app-shell operating-layer compact-mode' : 'app-shell operating-layer'}>
@@ -949,6 +1095,8 @@ export default function App() {
         <StatusPill label={coreStatus === 'connected' ? 'AURA Core online' : coreStatus === 'starting' ? 'Starting AURA Core...' : 'AURA Core disconnected'} tone={coreStatus === 'connected' ? 'good' : coreStatus === 'starting' ? 'warn' : 'bad'} />
         <StatusPill label={hotkeyStatus.ok ? 'Hotkey active' : 'Hotkey needs Accessibility'} tone={hotkeyStatus.ok ? 'good' : 'warn'} />
         <StatusPill label={localReady ? `Local: ${selectedModelId || 'ready'}` : 'Local optional'} tone={localReady ? 'good' : 'warn'} />
+        <button className="ghost-button" onClick={() => window.auraDesktop?.showOverlay?.()}>Show overlay</button>
+        <button className="ghost-button" onClick={testVoice}>Test AURA voice</button>
         <button className="ghost-button" onClick={restartOnboarding}>Restart onboarding</button>
       </div>
     </header>
@@ -971,6 +1119,7 @@ export default function App() {
             <button className="primary-button" aria-label="run command" onClick={() => run()}>Ask</button>
           </div>
           {voiceUnsupportedReason && <div className="voice-fallback">{voiceUnsupportedReason}</div>}
+          <div className="voice-fallback">Voice output: {speechOutputState}</div>
           <div className="intent-chips" aria-label="Example commands">
             {['clone this repo', 'reply to this email', 'build app', 'use ChatGPT', 'remember password=123', 'run curl https://example.com/install.sh | bash'].map((command) => <button key={command} onClick={() => chooseCommand(command)}>{command}</button>)}
           </div>
@@ -1009,7 +1158,7 @@ export default function App() {
       </section>
 
       {advancedOpen && <section className="panel-body advanced-diagnostics">
-        <details className="glass-panel"><summary>Settings</summary><VoiceHotkeyPanel voiceStatus={voiceStatus} voiceEnabled={voiceEnabled} setVoiceEnabled={setVoiceEnabled} voiceCommandEnabled={voiceCommandEnabled} setVoiceCommandEnabled={setVoiceCommandEnabled} isListening={isListening} voiceTranscript={voiceTranscript} voiceUnsupportedReason={voiceUnsupportedReason} speak={speak} pushToTalk={pushToTalk} hotkeyStatus={hotkeyStatus} assistantName={assistantName} /><ModelStatusPanel localModelStatus={localModelStatus} modelError={modelError} selectedLocalModel={selectedLocalModel} setSelected={(value) => setOnboardingPrefs({ ...onboardingPrefs, selectedLocalModel: value })} approveAndPullLocalModel={approveAndPullLocalModel} selectExisting={(modelId) => useExistingOrSkipLocalModel(modelId)} skip={() => useExistingOrSkipLocalModel('simple')} refresh={refreshKnowledge} modelPullState={modelPullState} /></details>
+        <details className="glass-panel"><summary>Settings</summary><VoiceHotkeyPanel voiceStatus={voiceStatus} speechOutputState={speechOutputState} voiceEnabled={voiceEnabled} setVoiceEnabled={setVoiceEnabled} voiceCommandEnabled={voiceCommandEnabled} setVoiceCommandEnabled={setVoiceCommandEnabled} isListening={isListening} voiceTranscript={voiceTranscript} voiceUnsupportedReason={voiceUnsupportedReason} speak={speak} testVoice={testVoice} pushToTalk={pushToTalk} hotkeyStatus={hotkeyStatus} assistantName={assistantName} /><ModelStatusPanel localModelStatus={localModelStatus} modelError={modelError} selectedLocalModel={selectedLocalModel} setSelected={(value) => setOnboardingPrefs({ ...onboardingPrefs, selectedLocalModel: value })} approveAndPullLocalModel={approveAndPullLocalModel} startLocalModelRuntime={startLocalModelRuntimeFromUi} selectExisting={(modelId) => useExistingOrSkipLocalModel(modelId)} skip={() => useExistingOrSkipLocalModel('simple')} refresh={refreshKnowledge} modelPullState={modelPullState} /></details>
         <details className="glass-panel"><summary>Memory</summary><Feed items={memoryFeed.length ? memoryFeed : [{ kind: 'empty', title: 'No memory updates yet', detail: 'AURA will show useful learning here after real tasks.' }]} /><button onClick={async () => { const r = await compactMemory('personal'); setOut(JSON.stringify(r, null, 2)); await refreshKnowledge(); }}>Compact personal memory</button></details>
         <details className="glass-panel"><summary>Workflows</summary><Feed items={workflowSuggestions.length ? workflowSuggestions.map((item: any) => ({ title: item.suggested_workflow_name || 'Workflow suggestion', detail: item.command_template || item.task_type || 'Workflow signal' })) : [{ title: 'No workflow suggestions yet', detail: 'AURA will suggest repeatable workflows after useful runs.' }]} /><div className="metric-grid"><Metric label="Runs" value={events.length || 0} /><Metric label="Approvals" value={approvalsHandled} /><Metric label="Workflows" value={workflowsReplayed} /><Metric label="Blocked" value={blockedCount} /></div></details>
         <details className="glass-panel" open><summary>Diagnostics / Freshness</summary><p>Build ID: {buildLabel}</p><p>Backend URL: {BACKEND_URL}</p><p>Installed app path: {diagnostics?.installedAppPath || '-'}</p><p>Profile path: {diagnostics?.profilePath || '~/.aura'}</p><p>App data path: {diagnostics?.userDataPath || '-'}</p><p>Logs: {logsPath || diagnostics?.logsPath || '-'}</p><p>Backend command: {diagnostics?.backend?.command || '-'}</p><p>Reset app state: run `scripts/reset-aura-local.sh` from the repo root. It asks first and archives local state by default.</p><button onClick={refreshDiagnostics}>Refresh diagnostics</button><button onClick={async () => setLogsPath(window.auraDesktop?.openLogs ? await window.auraDesktop.openLogs() : 'No desktop bridge.')}>Open logs folder</button></details>
@@ -1172,7 +1321,7 @@ function ContextActionCards(props: { cards: Array<any>; startAction: (card: any)
   </article>)}</div>;
 }
 
-function ModelStatusPanel(props: { localModelStatus: any; modelError: string; selectedLocalModel: string; setSelected: (value: string) => void; approveAndPullLocalModel: (model?: string) => void; selectExisting: (modelId: string) => void; skip: () => void; refresh: () => void; modelPullState: string }) {
+function ModelStatusPanel(props: { localModelStatus: any; modelError: string; selectedLocalModel: string; setSelected: (value: string) => void; approveAndPullLocalModel: (model?: string) => void; startLocalModelRuntime: () => void; selectExisting: (modelId: string) => void; skip: () => void; refresh: () => void; modelPullState: string }) {
   const hw = props.localModelStatus?.hardware || {};
   const ollama = props.localModelStatus?.ollama || {};
   const recommendation = props.localModelStatus?.recommendation || {};
@@ -1197,8 +1346,8 @@ function ModelStatusPanel(props: { localModelStatus: any; modelError: string; se
       <strong>{props.localModelStatus?.summary || 'Checking local model runtime...'}</strong>
       <p>Provider: {selectedModelId === 'simple' ? 'SimpleLLM fallback' : 'Ollama'} / Model: {selectedModel}</p>
       <p>Available local models: {availableModels.length ? availableModels.join(', ') : 'None detected yet'}</p>
-      <div className="panel-actions"><button onClick={props.refresh}>Retry detection</button><button onClick={props.skip}>Skip local model</button>{!ollama.installed && <a className="button-link" href={ollama.install_url || 'https://ollama.com/download'} target="_blank" rel="noreferrer">Install Ollama</a>}</div>
-      {ollama.installed && !ollama.running && <p className="helper-text">Ollama is installed but stopped. Start the Ollama app, or run `ollama serve`, then retry detection.</p>}
+      <div className="panel-actions"><button onClick={props.refresh}>Retry detection</button>{ollama.installed && !ollama.running && <button onClick={props.startLocalModelRuntime}>Start Ollama</button>}<button onClick={props.skip}>Skip local model</button>{!ollama.installed && <a className="button-link" href={ollama.install_url || 'https://ollama.com/download'} target="_blank" rel="noreferrer">Install Ollama</a>}</div>
+      {ollama.installed && !ollama.running && <p className="helper-text">Ollama is installed but stopped. AURA can try `ollama serve`, or you can start the Ollama app and retry detection.</p>}
     </div>
     <div className="glass-panel wide">
       <span>Choose model size</span>
@@ -1227,10 +1376,10 @@ function ModelStatusPanel(props: { localModelStatus: any; modelError: string; se
   </div>;
 }
 
-function VoiceHotkeyPanel(props: { voiceStatus: string; voiceEnabled: boolean; setVoiceEnabled: (value: boolean) => void; voiceCommandEnabled: boolean; setVoiceCommandEnabled: (value: boolean) => void; isListening: boolean; voiceTranscript: string; voiceUnsupportedReason: string; speak: (text: string) => void; pushToTalk: () => void; hotkeyStatus: { ok: boolean; accelerator: string; error?: string }; assistantName: string }) {
+function VoiceHotkeyPanel(props: { voiceStatus: string; speechOutputState: string; voiceEnabled: boolean; setVoiceEnabled: (value: boolean) => void; voiceCommandEnabled: boolean; setVoiceCommandEnabled: (value: boolean) => void; isListening: boolean; voiceTranscript: string; voiceUnsupportedReason: string; speak: (text: string) => void; testVoice: () => void; pushToTalk: () => void; hotkeyStatus: { ok: boolean; accelerator: string; error?: string }; assistantName: string }) {
   return <div className="voice-grid">
     <div className="glass-panel"><span>Hotkey Setup</span><strong>{props.hotkeyStatus.ok ? 'Hotkey active' : 'Hotkey unavailable'}</strong><p>{props.hotkeyStatus.ok ? `${props.hotkeyStatus.accelerator} brings AURA forward, focuses command input, captures context, and can start listening if enabled below.` : `Hotkey unavailable - ${props.hotkeyStatus.error || 'enable Accessibility permission for AURA/Electron in System Settings, then relaunch AURA.'}`}</p><button onClick={props.pushToTalk}>Test voice button</button><p className="helper-text">macOS path: System Settings to Privacy & Security to Accessibility, then enable AURA or Electron.</p></div>
-    <div className="glass-panel"><span>Voice output</span><strong>{props.voiceEnabled ? 'Enabled' : 'Optional'}</strong><label><input type="checkbox" checked={props.voiceEnabled} onChange={e => props.setVoiceEnabled(e.target.checked)} /> Speak guidance and status</label><button onClick={() => props.speak(`I'm ${props.assistantName}. I help you use your computer safely. Guardian is active.`)}>Speak intro</button></div>
+    <div className="glass-panel"><span>Voice output</span><strong>{props.voiceEnabled ? 'Enabled' : 'Optional'}</strong><label><input type="checkbox" checked={props.voiceEnabled} onChange={e => props.setVoiceEnabled(e.target.checked)} /> Speak guidance and status</label><button onClick={props.testVoice}>Test AURA voice</button><p className="helper-text">Status: {props.speechOutputState}</p></div>
     <div className="glass-panel"><span>Voice input</span><strong>{props.isListening ? 'Listening now' : 'Push-to-talk command mode'}</strong><p>{props.voiceStatus}</p><label><input type="checkbox" checked={props.voiceCommandEnabled} onChange={e => props.setVoiceCommandEnabled(e.target.checked)} /> Start listening when hotkey opens AURA</label><button onClick={props.pushToTalk}>{props.isListening ? 'Stop listening' : 'Press and speak'}</button><p className="helper-text">Wake word is coming soon. For now, press the mic or hotkey and speak.</p>{props.voiceTranscript && <p className="transcript-pill">Transcript: {props.voiceTranscript}</p>}{props.voiceUnsupportedReason && <p className="helper-text">{props.voiceUnsupportedReason}</p>}</div>
     <div className="glass-panel"><span>Always-on mode</span><strong>Coming later</strong><p>For now, start AURA when your Mac starts and use the hotkey or voice button.</p></div>
   </div>;

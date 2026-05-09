@@ -54,7 +54,7 @@ from aura.memory_engine import (
     search_memory_items,
     update_memory_item,
 )
-from aura.local_model_setup import local_model_status, pull_model, select_model
+from aura.local_model_setup import local_model_status, pull_model, select_model, start_ollama_server
 from aura.models import available_models
 from aura.mobile_companion import (
     create_mobile_approval_card,
@@ -451,6 +451,11 @@ def get_model():
 @app.get('/local-model/status')
 def local_model_setup_status():
     return local_model_status()
+
+
+@app.post('/local-model/start')
+def local_model_start():
+    return start_ollama_server()
 
 
 @app.post('/local-model/pull')

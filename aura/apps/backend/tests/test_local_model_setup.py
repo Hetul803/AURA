@@ -2,7 +2,7 @@ from fastapi.testclient import TestClient
 
 from api.main import app
 from aura import local_model_setup
-from aura.local_model_setup import local_model_status, pull_model, recommend_local_model, select_model
+from aura.local_model_setup import local_model_status, pull_model, recommend_local_model, select_model, start_ollama_server
 
 client = TestClient(app)
 
@@ -47,10 +47,29 @@ def test_model_pull_uses_ollama_after_approval(monkeypatch):
         stderr = ''
 
     monkeypatch.setattr(local_model_setup.shutil, 'which', lambda name: '/usr/local/bin/ollama')
+    monkeypatch.setattr(local_model_setup, 'ollama_available', lambda: True)
     monkeypatch.setattr(local_model_setup.subprocess, 'run', lambda args, **kwargs: calls.append(args) or Proc())
     result = pull_model('gemma4:e4b-nvfp4', approved=True, select_after_pull=False)
     assert result['ok'] is True
     assert calls[0] == ['ollama', 'pull', 'gemma4:e4b-nvfp4']
+
+
+def test_model_pull_guides_when_ollama_stopped(monkeypatch):
+    monkeypatch.setattr(local_model_setup.shutil, 'which', lambda name: '/usr/local/bin/ollama')
+    monkeypatch.setattr(local_model_setup, 'ollama_available', lambda: False)
+    monkeypatch.setattr(local_model_setup, 'start_ollama_server', lambda wait_seconds=3.5: {'ok': False, 'status': 'starting_or_blocked', 'command': 'ollama serve'})
+    result = pull_model('gemma4:e4b-nvfp4', approved=True, select_after_pull=False)
+    assert result['ok'] is False
+    assert result['status'] == 'ollama_not_running'
+    assert result['command'] == 'ollama serve'
+
+
+def test_start_ollama_server_guides_missing_install(monkeypatch):
+    monkeypatch.setattr(local_model_setup.shutil, 'which', lambda name: None)
+    result = start_ollama_server()
+    assert result['ok'] is False
+    assert result['status'] == 'missing_ollama'
+    assert 'brew install' in result['install_command']
 
 
 def test_local_model_status_api_contract(monkeypatch):
@@ -61,6 +80,10 @@ def test_local_model_status_api_contract(monkeypatch):
 
     pull = client.post('/local-model/pull', json={'model': 'gemma4:e4b-nvfp4', 'approved': False})
     assert pull.status_code == 403
+
+    start = client.post('/local-model/start')
+    assert start.status_code == 200
+    assert start.json()['status'] == 'missing_ollama'
 
 
 def test_selected_ollama_model_is_used_by_assist_path(monkeypatch):
