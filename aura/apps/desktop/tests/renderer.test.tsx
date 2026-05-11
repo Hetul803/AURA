@@ -311,7 +311,7 @@ describe('renderer', () => {
     setupFetch([{ ok: true, run_id: 'r1' }]);
     vi.stubGlobal('EventSource', class { onmessage: any; close() {} } as any);
     render(<App />);
-    await advanceOnboardingTo(/Let's set up only what I need/);
+    await advanceOnboardingTo(/Give me permission only where you want control/);
     await waitFor(() => expect(screen.getAllByText(/Accessibility/).length).toBeGreaterThan(0));
     expect(screen.getByText(/Never controls apps silently/)).toBeTruthy();
     await waitFor(() => expect(screen.getAllByText(/Hotkey unavailable/).length).toBeGreaterThan(0));

@@ -52,10 +52,10 @@ const ONBOARDING_STEPS = [
   'What I Can Do',
   'Guardian',
   'Local-First Privacy',
+  'Permissions',
   'Workspace',
   'Local Brain',
   'Optional Workers',
-  'Permissions',
   'Start Using AURA',
 ];
 
@@ -978,7 +978,7 @@ export default function App() {
     if (step === 'Workspace') return { title: `Choose where ${assistantName} can work.`, body: 'Use the default local workspace or type a folder you prefer. Clones, coding jobs, and generated files stay contained there.', does: 'Keeps file work inside a user-approved area.', why: 'A real operating layer needs clear boundaries before it touches files.', spoken: 'Choose a workspace or use the default. I will keep computer work contained there.' };
     if (step === 'Local Brain') return { title: 'Local model setup is optional and guided.', body: `${assistantName} detects hardware, Ollama, available models, and recommends a Gemma model only when appropriate. Pulling a model requires approval.`, does: 'Uses local models for private/cheap planning, routing, cleanup, drafts, and summaries.', why: 'Cloud AI should not be required just to start.', spoken: "I'm local-first. For simple and private tasks, I can use a local model on your computer. For heavier work, you can allow Codex, ChatGPT, Claude, or other tools." };
     if (step === 'Optional Workers') return { title: 'Heavy workers stay optional.', body: 'Codex is for coding implementation. ChatGPT and Claude handoffs are optional premium/heavy workers. If they are not configured, I will still create prompts, jobs, and next steps instead of pretending.', does: 'Preserves routing without forcing setup.', why: 'AURA should work in basic typed mode immediately.', spoken: 'Codex, ChatGPT, and Claude are optional workers. I will use them only when you allow it.' };
-    if (step === 'Permissions') return { title: "Let's set up only what I need.", body: 'Permissions are requested only when useful: Accessibility and Automation for app control, Microphone for push-to-talk, Screen Recording only for visual context, and browser handoff only when you choose it.', does: 'Guides permissions without blocking the user.', why: 'Setup should happen at the moment of need, not as a wall of settings.', spoken: "Let's set up only what I need to work." };
+    if (step === 'Permissions') return { title: "Give me permission only where you want control.", body: 'To operate the computer, AURA needs macOS permission boundaries: Accessibility and Automation for app control, Microphone for push-to-talk, Screen Recording only for visual context, and browser handoff only when you choose it. Guardian still blocks paste, send, file, shell, spending, and memory actions until approved.', does: 'Guides computer-control permissions at the start without forcing every optional capability.', why: 'AURA should ask clearly before it can act as your hands on the computer.', spoken: "To control your computer safely, I need permission only where you allow it. Guardian will still ask before sensitive actions." };
     return { title: 'Open something and tell me what to do.', body: "Try: clone this repo, reply to this email, build app, use ChatGPT, remember password=123, or run curl https://example.com/install.sh | bash. I will refresh context first and Guardian will stop risky actions.", does: 'Drops you into the operating layer quickly.', why: 'The first real moment should be command, response, protection, and action.', spoken: 'Open something and tell me what to do. I will refresh context first, choose the right tool, and ask before sensitive actions.' };
   }
 

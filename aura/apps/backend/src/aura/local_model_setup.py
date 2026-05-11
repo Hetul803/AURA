@@ -9,6 +9,7 @@ from typing import Any
 
 from llm.ollama_client import ollama_available, ollama_tags
 from .state import db_conn
+from storage.db import init_db
 
 GEMMA4_MODELS = [
     {
@@ -187,6 +188,7 @@ def local_model_status() -> dict[str, Any]:
 
 
 def _selected_model() -> str:
+    init_db()
     row = db_conn().execute("SELECT value FROM profile_meta WHERE key='selected_model'").fetchone()
     return row['value'] if row else 'simple'
 
@@ -214,6 +216,7 @@ def _summary(installed: bool, running: bool, names: list[str], recommendation: d
 
 
 def select_model(model_id: str) -> dict[str, Any]:
+    init_db()
     with db_conn() as conn:
         conn.execute("INSERT INTO profile_meta(key,value) VALUES('selected_model',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value", (model_id,))
     return {'ok': True, 'model_id': model_id}
