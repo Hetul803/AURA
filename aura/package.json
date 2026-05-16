@@ -11,6 +11,7 @@
     "aura:desktop": "pnpm --filter aura-desktop dev",
     "aura:backend": "bash scripts/aura-backend.sh",
     "aura:test": "bash infra/scripts/run_tests.sh",
+    "aura:web": "pnpm --filter aura-web dev",
     "aura:package": "bash scripts/build-mac-dmg.sh",
     "aura:verify-electron": "node scripts/verify-electron.cjs",
     "aura:brand": "node scripts/set-brand.mjs"
