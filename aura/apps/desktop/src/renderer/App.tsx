@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { approveRun, captureAssistContext, compactMemory, createMemoryItem, deleteMemoryItem, getActiveIdentity, getCostModels, getCostSummary, getCurrentContext, getDevices, getGuardianStatus, getIdentities, getLocalModelStatus, getMemoryItems, getProfileStatus, getRunState, getTools, getWorkflowSuggestions, getWorkflows, panicStop, pullLocalModel, rejectRun, resumeRun, retryRun, searchMemoryItems, selectModel, sendCommand, setActiveIdentity, startLocalModelRuntime as startLocalModelRuntimeApi, subscribeRun, updateMemoryItem, updateProfileStatus } from './state/api';
+import { activateLicense, approveRun, captureAssistContext, compactMemory, createMemoryItem, deleteMemoryItem, getActiveIdentity, getActiveIdentityAttestation, getBrand, getCostModels, getCostSummary, getCurrentContext, getDevices, getGuardianStatus, getIdentities, getLicenseStatus, getLocalModelStatus, getMemoryItems, getProfileStatus, getRunState, getTools, getWorkflowSuggestions, getWorkflows, panicStop, pullLocalModel, rejectRun, resumeRun, retryRun, searchMemoryItems, selectModel, sendCommand, setActiveIdentity, startLocalModelRuntime as startLocalModelRuntimeApi, subscribeRun, updateBrand, updateMemoryItem, updateProfileStatus } from './state/api';
 import ActionPanel from './ui/ActionPanel';
 import { pushEvent, store } from './state/store';
 import { BACKEND_URL } from '../shared/constants';
@@ -22,9 +22,10 @@ declare global {
       openLogs: () => Promise<string>;
       getHotkeyStatus?: () => Promise<{ ok: boolean; accelerator: string; error?: string }>;
       getDiagnostics?: () => Promise<any>;
+      getSystemVoices?: () => Promise<{ ok: boolean; voices: string[]; provider?: string; message?: string }>;
       repairBackend?: () => Promise<{ ok: boolean; message: string }>;
       reportRendererIssue?: (issue: any) => Promise<any>;
-      speakText?: (text: string) => Promise<{ ok: boolean; status: string; message?: string; provider?: string }>;
+      speakText?: (text: string, options?: { voice?: string; rate?: number }) => Promise<{ ok: boolean; status: string; message?: string; provider?: string }>;
       showOverlay?: () => Promise<any>;
       hideOverlay?: () => Promise<any>;
       toggleOverlay?: () => Promise<any>;
@@ -262,8 +263,13 @@ export default function App() {
   const [workflows, setWorkflows] = useState<any[]>([]);
   const [workflowSuggestions, setWorkflowSuggestions] = useState<any[]>([]);
   const [profileStatus, setProfileStatus] = useState<any>(null);
+  const [brand, setBrand] = useState<any>(null);
+  const [licenseStatus, setLicenseStatus] = useState<any>(null);
+  const [licenseToken, setLicenseToken] = useState('');
+  const [licenseNotice, setLicenseNotice] = useState('');
   const [identities, setIdentities] = useState<any[]>([]);
   const [activeIdentity, setActiveIdentityState] = useState<any>(null);
+  const [identityAttestation, setIdentityAttestation] = useState<any>(null);
   const [memoryEditor, setMemoryEditor] = useState({ kind: 'preference', key: '', value: '', scope: 'active' });
   const [memoryNotice, setMemoryNotice] = useState('');
   const [guardianStatus, setGuardianStatus] = useState<any>(null);
@@ -274,6 +280,8 @@ export default function App() {
   const [diagnostics, setDiagnostics] = useState<any>(null);
   const [repairState, setRepairState] = useState('');
   const [overlayExpanded, setOverlayExpanded] = useState(false);
+  const [systemVoices, setSystemVoices] = useState<string[]>([]);
+  const [selectedVoice, setSelectedVoice] = useState(() => localStorage.getItem('aura:voice-name') || '');
 
   function emitLocalGuardianEvent(event: { severity: string; title: string; explanation: string; action_required: string; type?: string; risk?: string; context?: any }) {
     const key = `${event.type || 'notice'}:${event.title}`;
@@ -334,7 +342,7 @@ export default function App() {
   }
 
   async function refreshKnowledge() {
-    const [p, m, ss, st, se, ts, ds, mi, wf, ws, profile, ids, activeId, guardian, cost, models, localModel] = await Promise.all([
+    const [p, m, ss, st, se, ts, ds, mi, wf, ws, profile, brandInfo, license, ids, activeId, attestation, guardian, cost, models, localModel] = await Promise.all([
       safeJson(() => fetch(`${BACKEND_URL}/preferences`).then(r => r.json()), []),
       safeJson(() => fetch(`${BACKEND_URL}/memories`).then(r => r.json()), []),
       safeJson(() => fetch(`${BACKEND_URL}/browser/sessions`).then(r => r.json()), []),
@@ -346,8 +354,11 @@ export default function App() {
       safeJson(() => getWorkflows(), []),
       safeJson(() => getWorkflowSuggestions(), []),
       safeJson(() => getProfileStatus(), null),
+      safeJson(() => getBrand(), null),
+      safeJson(() => getLicenseStatus(), null),
       safeJson(() => getIdentities(), []),
       safeJson(() => getActiveIdentity(), null),
+      safeJson(() => getActiveIdentityAttestation(), null),
       safeJson(() => getGuardianStatus(runId || undefined), null),
       safeJson(() => getCostSummary(), null),
       safeJson(() => getCostModels(), []),
@@ -355,7 +366,7 @@ export default function App() {
     ]);
     setPrefs(asArray(p)); setMemories(asArray(m)); setSessions(asArray(ss)); setStorage(st || {}); setSafety(asArray(se));
     setTools(asArray(ts)); setDevices(asArray(ds)); setMemoryItems(asArray(mi)); setWorkflows(asArray(wf));
-    setWorkflowSuggestions(asArray(ws)); setProfileStatus(profile); setIdentities(asArray(ids)); setActiveIdentityState(activeId); setGuardianStatus(guardian); setCostSummary(cost);
+    setWorkflowSuggestions(asArray(ws)); setProfileStatus(profile); setBrand(brandInfo); setLicenseStatus(license); setIdentities(asArray(ids)); setActiveIdentityState(activeId); setIdentityAttestation(attestation); setGuardianStatus(guardian); setCostSummary(cost);
     setCostModels(asArray(models));
     if (localModel) {
       setLocalModelStatus(localModel);
@@ -378,6 +389,8 @@ export default function App() {
     try {
       const info = await window.auraDesktop?.getDiagnostics?.();
       if (info) setDiagnostics(info);
+      const voices = await window.auraDesktop?.getSystemVoices?.();
+      if (voices?.ok) setSystemVoices(voices.voices || []);
     } catch {
       setDiagnostics(null);
     }
@@ -459,7 +472,7 @@ export default function App() {
     }
     if (window.auraDesktop?.speakText) {
       try {
-        const result = await window.auraDesktop.speakText(text);
+        const result = await window.auraDesktop.speakText(text, { voice: selectedVoice || undefined });
         if (result?.ok) {
           setVoiceStatus(`${assistantName} is speaking through macOS voice.`);
           setSpeechOutputState(result.provider || 'macos_say');
@@ -618,6 +631,10 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem('aura:assistant-name', assistantName);
   }, [assistantName]);
+
+  useEffect(() => {
+    localStorage.setItem('aura:voice-name', selectedVoice);
+  }, [selectedVoice]);
 
   useEffect(() => {
     if (!onboardingOpen) return;
@@ -904,6 +921,27 @@ export default function App() {
     if (voiceEnabled) speak(`Good choice. I'm ${cleanName} now.`, 'speaking');
   }
 
+  async function saveBrandName(productName: string) {
+    const updated = await updateBrand({ product_name: productName, assistant_default_name: productName });
+    setBrand(updated);
+    const cleanName = updated.assistant_default_name || productName || assistantName;
+    setAssistantName(cleanName);
+    setDraftAssistantName(cleanName);
+    addConversation('AURA', `Brand updated. I will present as ${cleanName} in this local profile.`, 'protected');
+  }
+
+  async function activateLicenseFromUi() {
+    setLicenseNotice('Verifying signed license token...');
+    try {
+      const result = await activateLicense(licenseToken, profileStatus?.cloud_account_id || undefined);
+      setLicenseStatus(result);
+      setLicenseNotice(result.activated ? `License active: ${result.tier}` : (result.message || 'License activation did not complete.'));
+      await refreshKnowledge();
+    } catch (error: any) {
+      setLicenseNotice(`License activation failed: ${error?.message || 'unknown error'}`);
+    }
+  }
+
   async function approveAndPullLocalModel(modelOverride?: string) {
     const modelToPull = modelOverride || selectedLocalModel;
     if (modelToPull === 'simple') {
@@ -1070,7 +1108,7 @@ export default function App() {
           </div>}
           {step === 'Guardian' && <div className="persona-stack watchtower-onboarding"><GuardianWatchtower guardianEvents={guardianEvents} pendingApproval={pendingApproval} panic={() => panicStop(runId)} runId={runId} /></div>}
           {step === 'Memory and Identity' && <div className="persona-stack">
-            <IdentityCard identities={identities} activeIdentity={activeIdentity} switchIdentity={async (id: string) => { setActiveIdentityState(await setActiveIdentity(id)); await refreshKnowledge(); }} />
+            <IdentityCard identities={identities} activeIdentity={activeIdentity} attestation={identityAttestation} switchIdentity={async (id: string) => { setActiveIdentityState(await setActiveIdentity(id)); await refreshKnowledge(); }} />
             <MemoryConsole memoryItems={memoryItems} memoryEditor={memoryEditor} setMemoryEditor={setMemoryEditor} memoryNotice={memoryNotice} saveMemory={saveMemoryFromUi} updateMemory={updateMemoryFromUi} deleteMemory={deleteMemoryFromUi} activeIdentity={activeIdentity} />
           </div>}
           {step === 'Local-First Privacy' && <div className="onboarding-examples">
@@ -1088,7 +1126,7 @@ export default function App() {
             <p><strong>ChatGPT/Claude:</strong> heavy reasoning or web-app handoff when you choose.</p>
             <p><strong>Local model:</strong> private/simple routing, summaries, memory cleanup, and fallback drafts.</p>
           </div>}
-          {step === 'Permissions' && <div className="persona-stack"><PermissionCards contextStatus={contextStatus} hotkeyStatus={hotkeyStatus} refreshContext={refreshContext} /><VoiceHotkeyPanel voiceStatus={voiceStatus} speechOutputState={speechOutputState} voiceEnabled={voiceEnabled} setVoiceEnabled={setVoiceEnabled} voiceCommandEnabled={voiceCommandEnabled} setVoiceCommandEnabled={setVoiceCommandEnabled} isListening={isListening} voiceTranscript={voiceTranscript} voiceUnsupportedReason={voiceUnsupportedReason} speak={speak} testVoice={testVoice} pushToTalk={pushToTalk} hotkeyStatus={hotkeyStatus} assistantName={assistantName} /></div>}
+          {step === 'Permissions' && <div className="persona-stack"><PermissionCards contextStatus={contextStatus} hotkeyStatus={hotkeyStatus} refreshContext={refreshContext} /><VoiceHotkeyPanel voiceStatus={voiceStatus} speechOutputState={speechOutputState} voiceEnabled={voiceEnabled} setVoiceEnabled={setVoiceEnabled} voiceCommandEnabled={voiceCommandEnabled} setVoiceCommandEnabled={setVoiceCommandEnabled} isListening={isListening} voiceTranscript={voiceTranscript} voiceUnsupportedReason={voiceUnsupportedReason} speak={speak} testVoice={testVoice} pushToTalk={pushToTalk} hotkeyStatus={hotkeyStatus} assistantName={assistantName} systemVoices={systemVoices} selectedVoice={selectedVoice} setSelectedVoice={setSelectedVoice} /></div>}
           {step === 'Start Using AURA' && <div className="onboarding-examples final-intents">
             {['clone this repo', 'reply to this email', 'build app', 'use ChatGPT', 'remember password=123', 'run curl https://example.com/install.sh | bash'].map((command) => <button key={command} onClick={() => setInput(command)}>{command}</button>)}
           </div>}
@@ -1145,8 +1183,9 @@ export default function App() {
     <header className="presence-topbar">
       <div className="brand-row"><span className="brand-mark">{assistantName.slice(0, 1).toUpperCase()}</span><span>{assistantName}</span></div>
       <div className="status-cluster">
-        <StatusPill label={coreStatus === 'connected' ? 'AURA Core online' : coreStatus === 'starting' ? 'Starting AURA Core...' : 'AURA Core disconnected'} tone={coreStatus === 'connected' ? 'good' : coreStatus === 'starting' ? 'warn' : 'bad'} />
+        <StatusPill label={coreStatus === 'connected' ? `${brand?.product_name || assistantName} Core online` : coreStatus === 'starting' ? `Starting ${brand?.product_name || assistantName} Core...` : `${brand?.product_name || assistantName} Core disconnected`} tone={coreStatus === 'connected' ? 'good' : coreStatus === 'starting' ? 'warn' : 'bad'} />
         <StatusPill label={`Identity: ${activeIdentity?.name || 'Personal AURA'}`} tone="good" />
+        <StatusPill label={licenseStatus?.activated ? `License: ${licenseStatus.tier}` : 'License: local alpha'} tone={licenseStatus?.activated ? 'good' : 'warn'} />
         <StatusPill label={hotkeyStatus.ok ? 'Hotkey active' : 'Hotkey needs Accessibility'} tone={hotkeyStatus.ok ? 'good' : 'warn'} />
         <StatusPill label={localReady ? `Local: ${selectedModelId || 'ready'}` : 'Local optional'} tone={localReady ? 'good' : 'warn'} />
         <button className="ghost-button" onClick={() => window.auraDesktop?.showOverlay?.()}>Show overlay</button>
@@ -1198,7 +1237,7 @@ export default function App() {
       <section className="presence-layout">
         <ConversationStream messages={conversationMessages} fallbackItems={streamItems} assistantName={assistantName} />
         <aside className="watchtower-column">
-          <IdentityCard identities={identities} activeIdentity={activeIdentity} switchIdentity={async (id: string) => { setActiveIdentityState(await setActiveIdentity(id)); await refreshKnowledge(); }} />
+          <IdentityCard identities={identities} activeIdentity={activeIdentity} attestation={identityAttestation} switchIdentity={async (id: string) => { setActiveIdentityState(await setActiveIdentity(id)); await refreshKnowledge(); }} />
           <ContextSummary assistantName={assistantName} context={capturedContext} currentUrl={currentUrl} contextStatus={contextStatus} refreshContext={refreshContext} openPermissions={() => { setOnboardingStep(ONBOARDING_STEPS.indexOf('Permissions')); setOnboardingOpen(true); }} />
           <GuardianWatchtower guardianEvents={guardianEvents} pendingApproval={pendingApproval} panic={() => panicStop(runId)} runId={runId} />
         </aside>
@@ -1213,7 +1252,7 @@ export default function App() {
       </section>
 
       {advancedOpen && <section className="panel-body advanced-diagnostics">
-        <details className="glass-panel"><summary>Settings</summary><VoiceHotkeyPanel voiceStatus={voiceStatus} speechOutputState={speechOutputState} voiceEnabled={voiceEnabled} setVoiceEnabled={setVoiceEnabled} voiceCommandEnabled={voiceCommandEnabled} setVoiceCommandEnabled={setVoiceCommandEnabled} isListening={isListening} voiceTranscript={voiceTranscript} voiceUnsupportedReason={voiceUnsupportedReason} speak={speak} testVoice={testVoice} pushToTalk={pushToTalk} hotkeyStatus={hotkeyStatus} assistantName={assistantName} /><ModelStatusPanel localModelStatus={localModelStatus} modelError={modelError} selectedLocalModel={selectedLocalModel} setSelected={(value) => setOnboardingPrefs({ ...onboardingPrefs, selectedLocalModel: value })} approveAndPullLocalModel={approveAndPullLocalModel} startLocalModelRuntime={startLocalModelRuntimeFromUi} selectExisting={(modelId) => useExistingOrSkipLocalModel(modelId)} skip={() => useExistingOrSkipLocalModel('simple')} refresh={refreshKnowledge} modelPullState={modelPullState} /></details>
+        <details className="glass-panel"><summary>Settings</summary><BrandLicensePanel brand={brand} licenseStatus={licenseStatus} licenseToken={licenseToken} setLicenseToken={setLicenseToken} licenseNotice={licenseNotice} activateLicense={activateLicenseFromUi} saveBrandName={saveBrandName} /><VoiceHotkeyPanel voiceStatus={voiceStatus} speechOutputState={speechOutputState} voiceEnabled={voiceEnabled} setVoiceEnabled={setVoiceEnabled} voiceCommandEnabled={voiceCommandEnabled} setVoiceCommandEnabled={setVoiceCommandEnabled} isListening={isListening} voiceTranscript={voiceTranscript} voiceUnsupportedReason={voiceUnsupportedReason} speak={speak} testVoice={testVoice} pushToTalk={pushToTalk} hotkeyStatus={hotkeyStatus} assistantName={assistantName} systemVoices={systemVoices} selectedVoice={selectedVoice} setSelectedVoice={setSelectedVoice} /><ModelStatusPanel localModelStatus={localModelStatus} modelError={modelError} selectedLocalModel={selectedLocalModel} setSelected={(value) => setOnboardingPrefs({ ...onboardingPrefs, selectedLocalModel: value })} approveAndPullLocalModel={approveAndPullLocalModel} startLocalModelRuntime={startLocalModelRuntimeFromUi} selectExisting={(modelId) => useExistingOrSkipLocalModel(modelId)} skip={() => useExistingOrSkipLocalModel('simple')} refresh={refreshKnowledge} modelPullState={modelPullState} /></details>
         <details className="glass-panel"><summary>Memory</summary><MemoryConsole memoryItems={memoryItems} memoryEditor={memoryEditor} setMemoryEditor={setMemoryEditor} memoryNotice={memoryNotice} saveMemory={saveMemoryFromUi} updateMemory={updateMemoryFromUi} deleteMemory={deleteMemoryFromUi} activeIdentity={activeIdentity} /><button onClick={async () => { const r = await compactMemory(activeIdentity?.memory_scope || 'personal'); setOut(JSON.stringify(r, null, 2)); await refreshKnowledge(); }}>Compact active identity memory</button></details>
         <details className="glass-panel"><summary>Workflows</summary><Feed items={workflowSuggestions.length ? workflowSuggestions.map((item: any) => ({ title: item.suggested_workflow_name || 'Workflow suggestion', detail: item.command_template || item.task_type || 'Workflow signal' })) : [{ title: 'No workflow suggestions yet', detail: 'AURA will suggest repeatable workflows after useful runs.' }]} /><div className="metric-grid"><Metric label="Runs" value={events.length || 0} /><Metric label="Approvals" value={approvalsHandled} /><Metric label="Workflows" value={workflowsReplayed} /><Metric label="Blocked" value={blockedCount} /></div></details>
         <details className="glass-panel" open><summary>Diagnostics / Freshness</summary><p>Build ID: {buildLabel}</p><p>Backend URL: {BACKEND_URL}</p><p>Installed app path: {diagnostics?.installedAppPath || '-'}</p><p>Profile path: {diagnostics?.profilePath || '~/.aura'}</p><p>App data path: {diagnostics?.userDataPath || '-'}</p><p>Logs: {logsPath || diagnostics?.logsPath || '-'}</p><p>Backend command: {diagnostics?.backend?.command || '-'}</p><p>Reset app state: run `scripts/reset-aura-local.sh` from the repo root. It asks first and archives local state by default.</p><button onClick={refreshDiagnostics}>Refresh diagnostics</button><button onClick={async () => setLogsPath(window.auraDesktop?.openLogs ? await window.auraDesktop.openLogs() : 'No desktop bridge.')}>Open logs folder</button></details>
@@ -1342,17 +1381,47 @@ function ContextSummary(props: { assistantName: string; context: any; currentUrl
   </section>;
 }
 
-function IdentityCard(props: { identities: any[]; activeIdentity: any; switchIdentity: (id: string) => void }) {
+function BrandLicensePanel(props: { brand: any; licenseStatus: any; licenseToken: string; setLicenseToken: (value: string) => void; licenseNotice: string; activateLicense: () => void; saveBrandName: (name: string) => void }) {
+  const [brandDraft, setBrandDraft] = useState(props.brand?.product_name || 'AURA');
+  useEffect(() => {
+    setBrandDraft(props.brand?.product_name || 'AURA');
+  }, [props.brand?.product_name]);
+  return <div className="brand-license-grid">
+    <section className="glass-panel">
+      <span>Brand control</span>
+      <strong>{props.brand?.product_name || 'AURA'}</strong>
+      <p>Rename the product shell without changing the underlying Helper, Guardian, Memory, and Identity architecture.</p>
+      <div className="license-row">
+        <input aria-label="product name" value={brandDraft} onChange={(e) => setBrandDraft(e.target.value)} placeholder="New company/app name" />
+        <button onClick={() => props.saveBrandName(brandDraft)}>Save brand</button>
+      </div>
+      <p className="helper-text">For final public distribution, also update code signing, bundle ID, website, icon, notarization, and legal pages.</p>
+    </section>
+    <section className="glass-panel">
+      <span>License</span>
+      <strong>{props.licenseStatus?.activated ? `${props.licenseStatus.tier} active` : 'Local alpha mode'}</strong>
+      <p>{props.licenseStatus?.message || 'Paste a signed license token to activate paid/private-alpha entitlements.'}</p>
+      <textarea aria-label="license token" rows={3} value={props.licenseToken} onChange={(e) => props.setLicenseToken(e.target.value)} placeholder="payload.signature" />
+      <div className="panel-actions"><button disabled={!props.licenseToken.trim()} onClick={props.activateLicense}>Activate signed license</button></div>
+      {props.licenseNotice && <p className="helper-text">{props.licenseNotice}</p>}
+      <p className="helper-text">Public-key license verification is built in. The private signing key must live outside the shipped app.</p>
+    </section>
+  </div>;
+}
+
+function IdentityCard(props: { identities: any[]; activeIdentity: any; attestation?: any; switchIdentity: (id: string) => void }) {
   const active = props.activeIdentity || props.identities.find((item) => item.identity_id === 'personal') || {};
   const metadata = active.metadata || {};
   const scopes = asArray(metadata.allowed_memory_scopes).join(', ') || active.memory_scope || 'personal';
+  const key = props.attestation?.key || {};
   return <section className="identity-card" aria-label="AURA identity">
     <div className="stream-heading">
       <span>AURA Identity</span>
       <strong>{active.name || 'Personal AURA'}</strong>
     </div>
     <p>AURA is acting under <strong>{active.identity_id || 'personal'}</strong>. Memory scope: <strong>{active.memory_scope || 'personal'}</strong>.</p>
-    <p className="helper-text">Allowed memory scopes: {scopes}. Crypto signing is planned, not active in this build.</p>
+    <p className="helper-text">Allowed memory scopes: {scopes}. Signing: {key.fingerprint ? `Ed25519 active (${key.fingerprint})` : 'creating local key...'}.</p>
+    <p className="helper-text">Private key is encrypted at rest with a local master key. Hardware-bound identity sync is a server-side next step, not claimed yet.</p>
     <div className="identity-switcher">
       {props.identities.map((identity) => <button key={identity.identity_id} className={identity.identity_id === active.identity_id ? 'selected' : ''} onClick={() => props.switchIdentity(identity.identity_id)}>{identity.name}</button>)}
     </div>
@@ -1480,10 +1549,10 @@ function ModelStatusPanel(props: { localModelStatus: any; modelError: string; se
   </div>;
 }
 
-function VoiceHotkeyPanel(props: { voiceStatus: string; speechOutputState: string; voiceEnabled: boolean; setVoiceEnabled: (value: boolean) => void; voiceCommandEnabled: boolean; setVoiceCommandEnabled: (value: boolean) => void; isListening: boolean; voiceTranscript: string; voiceUnsupportedReason: string; speak: (text: string) => void; testVoice: () => void; pushToTalk: () => void; hotkeyStatus: { ok: boolean; accelerator: string; error?: string }; assistantName: string }) {
+function VoiceHotkeyPanel(props: { voiceStatus: string; speechOutputState: string; voiceEnabled: boolean; setVoiceEnabled: (value: boolean) => void; voiceCommandEnabled: boolean; setVoiceCommandEnabled: (value: boolean) => void; isListening: boolean; voiceTranscript: string; voiceUnsupportedReason: string; speak: (text: string) => void; testVoice: () => void; pushToTalk: () => void; hotkeyStatus: { ok: boolean; accelerator: string; error?: string }; assistantName: string; systemVoices: string[]; selectedVoice: string; setSelectedVoice: (value: string) => void }) {
   return <div className="voice-grid">
     <div className="glass-panel"><span>Hotkey Setup</span><strong>{props.hotkeyStatus.ok ? 'Hotkey active' : 'Hotkey unavailable'}</strong><p>{props.hotkeyStatus.ok ? `${props.hotkeyStatus.accelerator} brings AURA forward, focuses command input, captures context, and can start listening if enabled below.` : `Hotkey unavailable - ${props.hotkeyStatus.error || 'enable Accessibility permission for AURA/Electron in System Settings, then relaunch AURA.'}`}</p><button onClick={props.pushToTalk}>Test voice button</button><p className="helper-text">macOS path: System Settings to Privacy & Security to Accessibility, then enable AURA or Electron.</p></div>
-    <div className="glass-panel"><span>Voice output</span><strong>{props.voiceEnabled ? 'Enabled' : 'Optional'}</strong><label><input type="checkbox" checked={props.voiceEnabled} onChange={e => props.setVoiceEnabled(e.target.checked)} /> Speak guidance and status</label><button onClick={props.testVoice}>Test AURA voice</button><p className="helper-text">Status: {props.speechOutputState}</p></div>
+    <div className="glass-panel"><span>Voice output</span><strong>{props.voiceEnabled ? 'Enabled' : 'Optional'}</strong><label><input type="checkbox" checked={props.voiceEnabled} onChange={e => props.setVoiceEnabled(e.target.checked)} /> Speak guidance and status</label><select aria-label="system voice" value={props.selectedVoice} onChange={(e) => props.setSelectedVoice(e.target.value)}><option value="">System default voice</option>{props.systemVoices.map((voice) => <option key={voice} value={voice}>{voice}</option>)}</select><button onClick={props.testVoice}>Test AURA voice</button><p className="helper-text">Status: {props.speechOutputState}</p></div>
     <div className="glass-panel"><span>Voice input</span><strong>{props.isListening ? 'Listening now' : 'Push-to-talk command mode'}</strong><p>{props.voiceStatus}</p><label><input type="checkbox" checked={props.voiceCommandEnabled} onChange={e => props.setVoiceCommandEnabled(e.target.checked)} /> Start listening when hotkey opens AURA</label><button onClick={props.pushToTalk}>{props.isListening ? 'Stop listening' : 'Press and speak'}</button><p className="helper-text">Wake word is coming soon. For now, press the mic or hotkey and speak.</p>{props.voiceTranscript && <p className="transcript-pill">Transcript: {props.voiceTranscript}</p>}{props.voiceUnsupportedReason && <p className="helper-text">{props.voiceUnsupportedReason}</p>}</div>
     <div className="glass-panel"><span>Always-on mode</span><strong>Coming later</strong><p>For now, start AURA when your Mac starts and use the hotkey or voice button.</p></div>
   </div>;

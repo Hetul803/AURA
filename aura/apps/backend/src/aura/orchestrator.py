@@ -7,6 +7,7 @@ import uuid
 
 from .assist import apply_feedback_preferences, draft_from_state
 from .context_engine import capture_current_context
+from .crypto_identity import sign_identity_payload
 from .executor import execute_steps
 from .guardian import record_human_guardian_event
 from .identity_boundary import get_active_identity, memory_scope_decision
@@ -77,6 +78,15 @@ def _identity_context() -> dict:
         'identity_name': identity.get('name'),
         'identity_scope': identity.get('memory_scope') or 'personal',
     }
+
+
+def _signed_identity_payload(identity: dict, payload: dict) -> dict:
+    enriched = dict(payload)
+    try:
+        enriched['identity_signature'] = sign_identity_payload(identity.get('identity_id') or 'personal', enriched)
+    except Exception as exc:
+        enriched['identity_signature_error'] = str(exc)
+    return enriched
 
 
 def _relevant_memory_for_command(text: str, identity: dict, task_type: str | None = None) -> dict:
@@ -155,21 +165,22 @@ def _run_memory_request(run_id: str, text: str, planning_context: dict, event_cb
         'memory_result': result,
         'identity': planning_context.get('identity'),
     })
+    audit_payload = _signed_identity_payload(identity, {
+        'identity_id': identity.get('identity_id'),
+        'identity_name': identity.get('name'),
+        'memory_scope': scope_decision['scope'],
+        'memory_key': key,
+        'stored': bool(result.get('stored')),
+        'rejected': bool(result.get('rejected')),
+        'reasons': result.get('reasons') or [],
+    })
     record_audit_event({
         'run_id': run_id,
         'event_type': 'memory_write_blocked' if result.get('rejected') else 'memory_write_saved',
         'action_type': 'MEMORY_WRITE',
         'risk_level': 'blocked' if result.get('rejected') else 'low',
         'message': f"AURA acted under {identity.get('name') or identity.get('identity_id')} to evaluate memory storage.",
-        'payload': {
-            'identity_id': identity.get('identity_id'),
-            'identity_name': identity.get('name'),
-            'memory_scope': scope_decision['scope'],
-            'memory_key': key,
-            'stored': bool(result.get('stored')),
-            'rejected': bool(result.get('rejected')),
-            'reasons': result.get('reasons') or [],
-        },
+        'payload': audit_payload,
     })
     if result.get('rejected'):
         reasons = result.get('reasons') or []
@@ -244,19 +255,20 @@ def run_command(text: str, event_cb=lambda e: None, choices: dict | None = None,
         'message': f"Using {len(relevant_memory['items'])} relevant memories for {identity_context['identity_name']}.",
         'memory_count': len(relevant_memory['items']),
     })
+    audit_payload = _signed_identity_payload(identity_context['active_identity'], {
+        'identity_id': identity_context['identity_id'],
+        'identity_name': identity_context['identity_name'],
+        'memory_scope': identity_context['identity_scope'],
+        'command': text,
+        'memory_used': relevant_memory['items'],
+    })
     record_audit_event({
         'run_id': run_id,
         'event_type': 'identity_action_started',
         'action_type': 'COMMAND',
         'risk_level': 'low',
         'message': f"AURA acted under {identity_context['identity_name']}.",
-        'payload': {
-            'identity_id': identity_context['identity_id'],
-            'identity_name': identity_context['identity_name'],
-            'memory_scope': identity_context['identity_scope'],
-            'command': text,
-            'memory_used': relevant_memory['items'],
-        },
+        'payload': audit_payload,
     })
 
     if plan['clarifications']:

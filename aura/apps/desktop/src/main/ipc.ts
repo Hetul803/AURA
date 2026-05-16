@@ -30,15 +30,39 @@ export function setHotkeyStatus(status: HotkeyStatus) {
   hotkeyStatus = status;
 }
 
-function speakWithSystemVoice(text: string) {
+function speakWithSystemVoice(text: string, options: { voice?: string; rate?: number } = {}) {
   const clean = String(text || '').replace(/\s+/g, ' ').trim().slice(0, 600);
   if (!clean) return { ok: false, status: 'empty_text', message: 'Nothing to speak.' };
   if (process.platform !== 'darwin') {
     return { ok: false, status: 'unsupported_platform', message: 'System voice fallback is only implemented for macOS right now.' };
   }
-  const child = spawn('say', [clean], { detached: true, stdio: 'ignore' });
+  const args: string[] = [];
+  if (options.voice) args.push('-v', String(options.voice).slice(0, 64));
+  if (options.rate && Number.isFinite(options.rate)) args.push('-r', String(Math.max(120, Math.min(260, Math.round(options.rate)))));
+  args.push(clean);
+  const child = spawn('say', args, { detached: true, stdio: 'ignore' });
   child.unref();
   return { ok: true, status: 'speaking', provider: 'macos_say' };
+}
+
+function listSystemVoices(): Promise<{ ok: boolean; voices: string[]; provider?: string; message?: string }> {
+  if (process.platform !== 'darwin') {
+    return Promise.resolve({ ok: false, voices: [], message: 'System voice listing is only available on macOS.' });
+  }
+  return new Promise((resolve) => {
+    const child = spawn('say', ['-v', '?'], { stdio: ['ignore', 'pipe', 'pipe'] });
+    let out = '';
+    child.stdout.on('data', (chunk) => { out += chunk.toString(); });
+    child.on('close', () => {
+      const voices = out.split('\n')
+        .map((line) => line.trim().split(/\s+/)[0])
+        .filter(Boolean)
+        .filter((voice, index, arr) => arr.indexOf(voice) === index)
+        .slice(0, 80);
+      resolve({ ok: voices.length > 0, voices, provider: 'macos_say' });
+    });
+    child.on('error', (error) => resolve({ ok: false, voices: [], message: error.message }));
+  });
 }
 
 export function registerIpcHandlers(controls: WindowControls = {}) {
@@ -74,7 +98,8 @@ export function registerIpcHandlers(controls: WindowControls = {}) {
     fs.appendFileSync(path.join(logsPath, 'aura-renderer.log'), line);
     return { ok: true };
   });
-  ipcMain.handle('aura:speak-text', async (_event, text: string) => speakWithSystemVoice(text));
+  ipcMain.handle('aura:get-system-voices', async () => listSystemVoices());
+  ipcMain.handle('aura:speak-text', async (_event, text: string, options?: { voice?: string; rate?: number }) => speakWithSystemVoice(text, options || {}));
   ipcMain.handle('aura:overlay-show', async () => windowControls.showOverlay?.() ?? { ok: false, message: 'Overlay controls are not ready.' });
   ipcMain.handle('aura:overlay-hide', async () => windowControls.hideOverlay?.() ?? { ok: false, message: 'Overlay controls are not ready.' });
   ipcMain.handle('aura:overlay-toggle', async () => windowControls.toggleOverlay?.() ?? { ok: false, message: 'Overlay controls are not ready.' });

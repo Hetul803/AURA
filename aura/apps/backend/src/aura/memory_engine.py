@@ -7,6 +7,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from .state import db_conn
+from .crypto_identity import decrypt_text, encrypt_text, is_encrypted_text
 from .privacy import detect_secret, detect_sensitive, redact_text, redact_value, sensitivity_labels
 from llm.embeddings import embed
 
@@ -32,6 +33,9 @@ def _loads(value: str | None, fallback: Any) -> Any:
 
 def _row_to_memory(row) -> dict[str, Any]:
     data = dict(row)
+    raw_value = data.get('value')
+    data['encrypted_at_rest'] = is_encrypted_text(raw_value)
+    data['value'] = decrypt_text(raw_value)
     data['tags'] = _loads(data.pop('tags_json', None), [])
     data['metadata'] = _loads(data.pop('metadata_json', None), {})
     data['provenance'] = _loads(data.pop('provenance_json', None), {})
@@ -172,9 +176,9 @@ def remember_item(
 
     mid = memory_id or f'mem_{uuid.uuid4().hex}'
     now = _now()
-    metadata = redact_value({**(metadata or {}), 'quality_score': adjusted_confidence, 'sensitivity': labels})
+    metadata = redact_value({**(metadata or {}), 'quality_score': adjusted_confidence, 'sensitivity': labels, 'encrypted_at_rest': True})
     provenance = redact_value(provenance or {'source': source, 'created_at': now})
-    value = redact_text(value)
+    value = encrypt_text(redact_text(value))
     payload = (
         mid,
         scope,
@@ -231,10 +235,7 @@ def list_memory_items(
     if scope:
         clauses.append('scope=?')
         params.append(scope)
-    if q:
-        clauses.append('(memory_key LIKE ? OR value LIKE ? OR tags_json LIKE ? OR kind LIKE ?)')
-        like = f'%{q}%'
-        params.extend([like, like, like, like])
+    python_q = q
     where = f"WHERE {' AND '.join(clauses)}" if clauses else ''
     rows = db_conn().execute(
         f'''
@@ -245,7 +246,19 @@ def list_memory_items(
         ''',
         [*params, limit],
     ).fetchall()
-    return [_row_to_memory(row) for row in rows]
+    items = [_row_to_memory(row) for row in rows]
+    if python_q:
+        needle = python_q.lower()
+        items = [
+            item for item in items
+            if needle in ' '.join([
+                item.get('memory_key') or '',
+                item.get('value') or '',
+                ' '.join(item.get('tags') or []),
+                item.get('kind') or '',
+            ]).lower()
+        ]
+    return items
 
 
 def search_memory_items(
@@ -314,7 +327,9 @@ def update_memory_item(memory_id: str, **changes: Any) -> dict[str, Any] | None:
             continue
         if key in allowed:
             if key == 'value':
-                value = redact_text(str(value))
+                value = encrypt_text(redact_text(str(value)))
+            if key == 'metadata':
+                value = {**(value or {}), 'encrypted_at_rest': True}
             fields.append(f'{key}=?')
             params.append(value)
     if not fields:
@@ -414,3 +429,21 @@ def memory_lifecycle_sweep(*, stale_after_days: int = 180, low_confidence: float
             update_memory_item(item['memory_id'], confidence=new_confidence)
             decayed.append(item['memory_id'])
     return {'archived': archived, 'decayed': decayed}
+
+
+def encrypt_existing_memory_items(limit: int = 10000) -> dict[str, Any]:
+    rows = db_conn().execute('SELECT memory_id, value, metadata_json FROM memory_items LIMIT ?', (limit,)).fetchall()
+    encrypted = []
+    with db_conn() as conn:
+        for row in rows:
+            value = row['value'] or ''
+            if not value or is_encrypted_text(value):
+                continue
+            metadata = _loads(row['metadata_json'], {})
+            metadata['encrypted_at_rest'] = True
+            conn.execute(
+                'UPDATE memory_items SET value=?, metadata_json=?, updated_at=? WHERE memory_id=?',
+                (encrypt_text(value), json.dumps(metadata, sort_keys=True), _now(), row['memory_id']),
+            )
+            encrypted.append(row['memory_id'])
+    return {'ok': True, 'encrypted': len(encrypted), 'memory_ids': encrypted[:25]}

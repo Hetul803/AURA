@@ -268,6 +268,18 @@ SCHEMA = [
   created_at TEXT DEFAULT CURRENT_TIMESTAMP,
   updated_at TEXT DEFAULT CURRENT_TIMESTAMP
 );""",
+"""CREATE TABLE IF NOT EXISTS identity_key_records(
+  key_id TEXT PRIMARY KEY,
+  identity_id TEXT,
+  algorithm TEXT,
+  public_key_pem TEXT,
+  encrypted_private_key_pem TEXT,
+  fingerprint TEXT,
+  status TEXT DEFAULT 'active',
+  metadata_json TEXT DEFAULT '{}',
+  created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+  rotated_at TEXT
+);""",
 """CREATE TABLE IF NOT EXISTS boundary_policies(
   policy_id TEXT PRIMARY KEY,
   source_identity TEXT,
@@ -341,6 +353,26 @@ SCHEMA = [
   current_repo TEXT,
   workspace_hint TEXT,
   snapshot_json TEXT
+);""",
+"""CREATE TABLE IF NOT EXISTS license_records(
+  license_id TEXT PRIMARY KEY,
+  account_email TEXT,
+  tier TEXT DEFAULT 'local_free',
+  status TEXT DEFAULT 'inactive',
+  token_hash TEXT,
+  device_fingerprint TEXT,
+  seats INTEGER DEFAULT 1,
+  features_json TEXT DEFAULT '{}',
+  expires_at TEXT,
+  activated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+  verified_at TEXT DEFAULT CURRENT_TIMESTAMP,
+  signature_status TEXT DEFAULT 'not_configured',
+  metadata_json TEXT DEFAULT '{}'
+);""",
+"""CREATE TABLE IF NOT EXISTS brand_settings(
+  key TEXT PRIMARY KEY,
+  value_json TEXT,
+  updated_at TEXT DEFAULT CURRENT_TIMESTAMP
 );""",
 ]
 

@@ -43,6 +43,25 @@ pnpm aura:package
 
 `./start-aura.sh` checks Node, pnpm, Python, Electron, esbuild, and the backend virtual environment. It installs missing dependencies, rebuilds Electron/esbuild for pnpm v10, starts the backend, then launches the desktop app.
 
+## Brand, license, and private alpha
+
+Rename the product before packaging:
+
+```bash
+pnpm aura:brand -- --name="Your Product Name" --company="Your Company" --app-id="com.yourcompany.yourproduct"
+```
+
+Generate signed private-alpha license tokens:
+
+```bash
+python scripts/generate-license-key.py --key-dir ~/AURA_VENDOR_KEYS --email user@example.com --tier private_alpha
+export AURA_LICENSE_PUBLIC_KEY="$(cat ~/AURA_VENDOR_KEYS/vendor_public.pem)"
+```
+
+The shipped app verifies signed license tokens with the public key. The private key must never ship in the app.
+
+See [docs/LAUNCH_READINESS.md](docs/LAUNCH_READINESS.md) for the launch checklist, cryptographic identity notes, encrypted memory behavior, and known public-launch gaps.
+
 If pnpm blocks Electron or esbuild build scripts, run:
 
 ```bash

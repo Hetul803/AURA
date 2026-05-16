@@ -14,8 +14,10 @@ from aura.identity_boundary import (
     set_active_identity,
     upsert_boundary_policy,
 )
+from aura.crypto_identity import identity_attestation, list_identity_keys, sign_identity_payload, verify_identity_signature
+from aura.licensing import generate_dev_license_token
 from aura.orchestrator import run_command
-from aura.memory_engine import list_memory_items
+from aura.memory_engine import encrypt_existing_memory_items, list_memory_items
 from aura.state import list_audit_log
 from aura.state import db_conn
 from storage.db import init_db
@@ -185,6 +187,109 @@ def test_command_memory_and_audit_use_active_identity():
     assert items[0]['metadata']['active_identity'] == 'work'
     audit = list_audit_log(limit=20)
     assert any((row.get('payload') or {}).get('identity_id') == 'work' for row in audit)
+    assert any((row.get('payload') or {}).get('identity_signature') for row in audit)
+
+
+def test_identity_attestation_creates_ed25519_key():
+    _clear_identity_tables()
+    ensure_default_identities()
+
+    attestation = identity_attestation(get_active_identity())
+
+    assert attestation['key']['algorithm'] == 'ed25519'
+    assert attestation['key']['fingerprint']
+    assert attestation['copy_resistance']['private_key_encrypted_at_rest'] is True
+    assert list_identity_keys('personal')
+
+    signature = sign_identity_payload('personal', {'action': 'demo', 'scope': 'personal'})
+    assert signature['signature']
+    public_key = attestation['key']['public_key_pem']
+    assert verify_identity_signature(public_key, {'action': 'demo', 'scope': 'personal'}, signature['signature'])
+
+
+def test_memory_values_are_encrypted_at_rest_but_decrypted_for_use():
+    _clear_identity_tables()
+    with db_conn() as conn:
+        conn.execute('DELETE FROM memory_items')
+    ensure_default_identities()
+
+    result = client.post('/memory/items', json={
+        'kind': 'preference',
+        'key': 'writing.style',
+        'value': 'I prefer concise technical explanations.',
+        'scope': 'personal',
+    })
+
+    assert result.status_code == 200
+    body = result.json()
+    assert body['stored'] is True
+    assert body['value'] == 'I prefer concise technical explanations.'
+    assert body['encrypted_at_rest'] is True
+    row = db_conn().execute('SELECT value FROM memory_items WHERE memory_id=?', (body['memory_id'],)).fetchone()
+    assert row['value'].startswith('enc:v1:')
+    assert 'concise technical' not in row['value']
+
+
+def test_existing_plaintext_memory_items_are_migrated_to_encrypted_storage():
+    _clear_identity_tables()
+    with db_conn() as conn:
+        conn.execute('DELETE FROM memory_items')
+        conn.execute(
+            '''
+            INSERT INTO memory_items(memory_id, scope, kind, memory_key, value, tags_json, confidence, source, permission)
+            VALUES('mem_plaintext_fixture','personal','preference','workspace.path','Use /Users/me/AURA workspaces','[]',0.8,'fixture','private')
+            '''
+        )
+
+    migrated = encrypt_existing_memory_items()
+
+    assert migrated['encrypted'] == 1
+    row = db_conn().execute("SELECT value FROM memory_items WHERE memory_id='mem_plaintext_fixture'").fetchone()
+    assert row['value'].startswith('enc:v1:')
+    assert 'AURA workspaces' not in row['value']
+    item = list_memory_items(scope='personal')[0]
+    assert item['value'] == 'Use /Users/me/AURA workspaces'
+
+
+def test_signed_license_token_requires_configured_vendor_key(monkeypatch):
+    monkeypatch.delenv('AURA_LICENSE_PUBLIC_KEY', raising=False)
+    token = 'payload.signature'
+    response = client.post('/license/activate', json={'token': token})
+    assert response.status_code == 400
+    assert response.json()['detail']['status'] == 'license_server_not_configured'
+
+
+def test_signed_license_token_activates_with_vendor_public_key(tmp_path, monkeypatch):
+    from cryptography.hazmat.primitives import serialization
+    from cryptography.hazmat.primitives.asymmetric import ed25519
+
+    private = ed25519.Ed25519PrivateKey.generate()
+    private_pem = private.private_bytes(
+        encoding=serialization.Encoding.PEM,
+        format=serialization.PrivateFormat.PKCS8,
+        encryption_algorithm=serialization.NoEncryption(),
+    ).decode('utf-8')
+    public_pem = private.public_key().public_bytes(
+        encoding=serialization.Encoding.PEM,
+        format=serialization.PublicFormat.SubjectPublicKeyInfo,
+    ).decode('utf-8')
+    monkeypatch.setenv('AURA_LICENSE_PUBLIC_KEY', public_pem)
+    with db_conn() as conn:
+        conn.execute('DELETE FROM license_records')
+
+    token = generate_dev_license_token(private_pem, {
+        'license_id': 'lic_test',
+        'account_email': 'alpha@example.com',
+        'tier': 'private_alpha',
+        'features': {'guardian': True, 'encrypted_memory': True},
+    })
+    response = client.post('/license/activate', json={'token': token})
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body['activated'] is True
+    assert body['tier'] == 'private_alpha'
+    assert body['signature_status'] == 'ed25519_verified'
 
 
 def test_enterprise_architecture_doc_exists():

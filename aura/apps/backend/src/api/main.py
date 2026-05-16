@@ -11,6 +11,7 @@ from pydantic import BaseModel
 from aura.assist import capture_structured_context
 from aura.agent_router import get_agent, list_agents, route_agent, workflow_suggestions
 from aura.ambient_adapters import adapter_contracts, classify_ambient_action, create_ambient_routine, get_ambient_routine, list_ambient_routines
+from aura.branding import get_brand, update_brand
 from aura.context_engine import capture_current_context, latest_context_snapshot, list_context_snapshots
 from aura.cost_router import (
     list_usage_events,
@@ -22,6 +23,7 @@ from aura.cost_router import (
     usage_summary,
 )
 from aura.guardian import record_human_guardian_event
+from aura.crypto_identity import identity_attestation, list_identity_keys, sign_identity_payload
 from aura.device_handoff import create_handoff, get_handoff, list_handoffs, update_handoff
 from aura.identity_boundary import (
     check_boundary,
@@ -50,6 +52,7 @@ from aura.memory_engine import (
     archive_memory_item,
     compact_memory_items,
     delete_memory_item,
+    encrypt_existing_memory_items,
     list_memory_items,
     memory_lifecycle_sweep,
     remember_item,
@@ -58,6 +61,7 @@ from aura.memory_engine import (
     update_memory_item,
 )
 from aura.local_model_setup import local_model_status, pull_model, select_model, start_ollama_server
+from aura.licensing import activate_license, license_status
 from aura.models import available_models
 from aura.mobile_companion import (
     create_mobile_approval_card,
@@ -102,6 +106,7 @@ from tools.browser_runtime import browser_manager
 from tools.registry import actions_for_device, get_tool_spec, list_tool_specs
 
 run_migrations()
+encrypt_existing_memory_items()
 app = FastAPI(title='AURA Backend')
 app.add_middleware(
     CORSMiddleware,
@@ -379,6 +384,28 @@ class ActiveIdentityBody(BaseModel):
     identity_id: str
 
 
+class IdentitySignBody(BaseModel):
+    payload: dict
+
+
+class LicenseActivationBody(BaseModel):
+    token: str
+    account_email: str | None = None
+
+
+class BrandPatchBody(BaseModel):
+    product_name: str | None = None
+    assistant_default_name: str | None = None
+    company_name: str | None = None
+    tagline: str | None = None
+    support_url: str | None = None
+    download_url: str | None = None
+    privacy_url: str | None = None
+    terms_url: str | None = None
+    app_id: str | None = None
+    artifact_name: str | None = None
+
+
 class MobileDeviceBody(BaseModel):
     device_name: str
     pairing_code: str
@@ -437,6 +464,29 @@ class RejectBody(BaseModel):
 @app.get('/health')
 def health():
     return {'ok': True}
+
+
+@app.get('/brand')
+def brand_get():
+    return get_brand()
+
+
+@app.patch('/brand')
+def brand_patch(body: BrandPatchBody):
+    return update_brand(body.model_dump(exclude_unset=True))
+
+
+@app.get('/license/status')
+def license_get():
+    return license_status()
+
+
+@app.post('/license/activate')
+def license_activate(body: LicenseActivationBody):
+    result = activate_license(body.token, body.account_email)
+    if not result.get('activated') and not result.get('ok'):
+        raise HTTPException(400, result)
+    return result
 
 
 @app.get('/models')
@@ -581,6 +631,28 @@ def identities_active_set(body: ActiveIdentityBody):
         return set_active_identity(body.identity_id)
     except KeyError as exc:
         raise HTTPException(404, 'identity not found') from exc
+
+
+@app.get('/identities/active/attestation')
+def identities_active_attestation():
+    return identity_attestation(get_active_identity())
+
+
+@app.get('/identities/{identity_id}/keys')
+def identities_keys(identity_id: str):
+    identity = next((item for item in list_identities() if item.get('identity_id') == identity_id), None)
+    if not identity:
+        raise HTTPException(404, 'identity not found')
+    identity_attestation(identity)
+    return list_identity_keys(identity_id)
+
+
+@app.post('/identities/{identity_id}/sign')
+def identities_sign(identity_id: str, body: IdentitySignBody):
+    identity = next((item for item in list_identities() if item.get('identity_id') == identity_id), None)
+    if not identity:
+        raise HTTPException(404, 'identity not found')
+    return sign_identity_payload(identity_id, body.payload)
 
 
 @app.get('/boundaries/policies')

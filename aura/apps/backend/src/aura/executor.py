@@ -4,6 +4,7 @@ import time
 from copy import deepcopy
 
 from . import observer
+from .crypto_identity import sign_identity_payload
 from .evaluator import evaluate_step
 from .guardian import decision_event, record_step_events
 from .repair import build_repair_step, strategy_for_failure
@@ -88,6 +89,20 @@ def _record_step_history(run_id: str, step, status: str, **extra):
         },
     )
     if status in {'needs_confirmation', 'blocked', 'success', 'terminal_failure', 'needs_user'}:
+        payload = {
+            'identity_id': identity.get('identity_id', 'personal'),
+            'identity_name': identity.get('name', 'Personal AURA'),
+            'memory_scope': identity.get('memory_scope', 'personal'),
+            'step_name': step.name,
+            'tool': step.tool,
+            'action_type': step.action_type,
+            'status': status,
+            **extra,
+        }
+        try:
+            payload['identity_signature'] = sign_identity_payload(payload['identity_id'], payload)
+        except Exception as exc:
+            payload['identity_signature_error'] = str(exc)
         record_audit_event({
             'run_id': run_id,
             'step_id': step.id,
@@ -95,16 +110,7 @@ def _record_step_history(run_id: str, step, status: str, **extra):
             'action_type': step.action_type,
             'risk_level': step.safety_level,
             'message': f"AURA acted under {identity.get('name') or 'Personal AURA'}: {step.name} -> {status}.",
-            'payload': {
-                'identity_id': identity.get('identity_id', 'personal'),
-                'identity_name': identity.get('name', 'Personal AURA'),
-                'memory_scope': identity.get('memory_scope', 'personal'),
-                'step_name': step.name,
-                'tool': step.tool,
-                'action_type': step.action_type,
-                'status': status,
-                **extra,
-            },
+            'payload': payload,
         })
 
 

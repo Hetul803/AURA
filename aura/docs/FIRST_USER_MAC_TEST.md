@@ -30,6 +30,22 @@ chmod +x start-aura.sh
 4. Drag AURA into Applications if prompted.
 5. Because this private-alpha build is unsigned, macOS may block the first launch. Use Finder, right-click AURA, choose Open, then confirm Open.
 
+Optional brand rename before building:
+
+```bash
+pnpm aura:brand -- --name="Your Product Name" --company="Your Company" --app-id="com.yourcompany.yourproduct"
+pnpm aura:package
+```
+
+Optional signed license setup for a 10-user private alpha:
+
+```bash
+python scripts/generate-license-key.py --key-dir ~/AURA_VENDOR_KEYS --email alpha-user@example.com --tier private_alpha
+export AURA_LICENSE_PUBLIC_KEY="$(cat ~/AURA_VENDOR_KEYS/vendor_public.pem)"
+```
+
+Paste the generated token in Advanced / Diagnostics -> Settings -> License. The private key must never ship inside the app.
+
 Success: AURA opens to the persona-led first launch. You should meet AURA before seeing the home command layer.
 
 Failure: macOS says the app is damaged or cannot be opened. Remove quarantine for local testing only:
@@ -184,7 +200,10 @@ Drag AURA into Applications, then right-click Open because the private-alpha app
 - one command input;
 - Guardian Watchtower visible with real events and clearly-labeled examples;
 - active identity visible as Personal AURA by default;
+- identity card shows an Ed25519 fingerprint after the local identity key is created;
 - Memory Console available behind Advanced / Diagnostics and in onboarding;
+- Memory Console values are readable in the UI but encrypted at rest in SQLite;
+- License status is visible as local alpha or active signed license;
 - Advanced / Diagnostics hidden unless opened.
 
 4. Complete onboarding quickly:

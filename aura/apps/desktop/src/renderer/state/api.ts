@@ -89,6 +89,34 @@ export async function getProfileStatus() {
   return r.json();
 }
 
+export async function getBrand() {
+  const r = await fetch(`${BACKEND_URL}/brand`);
+  return r.json();
+}
+
+export async function updateBrand(patch: any) {
+  const r = await fetch(`${BACKEND_URL}/brand`, {
+    method: 'PATCH',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(patch)
+  });
+  return r.json();
+}
+
+export async function getLicenseStatus() {
+  const r = await fetch(`${BACKEND_URL}/license/status`);
+  return r.json();
+}
+
+export async function activateLicense(token: string, accountEmail?: string) {
+  const r = await fetch(`${BACKEND_URL}/license/activate`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ token, account_email: accountEmail || undefined })
+  });
+  return r.json();
+}
+
 export async function getIdentities() {
   const r = await fetch(`${BACKEND_URL}/identities`);
   return r.json();
@@ -96,6 +124,11 @@ export async function getIdentities() {
 
 export async function getActiveIdentity() {
   const r = await fetch(`${BACKEND_URL}/identities/active`);
+  return r.json();
+}
+
+export async function getActiveIdentityAttestation() {
+  const r = await fetch(`${BACKEND_URL}/identities/active/attestation`);
   return r.json();
 }
 
