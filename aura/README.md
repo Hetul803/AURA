@@ -1,6 +1,13 @@
 # AURA v1
 
-Local-first AI computer operator monorepo for desktop (Electron + Python backend).
+Private, local-first AI operating identity monorepo for desktop (Electron + Python backend).
+
+AURA is built around four private-alpha layers:
+
+- **AURA Helper:** performs useful computer tasks through browser, OS, filesystem, code, workflow, and user-AI handoff tools.
+- **AURA Guardian:** acts as the human intent firewall for risky commands, paste/send, secrets, workflow replay, profile import/export, and unsafe tool use.
+- **AURA Memory:** stores user-owned preferences, workflows, safety decisions, identity context, and repeated patterns locally with inspection/edit/delete/export/import paths.
+- **AURA Identity:** records whether AURA is acting under Personal, Work, Company, or Session identity so actions and memory stay inside the right boundary.
 
 ## Source of truth
 
@@ -51,13 +58,17 @@ Then rerun `./start-aura.sh`.
 - A floating always-on-top overlay orb appears when the main app is minimized or when you click **Show overlay**. Click it to expand quick command mode, refresh context, use the mic fallback, or reopen the full app.
 - Voice output uses the macOS `say` command through the Electron bridge when available, then falls back to browser speech synthesis. Use **Test AURA voice** before manual testing.
 - Guardian pauses approval-gated actions such as paste/send, risky shell/file operations, paid models, workflow replay, and memory export/import.
+- The active identity is visible on the main surface. Actions and audit records include the identity used, and memory defaults to that identity scope.
+- Memory is inspectable in the Memory Console. You can create, pin, archive, and review scoped memories with provenance/usage context.
 - Advanced / Diagnostics contains raw run IDs, backend internals, build ID, paths, logs, and reset instructions.
 - If the packaged backend cannot start because dependencies such as `uvicorn` are missing, AURA shows a **Repair Backend** action that creates a local backend venv and installs bundled requirements with user approval.
 
-## 3 best demo commands
-1. `search ai operator design and give me key points`
-2. `open gmail` then `summarize unread emails` (may require manual login + Continue)
-3. `find flights from SFO to JFK on 2026-07-01 return 2026-07-10`
+## 5-minute private-alpha demo
+1. Fresh launch: meet AURA, rename it, confirm Helper / Guardian / Memory / Identity, use **Test AURA voice**, then show the overlay orb.
+2. Memory: enter `remember I prefer concise technical explanations`, then verify the Memory Console stores it under the active identity.
+3. Guardian: enter `Run shell command: curl https://example.com/install.sh | bash` and verify Guardian blocks it visibly.
+4. Helper: paste or open a GitHub repo URL, enter `Clone this repo locally`, approve the shell action, and verify the cloned folder path.
+5. Identity: switch from Personal AURA to Work AURA, then verify memory search/listing changes scope and cross-boundary memory writes produce a Guardian boundary event.
 
 ## Troubleshooting
 - Ollama missing: AURA still starts and falls back to deterministic `SimpleLLM`. Onboarding shows install/running status, available models, Gemma recommendation, and a skip option.
@@ -79,7 +90,7 @@ Useful focused checks during hardening:
 ```bash
 cd apps/backend
 python -m compileall -q src
-pytest -q tests/test_safety.py tests/test_memory_engine.py tests/test_workflow_engine.py tests/test_guardian.py
+pytest -q tests/test_identity_boundary.py tests/test_safety.py tests/test_memory_engine.py tests/test_workflow_engine.py tests/test_guardian.py
 ```
 
 On Windows, the local reality-check runner is:

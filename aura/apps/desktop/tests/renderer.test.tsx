@@ -204,10 +204,10 @@ describe('renderer', () => {
     expect(screen.getByText(/Website permission monitoring is planned/)).toBeTruthy();
     expect(screen.queryByText(/Memory intelligence/)).toBeNull();
     fireEvent.click(screen.getByText(/Advanced \/ Diagnostics/));
-    await waitFor(() => expect(screen.getByText(/Memory/)).toBeTruthy());
+    await waitFor(() => expect(screen.getAllByText(/Memory/).length).toBeGreaterThan(0));
     fireEvent.click(screen.getByText(/^Memory$/));
-    await waitFor(() => expect(screen.getByText(/No memory updates yet/)).toBeTruthy());
-    expect(screen.getAllByText(/No memory updates yet/).length).toBeGreaterThan(0);
+    await waitFor(() => expect(screen.getByText(/Memory inbox is ready/)).toBeTruthy());
+    expect(screen.getAllByText(/Memory inbox is ready/).length).toBeGreaterThan(0);
   });
 
   it('renders rich Guardian events in the main action stream', async () => {

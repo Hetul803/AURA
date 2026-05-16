@@ -16,6 +16,7 @@ from .state import (
     is_step_approved,
     is_run_cancelled,
     record_guardian_event,
+    record_audit_event,
     record_run_event,
     record_safety_event,
     update_run_context,
@@ -71,6 +72,8 @@ def _emit_step(event_cb, run_id: str, step, status: str, **extra):
 
 
 def _record_step_history(run_id: str, step, status: str, **extra):
+    ctx = get_run_context(run_id) or {}
+    identity = (ctx.get('identity') or {}).get('active_identity') or {}
     append_run_history(
         run_id,
         'step_history',
@@ -84,6 +87,25 @@ def _record_step_history(run_id: str, step, status: str, **extra):
             **extra,
         },
     )
+    if status in {'needs_confirmation', 'blocked', 'success', 'terminal_failure', 'needs_user'}:
+        record_audit_event({
+            'run_id': run_id,
+            'step_id': step.id,
+            'event_type': f'action_{status}',
+            'action_type': step.action_type,
+            'risk_level': step.safety_level,
+            'message': f"AURA acted under {identity.get('name') or 'Personal AURA'}: {step.name} -> {status}.",
+            'payload': {
+                'identity_id': identity.get('identity_id', 'personal'),
+                'identity_name': identity.get('name', 'Personal AURA'),
+                'memory_scope': identity.get('memory_scope', 'personal'),
+                'step_name': step.name,
+                'tool': step.tool,
+                'action_type': step.action_type,
+                'status': status,
+                **extra,
+            },
+        })
 
 
 def _record_failure(run_id: str, step, decision: dict, observation_map: dict):

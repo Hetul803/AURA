@@ -27,8 +27,11 @@ from aura.identity_boundary import (
     check_boundary,
     create_identity,
     ensure_default_identities,
+    get_active_identity,
     list_boundary_policies,
     list_identities,
+    memory_scope_decision,
+    set_active_identity,
     upsert_boundary_policy,
 )
 from devices.adapters import get_device_adapter, list_device_adapters
@@ -141,7 +144,7 @@ class MemoryItemCreate(BaseModel):
     kind: str = 'note'
     key: str
     value: str
-    scope: str = 'personal'
+    scope: str = 'active'
     permission: str = 'private'
     tags: list[str] = []
     confidence: float = 0.5
@@ -372,6 +375,10 @@ class BoundaryCheckBody(BaseModel):
     action: str
 
 
+class ActiveIdentityBody(BaseModel):
+    identity_id: str
+
+
 class MobileDeviceBody(BaseModel):
     device_name: str
     pairing_code: str
@@ -561,6 +568,19 @@ def identities_list():
 @app.post('/identities')
 def identities_create(body: IdentityCreateBody):
     return create_identity(**body.model_dump())
+
+
+@app.get('/identities/active')
+def identities_active_get():
+    return get_active_identity()
+
+
+@app.post('/identities/active')
+def identities_active_set(body: ActiveIdentityBody):
+    try:
+        return set_active_identity(body.identity_id)
+    except KeyError as exc:
+        raise HTTPException(404, 'identity not found') from exc
 
 
 @app.get('/boundaries/policies')
@@ -1096,24 +1116,68 @@ def memories_delete(mid: int):
 
 @app.get('/memory/items')
 def memory_items_list(q: str | None = None, kind: str | None = None, scope: str | None = None, include_archived: bool = False, limit: int = 100):
-    return list_memory_items(q=q, kind=kind, scope=scope, include_archived=include_archived, limit=limit)
+    decision = memory_scope_decision(requested_scope=scope, action='read')
+    if decision['decision'] == 'deny':
+        record_human_guardian_event(
+            severity='blocked',
+            title='Guardian blocked cross-identity memory read.',
+            explanation=decision['reason'],
+            action_required='Switch identity or explicitly request an approved import/export flow.',
+            event_type='identity_boundary',
+            action='MEMORY_READ',
+            risk='blocked',
+            context={'requested_scope': decision['scope'], 'active_identity': decision['identity'].get('identity_id')},
+        )
+        return []
+    if decision['decision'] == 'require_approval' and scope:
+        record_human_guardian_event(
+            severity='approval_required',
+            title='Guardian needs approval for cross-identity memory read.',
+            explanation=decision['reason'],
+            action_required='Use the active identity memory scope, or approve a boundary transfer workflow.',
+            event_type='identity_boundary',
+            action='MEMORY_READ',
+            risk='high',
+            context={'requested_scope': decision['scope'], 'active_identity': decision['identity'].get('identity_id')},
+        )
+        return []
+    return list_memory_items(q=q, kind=kind, scope=decision['scope'], include_archived=include_archived, limit=limit)
 
 
 @app.post('/memory/items')
 def memory_items_create(body: MemoryItemCreate):
+    decision = memory_scope_decision(requested_scope=body.scope, action='remember')
+    if decision['decision'] in {'deny', 'require_approval'}:
+        record_human_guardian_event(
+            severity='blocked' if decision['decision'] == 'deny' else 'approval_required',
+            title='Guardian stopped cross-identity memory storage.' if decision['decision'] == 'deny' else 'Guardian needs approval before cross-identity memory storage.',
+            explanation=decision['reason'],
+            action_required='Switch to the matching identity or save this memory in the active identity scope.',
+            event_type='identity_boundary',
+            action='MEMORY_WRITE',
+            risk='blocked' if decision['decision'] == 'deny' else 'high',
+            context={'requested_scope': decision['scope'], 'active_identity': decision['identity'].get('identity_id')},
+        )
+        return {
+            'stored': False,
+            'rejected': True,
+            'reasons': ['identity_boundary_' + decision['decision']],
+            'scope': decision['scope'],
+            'active_identity': decision['identity'],
+        }
     result = remember_item(
         kind=body.kind,
         key=body.key,
         value=body.value,
-        scope=body.scope,
+        scope=decision['scope'],
         permission=body.permission,
         tags=body.tags,
         confidence=body.confidence,
         source=body.source,
         pinned=body.pinned,
-        provenance=body.provenance,
+        provenance={**body.provenance, 'active_identity': decision['identity'].get('identity_id')},
         user_notes=body.user_notes,
-        metadata=body.metadata,
+        metadata={**body.metadata, 'active_identity': decision['identity'].get('identity_id')},
     )
     if result.get('rejected'):
         reasons = result.get('reasons') or []
@@ -1149,7 +1213,20 @@ def memory_items_delete(memory_id: str, archive: bool = True):
 
 @app.post('/memory/search')
 def memory_search(body: MemorySearchBody):
-    return search_memory_items(body.query, kind=body.kind, scope=body.scope, task_type=body.task_type, permission=body.permission, limit=body.limit)
+    decision = memory_scope_decision(requested_scope=body.scope, action='read')
+    if decision['decision'] in {'deny', 'require_approval'} and body.scope:
+        record_human_guardian_event(
+            severity='blocked' if decision['decision'] == 'deny' else 'approval_required',
+            title='Guardian protected identity-scoped memory.',
+            explanation=decision['reason'],
+            action_required='Switch identity or approve a boundary workflow before using this memory.',
+            event_type='identity_boundary',
+            action='MEMORY_SEARCH',
+            risk='blocked' if decision['decision'] == 'deny' else 'high',
+            context={'requested_scope': decision['scope'], 'active_identity': decision['identity'].get('identity_id')},
+        )
+        return []
+    return search_memory_items(body.query, kind=body.kind, scope=decision['scope'], task_type=body.task_type, permission=body.permission, limit=body.limit)
 
 
 @app.post('/memory/items/{memory_id}/reinforce')

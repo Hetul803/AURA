@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 import time
 import uuid
 
@@ -8,13 +9,14 @@ from .assist import apply_feedback_preferences, draft_from_state
 from .context_engine import capture_current_context
 from .executor import execute_steps
 from .guardian import record_human_guardian_event
+from .identity_boundary import get_active_identity, memory_scope_decision
 from .learning import record_run_learning
 from .macros import match_macro, record_macro, render_macro_steps, touch_macro
 from .memory import remember_execution, write_memory
-from .memory_engine import remember_item
+from .memory_engine import remember_item, search_memory_items
 from .planner import plan_from_text
 from .prefs import set_pref
-from .state import decide_approval, get_run_context, record_run_event, set_run_context, update_run_context
+from .state import decide_approval, get_run_context, record_audit_event, record_run_event, set_run_context, update_run_context
 from .steps import Step
 from .workflow_engine import create_workflow
 
@@ -60,6 +62,50 @@ def _capture_planning_context() -> dict:
         return {'ok': False, 'source': 'command', 'error': str(exc), 'context_refs': []}
 
 
+def _path_from_memory(value: str) -> str | None:
+    match = re.search(r'(~?/[\w .@%+=:,/\\-]+)', value or '')
+    if match:
+        return match.group(1).strip().rstrip('.')
+    return None
+
+
+def _identity_context() -> dict:
+    identity = get_active_identity()
+    return {
+        'active_identity': identity,
+        'identity_id': identity.get('identity_id'),
+        'identity_name': identity.get('name'),
+        'identity_scope': identity.get('memory_scope') or 'personal',
+    }
+
+
+def _relevant_memory_for_command(text: str, identity: dict, task_type: str | None = None) -> dict:
+    scope = identity.get('memory_scope') or 'personal'
+    items = search_memory_items(text, scope=scope, task_type=task_type, permission='private', limit=5)
+    workspace_hint = None
+    for item in items:
+        key = str(item.get('memory_key') or '').lower()
+        value = str(item.get('value') or '')
+        if any(token in key for token in ['workspace', 'folder', 'clone.path', 'project.folder']):
+            workspace_hint = _path_from_memory(value)
+            if workspace_hint:
+                break
+    return {
+        'items': [
+            {
+                'memory_id': item.get('memory_id'),
+                'kind': item.get('kind'),
+                'scope': item.get('scope'),
+                'memory_key': item.get('memory_key'),
+                'score': item.get('score'),
+                'reason': f"Matched this command under {scope} identity scope.",
+            }
+            for item in items
+        ],
+        'workspace_hint': workspace_hint,
+    }
+
+
 def _memory_request_payload(text: str) -> tuple[str, str] | None:
     low = text.lower().strip()
     if low.startswith('remember this '):
@@ -81,7 +127,19 @@ def _run_memory_request(run_id: str, text: str, planning_context: dict, event_cb
     if not payload:
         return None
     key, value = payload
-    result = remember_item(kind='note', key=key, value=value, scope='personal', permission='private', source='user', confidence=0.75, provenance={'run_id': run_id, 'source': 'command'})
+    identity = (planning_context.get('identity') or {}).get('active_identity') or get_active_identity()
+    scope_decision = memory_scope_decision(requested_scope=identity.get('memory_scope') or 'personal', action='remember', active_identity=identity)
+    result = remember_item(
+        kind='preference' if any(token in value.lower() for token in ['prefer', 'preference', 'always', 'usually']) else 'note',
+        key=key,
+        value=value,
+        scope=scope_decision['scope'],
+        permission='private',
+        source='user',
+        confidence=0.75,
+        provenance={'run_id': run_id, 'source': 'command', 'active_identity': identity.get('identity_id')},
+        metadata={'active_identity': identity.get('identity_id'), 'identity_scope': scope_decision['scope']},
+    )
     status = 'blocked' if result.get('rejected') else 'done'
     set_run_context(run_id, {
         'text': text,
@@ -95,6 +153,23 @@ def _run_memory_request(run_id: str, text: str, planning_context: dict, event_cb
         'terminal_outcome': 'blocked' if result.get('rejected') else 'success',
         'approval_state': {'required': False, 'status': 'not_requested'},
         'memory_result': result,
+        'identity': planning_context.get('identity'),
+    })
+    record_audit_event({
+        'run_id': run_id,
+        'event_type': 'memory_write_blocked' if result.get('rejected') else 'memory_write_saved',
+        'action_type': 'MEMORY_WRITE',
+        'risk_level': 'blocked' if result.get('rejected') else 'low',
+        'message': f"AURA acted under {identity.get('name') or identity.get('identity_id')} to evaluate memory storage.",
+        'payload': {
+            'identity_id': identity.get('identity_id'),
+            'identity_name': identity.get('name'),
+            'memory_scope': scope_decision['scope'],
+            'memory_key': key,
+            'stored': bool(result.get('stored')),
+            'rejected': bool(result.get('rejected')),
+            'reasons': result.get('reasons') or [],
+        },
     })
     if result.get('rejected'):
         reasons = result.get('reasons') or []
@@ -152,11 +227,37 @@ def run_command(text: str, event_cb=lambda e: None, choices: dict | None = None,
     run_id = run_id or str(uuid.uuid4())
     _send_event(event_cb, {'type': 'run_start', 'run_id': run_id, 'status': 'running', 'message': text})
     planning_context = {**context, 'client_supplied': True} if context is not None else _capture_planning_context()
+    identity_context = _identity_context()
+    planning_context['identity'] = identity_context
     _send_event(event_cb, {'type': 'context_captured', 'run_id': run_id, 'status': 'running', 'message': 'Context snapshot captured.', 'context_snapshot_id': planning_context.get('snapshot_id')})
     special = _run_memory_request(run_id, text, planning_context, event_cb) or _run_workflow_save_request(run_id, text, planning_context, event_cb)
     if special:
         return special
+    relevant_memory = _relevant_memory_for_command(text, identity_context['active_identity'])
+    if relevant_memory.get('workspace_hint') and not planning_context.get('workspace_hint'):
+        planning_context['workspace_hint'] = relevant_memory['workspace_hint']
     plan = plan_from_text(text, choices, planning_context)
+    _send_event(event_cb, {
+        'type': 'memory_used',
+        'run_id': run_id,
+        'status': 'running',
+        'message': f"Using {len(relevant_memory['items'])} relevant memories for {identity_context['identity_name']}.",
+        'memory_count': len(relevant_memory['items']),
+    })
+    record_audit_event({
+        'run_id': run_id,
+        'event_type': 'identity_action_started',
+        'action_type': 'COMMAND',
+        'risk_level': 'low',
+        'message': f"AURA acted under {identity_context['identity_name']}.",
+        'payload': {
+            'identity_id': identity_context['identity_id'],
+            'identity_name': identity_context['identity_name'],
+            'memory_scope': identity_context['identity_scope'],
+            'command': text,
+            'memory_used': relevant_memory['items'],
+        },
+    })
 
     if plan['clarifications']:
         set_run_context(run_id, {'text': text, 'choices': choices or {}, 'use_macro': use_macro, 'status': 'needs_clarification', 'planning_context': planning_context, 'plan': {**plan, 'steps': []}})
@@ -183,6 +284,8 @@ def run_command(text: str, event_cb=lambda e: None, choices: dict | None = None,
             'suggestion_confidence': (proactive or {}).get('suggestion_confidence'),
             'signals_used': list((proactive or {}).get('signals_used', [])),
         },
+        'identity': identity_context,
+        'memory_used': relevant_memory['items'],
         'steps': [s.model_dump() for s in steps],
         'plan': {**plan, 'steps': [s.model_dump() for s in steps]},
         'current_step_index': 0,

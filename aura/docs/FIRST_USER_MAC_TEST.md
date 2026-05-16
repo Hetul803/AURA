@@ -71,12 +71,13 @@ First launch should feel like meeting the assistant, not filling out a developer
 2. Rename AURA: rename it to a test name such as Alice, save it, and verify the caption says "Good choice. I'm Alice now."
 3. What I Can Do: verify AURA explains natural intent examples and clearly separates current abilities from future monitoring.
 4. Guardian: verify the Guardian Watchtower explains active protection and marks website/app permission monitoring as planned, not active.
-5. Local-First Privacy: verify local model, Codex, ChatGPT, and Claude routing is explained without forcing setup.
-6. Workspace: accept the default workspace or choose another folder. This should be fast and skippable.
-7. Local Brain: verify OS, chip, RAM, Ollama installed/running state, available models, recommendation, and approval-gated model pull. Skipping local model setup must not block first use.
-8. Optional Workers: verify Codex, ChatGPT, and Claude are optional.
-9. Permissions: verify Accessibility, Automation, Microphone, Screen Recording, and browser handoff are explained only as needed.
-10. Start Using AURA: enter the command layer.
+5. Memory and Identity: verify AURA explains local persistent memory and shows Personal / Work / Company / Session identity scopes.
+6. Local-First Privacy: verify local model, Codex, ChatGPT, and Claude routing is explained without forcing setup.
+7. Workspace: accept the default workspace or choose another folder. This should be fast and skippable.
+8. Local Brain: verify OS, chip, RAM, Ollama installed/running state, available models, recommendation, and approval-gated model pull. Skipping local model setup must not block first use.
+9. Optional Workers: verify Codex, ChatGPT, and Claude are optional.
+10. Permissions: verify Accessibility, Automation, Microphone, Screen Recording, and browser handoff are explained only as needed.
+11. Start Using AURA: enter the command layer.
 
 Success: pressing Enter command layer opens the presence-first home with the living assistant, one command input, captions, conversation stream, "AURA sees", and Guardian Watchtower. Memory, workflows, model setup, raw timeline, context JSON, and diagnostics should be hidden behind Advanced / Diagnostics.
 The home screen should show `AURA Core online`, Guardian Watchtower, local model status, a visible Restart onboarding button, current context, and a natural conversation/action stream.
@@ -182,6 +183,8 @@ Drag AURA into Applications, then right-click Open because the private-alpha app
 - animated living AURA presence;
 - one command input;
 - Guardian Watchtower visible with real events and clearly-labeled examples;
+- active identity visible as Personal AURA by default;
+- Memory Console available behind Advanced / Diagnostics and in onboarding;
 - Advanced / Diagnostics hidden unless opened.
 
 4. Complete onboarding quickly:
@@ -190,6 +193,7 @@ Drag AURA into Applications, then right-click Open because the private-alpha app
 - Rename if desired;
 - What I Can Do;
 - Guardian Watchtower;
+- Memory and Identity;
 - Local-First Privacy;
 - Workspace;
 - Local Brain, skip if Ollama is not ready;
@@ -218,6 +222,20 @@ Expected: AURA drafts a reply and requires approval before paste-back. It must n
 Expected: AURA creates a durable coding job with `AGENT_PROMPT.md`, explains the job location, and does not pretend Codex ran unless configured.
 
 10. Type `Use my ChatGPT subscription to draft a reply`.
+
+Expected: AURA prepares a handoff prompt and pauses before paste/open actions that cross app boundaries.
+
+11. Type `remember I prefer concise technical explanations`.
+
+Expected: AURA saves a preference memory under the active identity, shows it in the Memory Console, and later says it is using relevant memory for matching commands.
+
+12. Switch active identity from Personal AURA to Work AURA.
+
+Expected: the active identity card changes, memory listing/search defaults to the work scope, and attempts to store personal-scope memory while under Work AURA create a Guardian identity-boundary event.
+
+13. Try profile export without approval through the API or UI path.
+
+Expected: Guardian requires approval before export/import because memory can leave AURA's local trust boundary.
 
 Expected: AURA prepares the handoff prompt and pauses before external URL/paste actions.
 

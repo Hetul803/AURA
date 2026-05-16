@@ -7,6 +7,7 @@ apps/web/dist/
 apps/backend/.pytest_cache/
 apps/backend/src/**/*.pyc
 apps/backend/src/**/__pycache__/
+apps/backend/src/*.egg-info/
 __pycache__
 .pytest_cache
 *.pyc

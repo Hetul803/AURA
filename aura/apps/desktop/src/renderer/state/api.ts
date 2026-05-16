@@ -42,6 +42,29 @@ export async function getMemoryItems() {
   return r.json();
 }
 
+export async function createMemoryItem(body: any) {
+  const r = await fetch(`${BACKEND_URL}/memory/items`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(body)
+  });
+  return r.json();
+}
+
+export async function updateMemoryItem(memoryId: string, patch: any) {
+  const r = await fetch(`${BACKEND_URL}/memory/items/${encodeURIComponent(memoryId)}`, {
+    method: 'PATCH',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(patch)
+  });
+  return r.json();
+}
+
+export async function deleteMemoryItem(memoryId: string, archive = true) {
+  const r = await fetch(`${BACKEND_URL}/memory/items/${encodeURIComponent(memoryId)}?archive=${archive ? 'true' : 'false'}`, { method: 'DELETE' });
+  return r.json();
+}
+
 export async function searchMemoryItems(query: string, taskType?: string, limit = 4) {
   const r = await fetch(`${BACKEND_URL}/memory/search`, {
     method: 'POST',
@@ -63,6 +86,25 @@ export async function getWorkflowSuggestions() {
 
 export async function getProfileStatus() {
   const r = await fetch(`${BACKEND_URL}/profile/status`);
+  return r.json();
+}
+
+export async function getIdentities() {
+  const r = await fetch(`${BACKEND_URL}/identities`);
+  return r.json();
+}
+
+export async function getActiveIdentity() {
+  const r = await fetch(`${BACKEND_URL}/identities/active`);
+  return r.json();
+}
+
+export async function setActiveIdentity(identityId: string) {
+  const r = await fetch(`${BACKEND_URL}/identities/active`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ identity_id: identityId })
+  });
   return r.json();
 }
 
