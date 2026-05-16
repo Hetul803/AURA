@@ -7,6 +7,7 @@ import os
 from datetime import UTC, datetime
 from typing import Any
 
+import httpx
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import ed25519
 
@@ -116,6 +117,7 @@ def activate_license(token: str, account_email: str | None = None) -> dict[str, 
     license_id = payload.get('license_id') or hashlib.sha256(token.encode('utf-8')).hexdigest()[:24]
     token_hash = hashlib.sha256(token.encode('utf-8')).hexdigest()
     now = _now()
+    online_activation = activate_device_online(token, payload)
     with db_conn() as conn:
         conn.execute(
             '''
@@ -149,7 +151,7 @@ def activate_license(token: str, account_email: str | None = None) -> dict[str, 
                 now,
                 now,
                 'ed25519_verified',
-                json.dumps({'issuer': payload.get('issuer'), 'raw_payload': payload}, sort_keys=True),
+                json.dumps({'issuer': payload.get('issuer'), 'raw_payload': payload, 'online_activation': online_activation}, sort_keys=True),
             ),
         )
     record_audit_event({
@@ -159,7 +161,42 @@ def activate_license(token: str, account_email: str | None = None) -> dict[str, 
         'message': 'Activated signed AURA license.',
         'payload': {'license_id': license_id, 'tier': payload.get('tier'), 'account_email': account_email or payload.get('account_email')},
     })
-    return license_status()
+    status = license_status()
+    status['online_activation'] = online_activation
+    return status
+
+
+def activate_device_online(token: str, payload: dict[str, Any]) -> dict[str, Any]:
+    server = (os.getenv('AURA_LICENSE_SERVER_URL') or '').rstrip('/')
+    if not server:
+        return {
+            'ok': False,
+            'status': 'license_server_not_configured',
+            'message': 'Local license verified. Set AURA_LICENSE_SERVER_URL to also activate/revoke devices online.',
+        }
+    try:
+        response = httpx.post(
+            f'{server}/api/devices/activate',
+            json={
+                'token': token,
+                'device_fingerprint': _device_fingerprint(),
+                'device_name': os.uname().nodename if hasattr(os, 'uname') else 'AURA device',
+                'metadata': {
+                    'platform': os.uname().sysname if hasattr(os, 'uname') else os.name,
+                    'machine': os.uname().machine if hasattr(os, 'uname') else 'unknown',
+                    'license_id': payload.get('license_id'),
+                },
+            },
+            timeout=6,
+        )
+        data = response.json()
+        return {'ok': response.is_success and bool(data.get('ok')), 'status_code': response.status_code, **data}
+    except Exception as exc:
+        return {
+            'ok': False,
+            'status': 'license_server_unreachable',
+            'message': f'Local license verified, but online device activation failed: {exc}',
+        }
 
 
 def generate_dev_license_token(private_key_pem: str, payload: dict[str, Any]) -> str:

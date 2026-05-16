@@ -8,6 +8,8 @@ contextBridge.exposeInMainWorld('auraDesktop', {
   repairBackend: () => ipcRenderer.invoke('aura:repair-backend'),
   reportRendererIssue: (issue: any) => ipcRenderer.invoke('aura:renderer-issue', issue),
   speakText: (text: string, options?: any) => ipcRenderer.invoke('aura:speak-text', text, options),
+  nativeSpeechStatus: () => ipcRenderer.invoke('aura:native-speech-status'),
+  nativeTranscribe: (options?: any) => ipcRenderer.invoke('aura:native-transcribe', options),
   showOverlay: () => ipcRenderer.invoke('aura:overlay-show'),
   hideOverlay: () => ipcRenderer.invoke('aura:overlay-hide'),
   toggleOverlay: () => ipcRenderer.invoke('aura:overlay-toggle'),

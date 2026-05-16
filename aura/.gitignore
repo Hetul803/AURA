@@ -2,6 +2,7 @@ node_modules
 apps/desktop/dist/
 apps/desktop/dist-electron/
 apps/desktop/build-resources/
+apps/desktop/native/macos/build/
 apps/desktop/release/
 apps/web/dist/
 apps/backend/.pytest_cache/
@@ -22,3 +23,4 @@ apps/desktop/dist
 apps/desktop/build-resources
 test_runs/*
 !test_runs/.keep
+var/

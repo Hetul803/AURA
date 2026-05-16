@@ -32,15 +32,28 @@ Build can be made production signed with Electron Builder once credentials are a
 Current state:
 
 - Desktop app verifies Ed25519-signed license tokens.
-- Website has license issuance scaffolding behind `AURA_VENDOR_PRIVATE_KEY`.
+- Website has Stripe Checkout, webhook, license issuance, device activation, revocation, and crash-report scaffolding.
+- Private-alpha state is stored in `AURA_WEB_DB_PATH` as a durable JSON store for a small alpha. Replace with Postgres before a broad launch.
 
 Production path:
 
 1. Use Stripe Checkout for payment.
 2. On successful webhook, issue a signed license token.
 3. Store account, device activation, token id, revocation state, and subscription status.
-4. Desktop verifies license locally and periodically checks revocation when online.
+4. Desktop verifies license locally and can activate devices against `/api/devices/activate`.
 5. Guardian must prevent license tokens from being saved as regular memory.
+
+Required env:
+
+```bash
+STRIPE_SECRET_KEY=...
+STRIPE_PRICE_ID=...
+STRIPE_WEBHOOK_SECRET=...
+PUBLIC_BASE_URL=https://your-domain.com
+AURA_VENDOR_PRIVATE_KEY=...
+AURA_VENDOR_PUBLIC_KEY=...
+AURA_ADMIN_TOKEN=...
+```
 
 ## 4. Crash Reporting
 
@@ -86,6 +99,7 @@ Ready for 10 private alpha users after:
 - signed/notarized macOS build;
 - final product name and icon;
 - tested license token checkout;
+- persistent production hosting for the website/license store;
 - fresh install test on clean Macs;
 - native voice output verified;
 - push-to-talk fallback clearly explained;

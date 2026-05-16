@@ -65,6 +65,62 @@ function listSystemVoices(): Promise<{ ok: boolean; voices: string[]; provider?:
   });
 }
 
+function nativeSpeechHelperPath() {
+  const packaged = path.join(process.resourcesPath || '', 'native', 'AURASpeechHelper');
+  const dev = path.resolve(app.getAppPath(), 'native', 'macos', 'build', 'AURASpeechHelper');
+  if (fs.existsSync(packaged)) return packaged;
+  if (fs.existsSync(dev)) return dev;
+  return packaged;
+}
+
+function nativeSpeechStatus() {
+  if (process.platform !== 'darwin') {
+    return { ok: false, provider: 'apple_speech', status: 'unsupported_platform', message: 'Native speech input currently supports macOS only.' };
+  }
+  const helper = nativeSpeechHelperPath();
+  if (!fs.existsSync(helper)) {
+    return {
+      ok: false,
+      provider: 'apple_speech',
+      status: 'helper_missing',
+      helperPath: helper,
+      message: 'Native speech helper is not bundled. Run scripts/build-macos-speech-helper.sh before packaging, or use typed commands.',
+    };
+  }
+  return { ok: true, provider: 'apple_speech', status: 'ready', helperPath: helper };
+}
+
+function transcribeWithNativeSpeech(options: { durationSeconds?: number; locale?: string } = {}): Promise<any> {
+  const status = nativeSpeechStatus();
+  if (!status.ok) return Promise.resolve(status);
+  const args = [
+    '--duration',
+    String(Math.max(2, Math.min(20, Number(options.durationSeconds || 8)))),
+    '--locale',
+    String(options.locale || 'en-US'),
+  ];
+  return new Promise((resolve) => {
+    const child = spawn(status.helperPath as string, args, { stdio: ['ignore', 'pipe', 'pipe'] });
+    let stdout = '';
+    let stderr = '';
+    child.stdout.on('data', (chunk) => { stdout += chunk.toString(); });
+    child.stderr.on('data', (chunk) => { stderr += chunk.toString(); });
+    child.on('error', (error) => resolve({ ok: false, provider: 'apple_speech', status: 'spawn_failed', message: error.message }));
+    child.on('close', () => {
+      const lines = stdout.trim().split('\n').filter(Boolean);
+      for (let i = lines.length - 1; i >= 0; i -= 1) {
+        try {
+          const parsed = JSON.parse(lines[i]);
+          return resolve({ ...parsed, stderr: stderr.trim() || undefined });
+        } catch {
+          // Try the previous line.
+        }
+      }
+      return resolve({ ok: false, provider: 'apple_speech', status: 'invalid_helper_output', message: stderr.trim() || 'Native speech helper did not return JSON.' });
+    });
+  });
+}
+
 export function registerIpcHandlers(controls: WindowControls = {}) {
   windowControls = controls;
   ipcMain.handle('aura:open-logs', async () => {
@@ -100,6 +156,8 @@ export function registerIpcHandlers(controls: WindowControls = {}) {
   });
   ipcMain.handle('aura:get-system-voices', async () => listSystemVoices());
   ipcMain.handle('aura:speak-text', async (_event, text: string, options?: { voice?: string; rate?: number }) => speakWithSystemVoice(text, options || {}));
+  ipcMain.handle('aura:native-speech-status', async () => nativeSpeechStatus());
+  ipcMain.handle('aura:native-transcribe', async (_event, options?: { durationSeconds?: number; locale?: string }) => transcribeWithNativeSpeech(options || {}));
   ipcMain.handle('aura:overlay-show', async () => windowControls.showOverlay?.() ?? { ok: false, message: 'Overlay controls are not ready.' });
   ipcMain.handle('aura:overlay-hide', async () => windowControls.hideOverlay?.() ?? { ok: false, message: 'Overlay controls are not ready.' });
   ipcMain.handle('aura:overlay-toggle', async () => windowControls.toggleOverlay?.() ?? { ok: false, message: 'Overlay controls are not ready.' });

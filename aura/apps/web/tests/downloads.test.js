@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import crypto from 'node:crypto';
+import { AlphaStore } from '../src/alphaStore.js';
 import { createServer, incrementDownload, issueLicenseToken } from '../src/server.js';
 
 function tempJson(initial) {
@@ -10,6 +11,11 @@ function tempJson(initial) {
   const file = path.join(dir, 'downloads.json');
   fs.writeFileSync(file, JSON.stringify(initial, null, 2));
   return { dir, file };
+}
+
+function tempStore() {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'aura-web-store-test-'));
+  return { dir, store: new AlphaStore(path.join(dir, 'store.json')) };
 }
 
 function request(server, method, pathname, body) {
@@ -85,5 +91,41 @@ describe('marketing website', () => {
         Buffer.from(signature, 'base64url'),
       ),
     ).toBe(true);
+  });
+
+  it('creates checkout only when Stripe env is configured', async () => {
+    const { store } = tempStore();
+    const res = await request(createServer({ store }), 'POST', '/api/checkout/create', { email: 'alpha@example.com' });
+    const body = await res.json();
+
+    expect(res.status).toBe(400);
+    expect(body.status).toBe('stripe_not_configured');
+    expect(store.read().accounts['alpha@example.com']).toBeTruthy();
+  });
+
+  it('activates devices with signed tokens and enforces seat limits', async () => {
+    const { privateKey } = crypto.generateKeyPairSync('ed25519');
+    process.env.AURA_VENDOR_PRIVATE_KEY = privateKey.export({ type: 'pkcs8', format: 'pem' });
+    const issued = issueLicenseToken({ email: 'alpha@example.com' });
+    const { store } = tempStore();
+    const server = createServer({ store });
+
+    const first = await request(server, 'POST', '/api/devices/activate', {
+      token: issued.token,
+      device_fingerprint: 'mac-1',
+      device_name: 'Founder Mac',
+    });
+    const firstBody = await first.json();
+    expect(first.status).toBe(200);
+    expect(firstBody.ok).toBe(true);
+
+    const second = await request(createServer({ store }), 'POST', '/api/devices/activate', {
+      token: issued.token,
+      device_fingerprint: 'mac-2',
+      device_name: 'Second Mac',
+    });
+    const secondBody = await second.json();
+    expect(second.status).toBe(409);
+    expect(secondBody.status).toBe('seat_limit_reached');
   });
 });

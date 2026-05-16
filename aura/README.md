@@ -39,6 +39,7 @@ pnpm aura:backend
 pnpm aura:desktop
 pnpm aura:test
 pnpm aura:package
+pnpm aura:web
 ```
 
 `./start-aura.sh` checks Node, pnpm, Python, Electron, esbuild, and the backend virtual environment. It installs missing dependencies, rebuilds Electron/esbuild for pnpm v10, starts the backend, then launches the desktop app.
@@ -60,7 +61,21 @@ export AURA_LICENSE_PUBLIC_KEY="$(cat ~/AURA_VENDOR_KEYS/vendor_public.pem)"
 
 The shipped app verifies signed license tokens with the public key. The private key must never ship in the app.
 
-See [docs/LAUNCH_READINESS.md](docs/LAUNCH_READINESS.md) for the launch checklist, cryptographic identity notes, encrypted memory behavior, and known public-launch gaps.
+Launch website and checkout:
+
+```bash
+cp .env.example .env
+pnpm aura:web
+```
+
+Production Mac package with native speech helper, signing, and notarization:
+
+```bash
+pnpm aura:voice:build
+pnpm aura:package:prod
+```
+
+See [docs/LAUNCH_OPERATIONS.md](docs/LAUNCH_OPERATIONS.md) and [docs/LAUNCH_READINESS.md](docs/LAUNCH_READINESS.md) for checkout, device activation, notarization, cryptographic identity, encrypted memory behavior, and known public-launch gaps.
 
 If pnpm blocks Electron or esbuild build scripts, run:
 
@@ -75,7 +90,7 @@ Then rerun `./start-aura.sh`.
 - AURA opens as an AI operating layer, not a dashboard: avatar, one command input, spoken/captioned status, action stream, context, and Guardian.
 - Type or speak one intent. AURA refreshes context first, then submits the command to the backend.
 - A floating always-on-top overlay orb appears when the main app is minimized or when you click **Show overlay**. Click it to expand quick command mode, refresh context, use the mic fallback, or reopen the full app.
-- Voice output uses the macOS `say` command through the Electron bridge when available, then falls back to browser speech synthesis. Use **Test AURA voice** before manual testing.
+- Voice output uses the macOS `say` command through the Electron bridge when available, then falls back to browser speech synthesis. Native push-to-talk uses the bundled Apple Speech helper when built with `pnpm aura:voice:build`; browser speech recognition is only a fallback. Use **Test AURA voice** before manual testing.
 - Guardian pauses approval-gated actions such as paste/send, risky shell/file operations, paid models, workflow replay, and memory export/import.
 - The active identity is visible on the main surface. Actions and audit records include the identity used, and memory defaults to that identity scope.
 - Memory is inspectable in the Memory Console. You can create, pin, archive, and review scoped memories with provenance/usage context.
@@ -119,8 +134,9 @@ powershell -ExecutionPolicy Bypass -File infra/scripts/run_tests.ps1
 It runs backend tests, backend compile checks, and private-alpha readiness. Desktop/web tests run when `pnpm` is installed.
 
 ## Known intentional stubs
-- Always-listening `Hey AURA` wake word. Push-to-talk uses Web Speech API when the Electron runtime exposes it; typed input remains the fallback.
-- Final purchase/checkout completion (confirmation-gated)
+- Always-listening `Hey AURA` wake word.
+- OS-wide Guardian monitoring outside AURA-mediated actions.
+- Broad-launch database scale: the website license server uses a durable JSON store for the first private alpha; replace `AlphaStore` with Postgres before public launch.
 
 ## Full Desktop Manual Test
 1. Install and start with `./start-aura.sh`.

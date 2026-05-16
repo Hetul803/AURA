@@ -105,11 +105,16 @@ function createOverlayWindow() {
     skipTaskbar: true,
     hasShadow: true,
     webPreferences: {
-      preload: path.join(__dirname, 'preload.cjs')
+      preload: path.join(__dirname, 'preload.cjs'),
+      backgroundThrottling: false,
     }
   });
   win.setAlwaysOnTop(true, 'floating');
+  if (process.platform === 'darwin') win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
   loadRenderer(win, true);
+  win.once('ready-to-show', () => {
+    if (!mainWindow?.isVisible()) win.show();
+  });
   win.on('moved', () => saveOverlayBounds(win));
   win.on('close', (event) => {
     if (!isQuitting) {
@@ -123,7 +128,8 @@ function createOverlayWindow() {
 
 function showOverlay() {
   const win = createOverlayWindow();
-  win.showInactive();
+  win.show();
+  win.focus();
   return { ok: true, visible: true };
 }
 
@@ -138,7 +144,8 @@ function toggleOverlay() {
     win.hide();
     return { ok: true, visible: false };
   }
-  win.showInactive();
+  win.show();
+  win.focus();
   return { ok: true, visible: true };
 }
 

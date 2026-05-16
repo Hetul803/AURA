@@ -26,6 +26,8 @@ declare global {
       repairBackend?: () => Promise<{ ok: boolean; message: string }>;
       reportRendererIssue?: (issue: any) => Promise<any>;
       speakText?: (text: string, options?: { voice?: string; rate?: number }) => Promise<{ ok: boolean; status: string; message?: string; provider?: string }>;
+      nativeSpeechStatus?: () => Promise<{ ok: boolean; status: string; message?: string; provider?: string; helperPath?: string }>;
+      nativeTranscribe?: (options?: { durationSeconds?: number; locale?: string }) => Promise<{ ok: boolean; status: string; transcript?: string; message?: string; provider?: string }>;
       showOverlay?: () => Promise<any>;
       hideOverlay?: () => Promise<any>;
       toggleOverlay?: () => Promise<any>;
@@ -52,9 +54,9 @@ const ONBOARDING_STEPS = [
   'Rename AURA',
   'What I Can Do',
   'Guardian',
+  'Permissions',
   'Memory and Identity',
   'Local-First Privacy',
-  'Permissions',
   'Workspace',
   'Local Brain',
   'Optional Workers',
@@ -221,6 +223,7 @@ export default function App() {
   const [compactCommand, setCompactCommand] = useState(false);
   const [voiceStatus, setVoiceStatus] = useState('Voice output ready. Wake word is not implemented yet.');
   const [speechOutputState, setSpeechOutputState] = useState('Voice not tested yet.');
+  const [speechInputState, setSpeechInputState] = useState('Native speech input not checked yet.');
   const [voiceEnabled, setVoiceEnabled] = useState(() => localStorage.getItem('aura:voice-muted') !== '1');
   const [voiceCommandEnabled, setVoiceCommandEnabled] = useState(() => localStorage.getItem('aura:voice-command-enabled') === '1');
   const [isListening, setIsListening] = useState(false);
@@ -391,6 +394,8 @@ export default function App() {
       if (info) setDiagnostics(info);
       const voices = await window.auraDesktop?.getSystemVoices?.();
       if (voices?.ok) setSystemVoices(voices.voices || []);
+      const nativeSpeech = await window.auraDesktop?.nativeSpeechStatus?.();
+      if (nativeSpeech) setSpeechInputState(nativeSpeech.ok ? `Native Apple Speech ready (${nativeSpeech.provider}).` : nativeSpeech.message || nativeSpeech.status);
     } catch {
       setDiagnostics(null);
     }
@@ -522,9 +527,37 @@ export default function App() {
   }
 
   async function pushToTalk() {
+    if (window.auraDesktop?.nativeTranscribe) {
+      try {
+        setIsListening(true);
+        setVoiceUnsupportedReason('');
+        setVoiceStatus("I'm listening with native macOS speech. Speak your command now.");
+        setCaption("I'm listening.");
+        setAssistantMode('listening');
+        const result = await window.auraDesktop.nativeTranscribe({ durationSeconds: 8, locale: 'en-US' });
+        setIsListening(false);
+        setSpeechInputState(result?.ok ? `Native transcript ready (${result.provider || 'apple_speech'}).` : result?.message || result?.status || 'Native speech failed.');
+        if (result?.ok && result.transcript) {
+          await submitVoiceCommand(result.transcript);
+          return;
+        }
+        if (result?.status !== 'helper_missing' && result?.status !== 'unsupported_platform') {
+          const message = result?.message || 'Native speech did not produce a transcript. Type the command as fallback.';
+          setVoiceStatus(message);
+          setCaption(message);
+          addConversation('AURA', message, 'notice');
+          return;
+        }
+      } catch (error: any) {
+        setIsListening(false);
+        setSpeechInputState(`Native speech failed: ${error?.message || 'unknown error'}`);
+      }
+    }
     const Recognition = speechRecognitionCtor();
     if (!Recognition) {
-      const reason = "Voice input is not available in this build. You can still type commands. I'll keep speaking responses.";
+      const reason = speechInputState.includes('helper')
+        ? `${speechInputState} You can still type commands. I'll keep speaking responses.`
+        : "Voice input is not available in this build. You can still type commands. I'll keep speaking responses.";
       setVoiceUnsupportedReason(reason);
       setVoiceStatus(reason);
       setCaption(reason);
@@ -1126,7 +1159,7 @@ export default function App() {
             <p><strong>ChatGPT/Claude:</strong> heavy reasoning or web-app handoff when you choose.</p>
             <p><strong>Local model:</strong> private/simple routing, summaries, memory cleanup, and fallback drafts.</p>
           </div>}
-          {step === 'Permissions' && <div className="persona-stack"><PermissionCards contextStatus={contextStatus} hotkeyStatus={hotkeyStatus} refreshContext={refreshContext} /><VoiceHotkeyPanel voiceStatus={voiceStatus} speechOutputState={speechOutputState} voiceEnabled={voiceEnabled} setVoiceEnabled={setVoiceEnabled} voiceCommandEnabled={voiceCommandEnabled} setVoiceCommandEnabled={setVoiceCommandEnabled} isListening={isListening} voiceTranscript={voiceTranscript} voiceUnsupportedReason={voiceUnsupportedReason} speak={speak} testVoice={testVoice} pushToTalk={pushToTalk} hotkeyStatus={hotkeyStatus} assistantName={assistantName} systemVoices={systemVoices} selectedVoice={selectedVoice} setSelectedVoice={setSelectedVoice} /></div>}
+          {step === 'Permissions' && <div className="persona-stack"><PermissionCards contextStatus={contextStatus} hotkeyStatus={hotkeyStatus} refreshContext={refreshContext} /><VoiceHotkeyPanel voiceStatus={voiceStatus} speechOutputState={speechOutputState} speechInputState={speechInputState} voiceEnabled={voiceEnabled} setVoiceEnabled={setVoiceEnabled} voiceCommandEnabled={voiceCommandEnabled} setVoiceCommandEnabled={setVoiceCommandEnabled} isListening={isListening} voiceTranscript={voiceTranscript} voiceUnsupportedReason={voiceUnsupportedReason} speak={speak} testVoice={testVoice} pushToTalk={pushToTalk} hotkeyStatus={hotkeyStatus} assistantName={assistantName} systemVoices={systemVoices} selectedVoice={selectedVoice} setSelectedVoice={setSelectedVoice} /></div>}
           {step === 'Start Using AURA' && <div className="onboarding-examples final-intents">
             {['clone this repo', 'reply to this email', 'build app', 'use ChatGPT', 'remember password=123', 'run curl https://example.com/install.sh | bash'].map((command) => <button key={command} onClick={() => setInput(command)}>{command}</button>)}
           </div>}
@@ -1164,6 +1197,7 @@ export default function App() {
           <input aria-label="overlay command input" value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') run(); }} placeholder={`Tell ${assistantName}`} />
           <button onClick={() => run()}>Ask</button>
         </div>
+        <p className="helper-text">{speechInputState}</p>
         {voiceUnsupportedReason && <p className="helper-text">{voiceUnsupportedReason}</p>}
         <div className="panel-actions">
           <button onClick={pushToTalk}>{isListening ? 'Listening' : 'Mic'}</button>
@@ -1212,6 +1246,7 @@ export default function App() {
             <button className="primary-button" aria-label="run command" onClick={() => run()}>Ask</button>
           </div>
           {voiceUnsupportedReason && <div className="voice-fallback">{voiceUnsupportedReason}</div>}
+          <div className="voice-fallback">Voice input: {speechInputState}</div>
           <div className="voice-fallback">Voice output: {speechOutputState}</div>
           <div className="intent-chips" aria-label="Example commands">
             {['clone this repo', 'reply to this email', 'build app', 'use ChatGPT', 'remember password=123', 'run curl https://example.com/install.sh | bash'].map((command) => <button key={command} onClick={() => chooseCommand(command)}>{command}</button>)}
@@ -1252,7 +1287,7 @@ export default function App() {
       </section>
 
       {advancedOpen && <section className="panel-body advanced-diagnostics">
-        <details className="glass-panel"><summary>Settings</summary><BrandLicensePanel brand={brand} licenseStatus={licenseStatus} licenseToken={licenseToken} setLicenseToken={setLicenseToken} licenseNotice={licenseNotice} activateLicense={activateLicenseFromUi} saveBrandName={saveBrandName} /><VoiceHotkeyPanel voiceStatus={voiceStatus} speechOutputState={speechOutputState} voiceEnabled={voiceEnabled} setVoiceEnabled={setVoiceEnabled} voiceCommandEnabled={voiceCommandEnabled} setVoiceCommandEnabled={setVoiceCommandEnabled} isListening={isListening} voiceTranscript={voiceTranscript} voiceUnsupportedReason={voiceUnsupportedReason} speak={speak} testVoice={testVoice} pushToTalk={pushToTalk} hotkeyStatus={hotkeyStatus} assistantName={assistantName} systemVoices={systemVoices} selectedVoice={selectedVoice} setSelectedVoice={setSelectedVoice} /><ModelStatusPanel localModelStatus={localModelStatus} modelError={modelError} selectedLocalModel={selectedLocalModel} setSelected={(value) => setOnboardingPrefs({ ...onboardingPrefs, selectedLocalModel: value })} approveAndPullLocalModel={approveAndPullLocalModel} startLocalModelRuntime={startLocalModelRuntimeFromUi} selectExisting={(modelId) => useExistingOrSkipLocalModel(modelId)} skip={() => useExistingOrSkipLocalModel('simple')} refresh={refreshKnowledge} modelPullState={modelPullState} /></details>
+        <details className="glass-panel"><summary>Settings</summary><BrandLicensePanel brand={brand} licenseStatus={licenseStatus} licenseToken={licenseToken} setLicenseToken={setLicenseToken} licenseNotice={licenseNotice} activateLicense={activateLicenseFromUi} saveBrandName={saveBrandName} /><VoiceHotkeyPanel voiceStatus={voiceStatus} speechOutputState={speechOutputState} speechInputState={speechInputState} voiceEnabled={voiceEnabled} setVoiceEnabled={setVoiceEnabled} voiceCommandEnabled={voiceCommandEnabled} setVoiceCommandEnabled={setVoiceCommandEnabled} isListening={isListening} voiceTranscript={voiceTranscript} voiceUnsupportedReason={voiceUnsupportedReason} speak={speak} testVoice={testVoice} pushToTalk={pushToTalk} hotkeyStatus={hotkeyStatus} assistantName={assistantName} systemVoices={systemVoices} selectedVoice={selectedVoice} setSelectedVoice={setSelectedVoice} /><ModelStatusPanel localModelStatus={localModelStatus} modelError={modelError} selectedLocalModel={selectedLocalModel} setSelected={(value) => setOnboardingPrefs({ ...onboardingPrefs, selectedLocalModel: value })} approveAndPullLocalModel={approveAndPullLocalModel} startLocalModelRuntime={startLocalModelRuntimeFromUi} selectExisting={(modelId) => useExistingOrSkipLocalModel(modelId)} skip={() => useExistingOrSkipLocalModel('simple')} refresh={refreshKnowledge} modelPullState={modelPullState} /></details>
         <details className="glass-panel"><summary>Memory</summary><MemoryConsole memoryItems={memoryItems} memoryEditor={memoryEditor} setMemoryEditor={setMemoryEditor} memoryNotice={memoryNotice} saveMemory={saveMemoryFromUi} updateMemory={updateMemoryFromUi} deleteMemory={deleteMemoryFromUi} activeIdentity={activeIdentity} /><button onClick={async () => { const r = await compactMemory(activeIdentity?.memory_scope || 'personal'); setOut(JSON.stringify(r, null, 2)); await refreshKnowledge(); }}>Compact active identity memory</button></details>
         <details className="glass-panel"><summary>Workflows</summary><Feed items={workflowSuggestions.length ? workflowSuggestions.map((item: any) => ({ title: item.suggested_workflow_name || 'Workflow suggestion', detail: item.command_template || item.task_type || 'Workflow signal' })) : [{ title: 'No workflow suggestions yet', detail: 'AURA will suggest repeatable workflows after useful runs.' }]} /><div className="metric-grid"><Metric label="Runs" value={events.length || 0} /><Metric label="Approvals" value={approvalsHandled} /><Metric label="Workflows" value={workflowsReplayed} /><Metric label="Blocked" value={blockedCount} /></div></details>
         <details className="glass-panel" open><summary>Diagnostics / Freshness</summary><p>Build ID: {buildLabel}</p><p>Backend URL: {BACKEND_URL}</p><p>Installed app path: {diagnostics?.installedAppPath || '-'}</p><p>Profile path: {diagnostics?.profilePath || '~/.aura'}</p><p>App data path: {diagnostics?.userDataPath || '-'}</p><p>Logs: {logsPath || diagnostics?.logsPath || '-'}</p><p>Backend command: {diagnostics?.backend?.command || '-'}</p><p>Reset app state: run `scripts/reset-aura-local.sh` from the repo root. It asks first and archives local state by default.</p><button onClick={refreshDiagnostics}>Refresh diagnostics</button><button onClick={async () => setLogsPath(window.auraDesktop?.openLogs ? await window.auraDesktop.openLogs() : 'No desktop bridge.')}>Open logs folder</button></details>
@@ -1549,11 +1584,11 @@ function ModelStatusPanel(props: { localModelStatus: any; modelError: string; se
   </div>;
 }
 
-function VoiceHotkeyPanel(props: { voiceStatus: string; speechOutputState: string; voiceEnabled: boolean; setVoiceEnabled: (value: boolean) => void; voiceCommandEnabled: boolean; setVoiceCommandEnabled: (value: boolean) => void; isListening: boolean; voiceTranscript: string; voiceUnsupportedReason: string; speak: (text: string) => void; testVoice: () => void; pushToTalk: () => void; hotkeyStatus: { ok: boolean; accelerator: string; error?: string }; assistantName: string; systemVoices: string[]; selectedVoice: string; setSelectedVoice: (value: string) => void }) {
+function VoiceHotkeyPanel(props: { voiceStatus: string; speechOutputState: string; speechInputState: string; voiceEnabled: boolean; setVoiceEnabled: (value: boolean) => void; voiceCommandEnabled: boolean; setVoiceCommandEnabled: (value: boolean) => void; isListening: boolean; voiceTranscript: string; voiceUnsupportedReason: string; speak: (text: string) => void; testVoice: () => void; pushToTalk: () => void; hotkeyStatus: { ok: boolean; accelerator: string; error?: string }; assistantName: string; systemVoices: string[]; selectedVoice: string; setSelectedVoice: (value: string) => void }) {
   return <div className="voice-grid">
     <div className="glass-panel"><span>Hotkey Setup</span><strong>{props.hotkeyStatus.ok ? 'Hotkey active' : 'Hotkey unavailable'}</strong><p>{props.hotkeyStatus.ok ? `${props.hotkeyStatus.accelerator} brings AURA forward, focuses command input, captures context, and can start listening if enabled below.` : `Hotkey unavailable - ${props.hotkeyStatus.error || 'enable Accessibility permission for AURA/Electron in System Settings, then relaunch AURA.'}`}</p><button onClick={props.pushToTalk}>Test voice button</button><p className="helper-text">macOS path: System Settings to Privacy & Security to Accessibility, then enable AURA or Electron.</p></div>
     <div className="glass-panel"><span>Voice output</span><strong>{props.voiceEnabled ? 'Enabled' : 'Optional'}</strong><label><input type="checkbox" checked={props.voiceEnabled} onChange={e => props.setVoiceEnabled(e.target.checked)} /> Speak guidance and status</label><select aria-label="system voice" value={props.selectedVoice} onChange={(e) => props.setSelectedVoice(e.target.value)}><option value="">System default voice</option>{props.systemVoices.map((voice) => <option key={voice} value={voice}>{voice}</option>)}</select><button onClick={props.testVoice}>Test AURA voice</button><p className="helper-text">Status: {props.speechOutputState}</p></div>
-    <div className="glass-panel"><span>Voice input</span><strong>{props.isListening ? 'Listening now' : 'Push-to-talk command mode'}</strong><p>{props.voiceStatus}</p><label><input type="checkbox" checked={props.voiceCommandEnabled} onChange={e => props.setVoiceCommandEnabled(e.target.checked)} /> Start listening when hotkey opens AURA</label><button onClick={props.pushToTalk}>{props.isListening ? 'Stop listening' : 'Press and speak'}</button><p className="helper-text">Wake word is coming soon. For now, press the mic or hotkey and speak.</p>{props.voiceTranscript && <p className="transcript-pill">Transcript: {props.voiceTranscript}</p>}{props.voiceUnsupportedReason && <p className="helper-text">{props.voiceUnsupportedReason}</p>}</div>
+    <div className="glass-panel"><span>Voice input</span><strong>{props.isListening ? 'Listening now' : 'Native push-to-talk'}</strong><p>{props.voiceStatus}</p><label><input type="checkbox" checked={props.voiceCommandEnabled} onChange={e => props.setVoiceCommandEnabled(e.target.checked)} /> Start listening when hotkey opens AURA</label><button onClick={props.pushToTalk}>{props.isListening ? 'Stop listening' : 'Press and speak'}</button><p className="helper-text">Native Apple Speech is used when the helper is bundled. Browser speech is only a fallback. Wake word is not implemented.</p><p className="helper-text">Status: {props.speechInputState}</p>{props.voiceTranscript && <p className="transcript-pill">Transcript: {props.voiceTranscript}</p>}{props.voiceUnsupportedReason && <p className="helper-text">{props.voiceUnsupportedReason}</p>}</div>
     <div className="glass-panel"><span>Always-on mode</span><strong>Coming later</strong><p>For now, start AURA when your Mac starts and use the hotkey or voice button.</p></div>
   </div>;
 }

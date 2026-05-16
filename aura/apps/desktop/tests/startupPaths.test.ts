@@ -75,9 +75,12 @@ describe('desktop startup paths', () => {
     expect(mainSource).toContain('createOverlayWindow');
     expect(mainSource).toContain('alwaysOnTop: true');
     expect(mainSource).toContain('overlay-state.json');
-    expect(mainSource).toContain('showInactive');
+    expect(mainSource).toContain('backgroundThrottling: false');
+    expect(mainSource).toContain('setVisibleOnAllWorkspaces');
+    expect(mainSource).toContain('win.focus()');
     expect(preloadBridge).toContain('showOverlay');
     expect(preloadBridge).toContain('openFullApp');
     expect(preloadBridge).toContain('speakText');
+    expect(preloadBridge).toContain('nativeTranscribe');
   });
 });

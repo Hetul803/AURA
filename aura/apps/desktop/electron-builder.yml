@@ -9,6 +9,8 @@ files:
 extraResources:
   - from: build-resources/backend
     to: backend
+  - from: build-resources/native
+    to: native
 extraMetadata:
   description: Private, local-first personal AI operating layer.
 asar: true
@@ -18,6 +20,13 @@ win:
 mac:
   target:
     - dmg
+  category: public.app-category.productivity
+  hardenedRuntime: true
+  entitlements: entitlements.mac.plist
+  entitlementsInherit: entitlements.mac.plist
+  extendInfo:
+    NSMicrophoneUsageDescription: AURA uses the microphone only when you press push-to-talk.
+    NSSpeechRecognitionUsageDescription: AURA uses speech recognition only when you press push-to-talk.
 linux:
   target:
     - AppImage

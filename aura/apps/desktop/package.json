@@ -7,7 +7,7 @@
   "scripts": {
     "dev": "tsc -p tsconfig.electron.json && node scripts/copy-preload.mjs && concurrently -k \"vite\" \"wait-on tcp:5173 && cross-env ELECTRON_DEV_URL=http://localhost:5173 electron ./dist-electron/main/index.js\" \"tsc -p tsconfig.electron.json --watch\"",
     "build": "vite build && tsc -p tsconfig.electron.json && node scripts/copy-preload.mjs",
-    "package": "pnpm build && node scripts/stage-backend.mjs && electron-builder",
+    "package": "pnpm build && node scripts/stage-backend.mjs && node scripts/stage-native.mjs && electron-builder",
     "test": "vitest run"
   },
   "dependencies": {
