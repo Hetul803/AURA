@@ -188,6 +188,31 @@ export async function getGuardianStatus(runId?: string) {
   return r.json();
 }
 
+export async function getGuardianLedger(filters: any = {}) {
+  const qs = new URLSearchParams(filters).toString();
+  const r = await fetch(`${BACKEND_URL}/guardian/ledger${qs ? `?${qs}` : ''}`);
+  return r.json();
+}
+
+export async function getGuardianPolicy() {
+  const r = await fetch(`${BACKEND_URL}/guardian/policy`);
+  return r.json();
+}
+
+export async function updateGuardianPolicy(patch: any) {
+  const r = await fetch(`${BACKEND_URL}/guardian/policy`, {
+    method: 'PATCH',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(patch)
+  });
+  return r.json();
+}
+
+export async function getGuardianCoverage() {
+  const r = await fetch(`${BACKEND_URL}/guardian/coverage`);
+  return r.json();
+}
+
 export async function getCostSummary() {
   const r = await fetch(`${BACKEND_URL}/cost/summary`);
   return r.json();
@@ -226,6 +251,16 @@ export async function compactMemory(scope?: string) {
   const r = await fetch(`${BACKEND_URL}/memory/compact`, {
     method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ scope, older_than_days: 30 })
   });
+  return r.json();
+}
+
+export async function getMemoryHealth() {
+  const r = await fetch(`${BACKEND_URL}/memory/health`);
+  return r.json();
+}
+
+export async function getExternalAgentsStatus() {
+  const r = await fetch(`${BACKEND_URL}/external-agents/status`);
   return r.json();
 }
 

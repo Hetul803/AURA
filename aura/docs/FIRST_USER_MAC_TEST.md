@@ -224,6 +224,8 @@ Drag AURA into Applications, then right-click Open because the private-alpha app
 From `AURA/aura`, run:
 
 ```bash
+pnpm aura:doctor
+pnpm aura:alpha-check
 pnpm aura:demo-check
 pnpm aura:smoke
 ```

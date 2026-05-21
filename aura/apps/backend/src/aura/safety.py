@@ -6,6 +6,7 @@ from urllib.parse import urlparse
 
 from .learning import query_relevant_memory
 from .privacy import detect_secret, redact_text
+from .guardian_policy import apply_guardian_policy
 from tools.registry import get_tool_spec
 
 SENSITIVE = ['send', 'delete', 'pay', 'purchase', 'checkout']
@@ -105,7 +106,7 @@ def step_risk(step, task_type: str | None = None) -> dict:
     learned_block = any(item.get('policy') == 'blocked' for item in safety_hints['safety'])
 
     if learned_block or registry_risk == 'blocked':
-        return {'decision': 'blocked', 'risk': 'blocked', 'reason': reason if registry_risk == 'blocked' else 'learned_or_registry_block'}
+        return apply_guardian_policy(step, {'decision': 'blocked', 'risk': 'blocked', 'reason': reason if registry_risk == 'blocked' else 'learned_or_registry_block'}, task_type=task_type)
     if (
         step.safety_level == 'CONFIRM'
         or registry_requires_approval
@@ -113,8 +114,8 @@ def step_risk(step, task_type: str | None = None) -> dict:
         or requires_confirmation(step.name)
         or learned_confirm
     ):
-        return {'decision': 'confirm', 'risk': registry_risk, 'reason': reason, 'redacted_args': redact_text(str(step.args or {}), limit=600)}
-    return {'decision': 'allow', 'risk': registry_risk, 'reason': reason}
+        return apply_guardian_policy(step, {'decision': 'confirm', 'risk': registry_risk, 'reason': reason, 'redacted_args': redact_text(str(step.args or {}), limit=600)}, task_type=task_type)
+    return apply_guardian_policy(step, {'decision': 'allow', 'risk': registry_risk, 'reason': reason}, task_type=task_type)
 
 
 def guard_step(step, task_type: str | None = None) -> str:

@@ -103,3 +103,24 @@ AURA is much closer to private-alpha readiness, but not yet a fully public produ
 - OS-wide Guardian monitoring outside AURA-managed actions;
 - full database encryption and backup/recovery;
 - crash reporting and auto-update.
+## Current Private-Alpha Launch Gate
+
+Run:
+
+```bash
+pnpm aura:alpha-check
+pnpm aura:smoke
+pnpm aura:package
+```
+
+These checks cover local machine doctor diagnostics, private-alpha documentation/packaging metadata, Guardian/Memory/Identity product tests, desktop renderer tests/build, Electron verification, and DMG creation.
+
+Before a 10-user alpha, verify manually:
+
+- onboarding reset works on a clean Mac;
+- overlay can be shown and moved;
+- voice test works or reports the exact limitation;
+- Guardian strict mode and blocked commands appear in the Watchtower;
+- memory survives restart and affects a draft;
+- identity switch changes memory scope and ledger entries;
+- GitHub clone, draft reply, coding job, open URL/app, workspace note, and prepare-work-session flows are testable.

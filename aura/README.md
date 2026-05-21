@@ -40,6 +40,9 @@ pnpm aura:desktop
 pnpm aura:test
 pnpm aura:smoke
 pnpm aura:demo-check
+pnpm aura:doctor
+pnpm aura:alpha-check
+pnpm aura:demo
 pnpm aura:reset
 pnpm aura:package
 pnpm aura:web
@@ -133,6 +136,13 @@ pytest -q tests/test_identity_boundary.py tests/test_safety.py tests/test_memory
 ```
 
 `pnpm aura:smoke` verifies backend compile, Guardian/Memory/Identity/workflow readiness, desktop tests/build, and Electron install. `pnpm aura:demo-check` is the faster founder-demo gate.
+
+Launch readiness helpers:
+```bash
+pnpm aura:doctor       # local machine/runtime diagnosis
+pnpm aura:alpha-check  # doctor + private alpha check + demo-check
+pnpm aura:demo         # demo-check, then start backend + desktop
+```
 
 On Windows, the local reality-check runner is:
 ```powershell

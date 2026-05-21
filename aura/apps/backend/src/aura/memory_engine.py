@@ -394,6 +394,40 @@ def forget_memory_inbox_item(memory_id: str) -> dict[str, Any] | None:
     return update_memory_item(memory_id, metadata=metadata, archived=True)
 
 
+def memory_health() -> dict[str, Any]:
+    items = list_memory_items(include_archived=True, limit=10000)
+    active = [item for item in items if not item.get('archived') and not _is_pending_inbox(item)]
+    archived = [item for item in items if item.get('archived')]
+    pending = [item for item in items if _is_pending_inbox(item)]
+    by_kind: dict[str, int] = defaultdict(int)
+    by_scope: dict[str, int] = defaultdict(int)
+    stale = 0
+    now = datetime.now(UTC)
+    for item in active:
+        by_kind[item.get('kind') or 'note'] += 1
+        by_scope[item.get('scope') or 'personal'] += 1
+        updated = _parse_dt(item.get('last_used_at') or item.get('updated_at') or item.get('created_at'))
+        if updated and (now - updated) > timedelta(days=180):
+            stale += 1
+    summaries = [item for item in active if item.get('kind') == 'summary']
+    last_compaction = max((item.get('created_at') or '' for item in summaries), default=None)
+    return {
+        'total_memories': len(items),
+        'active_memories': len(active),
+        'pinned_memories': len([item for item in active if item.get('pinned')]),
+        'archived_memories': len(archived),
+        'pending_inbox': len(pending),
+        'stale_memories': stale,
+        'safety_memories': by_kind.get('safety', 0),
+        'identity_memories': by_kind.get('identity', 0),
+        'workflow_memories': by_kind.get('workflow', 0),
+        'by_kind': dict(by_kind),
+        'by_scope': dict(by_scope),
+        'last_compaction': last_compaction,
+        'encrypted_at_rest': all(item.get('encrypted_at_rest') for item in items) if items else True,
+    }
+
+
 def update_memory_item(memory_id: str, **changes: Any) -> dict[str, Any] | None:
     allowed = {
         'scope',

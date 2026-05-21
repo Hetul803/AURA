@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { activateLicense, approveRun, captureAssistContext, compactMemory, createMemoryInboxItem, createMemoryItem, deleteMemoryItem, forgetMemoryInboxItem, getActiveIdentity, getActiveIdentityAttestation, getBrand, getCostModels, getCostSummary, getCurrentContext, getDevices, getGuardianStatus, getIdentities, getIdentityLedger, getLicenseStatus, getLocalModelStatus, getMemoryInbox, getMemoryItems, getProfileStatus, getRunState, getTools, getWorkflowSuggestions, getWorkflows, keepMemoryInboxItem, panicStop, pullLocalModel, rejectRun, resumeRun, retryRun, searchMemoryItems, selectModel, sendCommand, setActiveIdentity, startLocalModelRuntime as startLocalModelRuntimeApi, subscribeRun, updateBrand, updateMemoryItem, updateProfileStatus } from './state/api';
+import { activateLicense, approveRun, captureAssistContext, compactMemory, createMemoryInboxItem, createMemoryItem, deleteMemoryItem, forgetMemoryInboxItem, getActiveIdentity, getActiveIdentityAttestation, getBrand, getCostModels, getCostSummary, getCurrentContext, getDevices, getExternalAgentsStatus, getGuardianCoverage, getGuardianLedger, getGuardianPolicy, getGuardianStatus, getIdentities, getIdentityLedger, getLicenseStatus, getLocalModelStatus, getMemoryHealth, getMemoryInbox, getMemoryItems, getProfileStatus, getRunState, getTools, getWorkflowSuggestions, getWorkflows, keepMemoryInboxItem, panicStop, pullLocalModel, rejectRun, resumeRun, retryRun, searchMemoryItems, selectModel, sendCommand, setActiveIdentity, startLocalModelRuntime as startLocalModelRuntimeApi, subscribeRun, updateBrand, updateGuardianPolicy, updateMemoryItem, updateProfileStatus } from './state/api';
 import ActionPanel from './ui/ActionPanel';
 import { pushEvent, store } from './state/store';
 import { BACKEND_URL } from '../shared/constants';
@@ -278,7 +278,12 @@ export default function App() {
   const [memoryEditor, setMemoryEditor] = useState({ kind: 'preference', key: '', value: '', scope: 'active' });
   const [memoryNotice, setMemoryNotice] = useState('');
   const [guardianStatus, setGuardianStatus] = useState<any>(null);
+  const [guardianLedger, setGuardianLedger] = useState<any[]>([]);
+  const [guardianPolicy, setGuardianPolicy] = useState<any>(null);
+  const [guardianCoverage, setGuardianCoverage] = useState<any>(null);
   const [localGuardianEvents, setLocalGuardianEvents] = useState<any[]>([]);
+  const [memoryHealth, setMemoryHealth] = useState<any>(null);
+  const [externalAgents, setExternalAgents] = useState<any>(null);
   const [costSummary, setCostSummary] = useState<any>(null);
   const [costModels, setCostModels] = useState<any[]>([]);
   const [localModelStatus, setLocalModelStatus] = useState<any>(null);
@@ -347,7 +352,7 @@ export default function App() {
   }
 
   async function refreshKnowledge() {
-    const [p, m, ss, st, se, ts, ds, mi, inbox, wf, ws, profile, brandInfo, license, ids, activeId, attestation, ledger, guardian, cost, models, localModel] = await Promise.all([
+    const [p, m, ss, st, se, ts, ds, mi, inbox, memoryHealthData, wf, ws, profile, brandInfo, license, ids, activeId, attestation, ledger, guardian, guardianLedgerData, guardianPolicyData, guardianCoverageData, externalAgentData, cost, models, localModel] = await Promise.all([
       safeJson(() => fetch(`${BACKEND_URL}/preferences`).then(r => r.json()), []),
       safeJson(() => fetch(`${BACKEND_URL}/memories`).then(r => r.json()), []),
       safeJson(() => fetch(`${BACKEND_URL}/browser/sessions`).then(r => r.json()), []),
@@ -357,6 +362,7 @@ export default function App() {
       safeJson(() => getDevices(), []),
       safeJson(() => getMemoryItems(), []),
       safeJson(() => getMemoryInbox(), []),
+      safeJson(() => getMemoryHealth(), null),
       safeJson(() => getWorkflows(), []),
       safeJson(() => getWorkflowSuggestions(), []),
       safeJson(() => getProfileStatus(), null),
@@ -367,13 +373,17 @@ export default function App() {
       safeJson(() => getActiveIdentityAttestation(), null),
       safeJson(() => getIdentityLedger(), []),
       safeJson(() => getGuardianStatus(runId || undefined), null),
+      safeJson(() => getGuardianLedger({ limit: 80 }), []),
+      safeJson(() => getGuardianPolicy(), null),
+      safeJson(() => getGuardianCoverage(), null),
+      safeJson(() => getExternalAgentsStatus(), null),
       safeJson(() => getCostSummary(), null),
       safeJson(() => getCostModels(), []),
       safeJson(() => getLocalModelStatus(), null),
     ]);
     setPrefs(asArray(p)); setMemories(asArray(m)); setSessions(asArray(ss)); setStorage(st || {}); setSafety(asArray(se));
-    setTools(asArray(ts)); setDevices(asArray(ds)); setMemoryItems(asArray(mi)); setMemoryInbox(asArray(inbox)); setWorkflows(asArray(wf));
-    setWorkflowSuggestions(asArray(ws)); setProfileStatus(profile); setBrand(brandInfo); setLicenseStatus(license); setIdentities(asArray(ids)); setActiveIdentityState(activeId); setIdentityAttestation(attestation); setIdentityLedger(asArray(ledger)); setGuardianStatus(guardian); setCostSummary(cost);
+    setTools(asArray(ts)); setDevices(asArray(ds)); setMemoryItems(asArray(mi)); setMemoryInbox(asArray(inbox)); setMemoryHealth(memoryHealthData); setWorkflows(asArray(wf));
+    setWorkflowSuggestions(asArray(ws)); setProfileStatus(profile); setBrand(brandInfo); setLicenseStatus(license); setIdentities(asArray(ids)); setActiveIdentityState(activeId); setIdentityAttestation(attestation); setIdentityLedger(asArray(ledger)); setGuardianStatus(guardian); setGuardianLedger(asArray(guardianLedgerData)); setGuardianPolicy(guardianPolicyData); setGuardianCoverage(guardianCoverageData); setExternalAgents(externalAgentData); setCostSummary(cost);
     setCostModels(asArray(models));
     if (localModel) {
       setLocalModelStatus(localModel);
@@ -1172,14 +1182,14 @@ export default function App() {
             <p>If you're working in Cursor, say: <strong>Fix this part of the app</strong>, and I can prepare the coding job.</p>
             <p className="helper-text">Current build: context refresh, clone planning, email draft approval, coding jobs, ChatGPT/Claude handoff prompts, workflow save/replay, Guardian blocking, and safe memory. Future: deeper website/app permission monitoring.</p>
           </div>}
-          {step === 'Guardian' && <div className="persona-stack watchtower-onboarding"><GuardianWatchtower guardianEvents={guardianEvents} pendingApproval={pendingApproval} panic={() => panicStop(runId)} runId={runId} /></div>}
+          {step === 'Guardian' && <div className="persona-stack watchtower-onboarding"><GuardianWatchtower guardianEvents={guardianEvents} guardianLedger={guardianLedger} guardianPolicy={guardianPolicy} guardianCoverage={guardianCoverage} pendingApproval={pendingApproval} panic={() => panicStop(runId)} runId={runId} updatePolicy={async (patch) => { setGuardianPolicy(await updateGuardianPolicy(patch)); await refreshKnowledge(); }} /></div>}
           {step === 'Memory and Identity' && <div className="persona-stack">
             <div className="onboarding-preferences">
               <label><input type="checkbox" checked={onboardingPrefs.memoryConsent} onChange={e => setOnboardingPrefs({ ...onboardingPrefs, memoryConsent: e.target.checked })} /> Allow AURA to remember safe preferences and workflows after showing you what it learned.</label>
               <label>Guardian protection level<select value={onboardingPrefs.guardianLevel} onChange={e => setOnboardingPrefs({ ...onboardingPrefs, guardianLevel: e.target.value })}><option value="balanced">Balanced approvals</option><option value="strict">Strict approvals</option></select></label>
             </div>
             <IdentityCard identities={identities} activeIdentity={activeIdentity} attestation={identityAttestation} ledger={identityLedger} switchIdentity={async (id: string) => { setActiveIdentityState(await setActiveIdentity(id)); await refreshKnowledge(); }} />
-            <MemoryConsole memoryItems={memoryItems} memoryInbox={memoryInbox} memoryEditor={memoryEditor} setMemoryEditor={setMemoryEditor} memoryNotice={memoryNotice} saveMemory={saveMemoryFromUi} updateMemory={updateMemoryFromUi} deleteMemory={deleteMemoryFromUi} keepInbox={keepMemoryFromInbox} forgetInbox={forgetMemoryFromInbox} activeIdentity={activeIdentity} />
+            <MemoryConsole memoryItems={memoryItems} memoryInbox={memoryInbox} memoryHealth={memoryHealth} memoryEditor={memoryEditor} setMemoryEditor={setMemoryEditor} memoryNotice={memoryNotice} saveMemory={saveMemoryFromUi} updateMemory={updateMemoryFromUi} deleteMemory={deleteMemoryFromUi} keepInbox={keepMemoryFromInbox} forgetInbox={forgetMemoryFromInbox} activeIdentity={activeIdentity} />
           </div>}
           {step === 'Local-First Privacy' && <div className="onboarding-examples">
             <p>Simple/private tasks can stay local when Ollama is ready.</p>
@@ -1311,8 +1321,15 @@ export default function App() {
         <aside className="watchtower-column">
           <IdentityCard identities={identities} activeIdentity={activeIdentity} attestation={identityAttestation} ledger={identityLedger} switchIdentity={async (id: string) => { setActiveIdentityState(await setActiveIdentity(id)); await refreshKnowledge(); }} />
           <ContextSummary assistantName={assistantName} context={capturedContext} currentUrl={currentUrl} contextStatus={contextStatus} refreshContext={refreshContext} openPermissions={() => { setOnboardingStep(ONBOARDING_STEPS.indexOf('Permissions')); setOnboardingOpen(true); }} />
-          <GuardianWatchtower guardianEvents={guardianEvents} pendingApproval={pendingApproval} panic={() => panicStop(runId)} runId={runId} />
+          <GuardianWatchtower guardianEvents={guardianEvents} guardianLedger={guardianLedger} guardianPolicy={guardianPolicy} guardianCoverage={guardianCoverage} pendingApproval={pendingApproval} panic={() => panicStop(runId)} runId={runId} updatePolicy={async (patch) => { setGuardianPolicy(await updateGuardianPolicy(patch)); await refreshKnowledge(); }} />
         </aside>
+      </section>
+
+      <section className="product-status-grid" aria-label="AURA product status">
+        <Metric label="AURA Status" value={coreStatus === 'connected' ? 'Online' : 'Needs Core'} />
+        <Metric label="Memory Status" value={`${memoryHealth?.active_memories || 0} active`} />
+        <Metric label="Guardian" value={guardianPolicy?.mode || 'balanced'} />
+        <Metric label="Last Action" value={identityLedger[0]?.summary ? shortText(identityLedger[0].summary, 'Ledger ready') : 'Ready'} />
       </section>
 
       {(pendingApproval || draftText || runId) && <section className="approval-workspace">
@@ -1325,8 +1342,9 @@ export default function App() {
 
       {advancedOpen && <section className="panel-body advanced-diagnostics">
         <details className="glass-panel"><summary>Settings</summary><BrandLicensePanel brand={brand} licenseStatus={licenseStatus} licenseToken={licenseToken} setLicenseToken={setLicenseToken} licenseNotice={licenseNotice} activateLicense={activateLicenseFromUi} saveBrandName={saveBrandName} /><VoiceHotkeyPanel voiceStatus={voiceStatus} speechOutputState={speechOutputState} speechInputState={speechInputState} voiceEnabled={voiceEnabled} setVoiceEnabled={setVoiceEnabled} voiceCommandEnabled={voiceCommandEnabled} setVoiceCommandEnabled={setVoiceCommandEnabled} isListening={isListening} voiceTranscript={voiceTranscript} voiceUnsupportedReason={voiceUnsupportedReason} speak={speak} testVoice={testVoice} pushToTalk={pushToTalk} hotkeyStatus={hotkeyStatus} assistantName={assistantName} systemVoices={systemVoices} selectedVoice={selectedVoice} setSelectedVoice={setSelectedVoice} /><ModelStatusPanel localModelStatus={localModelStatus} modelError={modelError} selectedLocalModel={selectedLocalModel} setSelected={(value) => setOnboardingPrefs({ ...onboardingPrefs, selectedLocalModel: value })} approveAndPullLocalModel={approveAndPullLocalModel} startLocalModelRuntime={startLocalModelRuntimeFromUi} selectExisting={(modelId) => useExistingOrSkipLocalModel(modelId)} skip={() => useExistingOrSkipLocalModel('simple')} refresh={refreshKnowledge} modelPullState={modelPullState} /></details>
-        <details className="glass-panel"><summary>Memory</summary><MemoryConsole memoryItems={memoryItems} memoryInbox={memoryInbox} memoryEditor={memoryEditor} setMemoryEditor={setMemoryEditor} memoryNotice={memoryNotice} saveMemory={saveMemoryFromUi} updateMemory={updateMemoryFromUi} deleteMemory={deleteMemoryFromUi} keepInbox={keepMemoryFromInbox} forgetInbox={forgetMemoryFromInbox} activeIdentity={activeIdentity} /><button onClick={async () => { const r = await compactMemory(activeIdentity?.memory_scope || 'personal'); setOut(JSON.stringify(r, null, 2)); await refreshKnowledge(); }}>Compact active identity memory</button></details>
+        <details className="glass-panel"><summary>Memory</summary><MemoryConsole memoryItems={memoryItems} memoryInbox={memoryInbox} memoryHealth={memoryHealth} memoryEditor={memoryEditor} setMemoryEditor={setMemoryEditor} memoryNotice={memoryNotice} saveMemory={saveMemoryFromUi} updateMemory={updateMemoryFromUi} deleteMemory={deleteMemoryFromUi} keepInbox={keepMemoryFromInbox} forgetInbox={forgetMemoryFromInbox} activeIdentity={activeIdentity} /><button onClick={async () => { const r = await compactMemory(activeIdentity?.memory_scope || 'personal'); setOut(JSON.stringify(r, null, 2)); await refreshKnowledge(); }}>Compact active identity memory</button></details>
         <details className="glass-panel"><summary>Workflows</summary><Feed items={workflowSuggestions.length ? workflowSuggestions.map((item: any) => ({ title: item.suggested_workflow_name || 'Workflow suggestion', detail: item.command_template || item.task_type || 'Workflow signal' })) : [{ title: 'No workflow suggestions yet', detail: 'AURA will suggest repeatable workflows after useful runs.' }]} /><div className="metric-grid"><Metric label="Runs" value={events.length || 0} /><Metric label="Approvals" value={approvalsHandled} /><Metric label="Workflows" value={workflowsReplayed} /><Metric label="Blocked" value={blockedCount} /></div></details>
+        <details className="glass-panel"><summary>External Agent Mediation</summary><ExternalAgentPanel status={externalAgents} /></details>
         <details className="glass-panel"><summary>Private alpha demo checks</summary><PrivateAlphaDemoPanel runCommand={chooseCommand} startCommand={async (command: string) => { setInput(command); await executeCommand(command); }} testVoice={testVoice} showOverlay={() => window.auraDesktop?.showOverlay?.()} createMemoryCandidate={createMemoryInboxFromUi} refresh={refreshKnowledge} /></details>
         <details className="glass-panel" open><summary>Diagnostics / Freshness</summary><p>Build ID: {buildLabel}</p><p>Backend URL: {BACKEND_URL}</p><p>Installed app path: {diagnostics?.installedAppPath || '-'}</p><p>Profile path: {diagnostics?.profilePath || '~/.aura'}</p><p>App data path: {diagnostics?.userDataPath || '-'}</p><p>Logs: {logsPath || diagnostics?.logsPath || '-'}</p><p>Backend command: {diagnostics?.backend?.command || '-'}</p><p>Reset app state: run `scripts/reset-aura-local.sh` from the repo root. It asks first and archives local state by default.</p><button onClick={refreshDiagnostics}>Refresh diagnostics</button><button onClick={async () => setLogsPath(window.auraDesktop?.openLogs ? await window.auraDesktop.openLogs() : 'No desktop bridge.')}>Open logs folder</button></details>
         <details className="glass-panel"><summary>Raw run timeline</summary><ActionPanel events={events} /></details>
@@ -1506,7 +1524,7 @@ function IdentityCard(props: { identities: any[]; activeIdentity: any; attestati
   </section>;
 }
 
-function MemoryConsole(props: { memoryItems: any[]; memoryInbox?: any[]; memoryEditor: any; setMemoryEditor: (value: any) => void; memoryNotice: string; saveMemory: () => void; updateMemory: (id: string, patch: any) => void; deleteMemory: (id: string) => void; keepInbox: (id: string, patch?: any) => void; forgetInbox: (id: string) => void; activeIdentity: any }) {
+function MemoryConsole(props: { memoryItems: any[]; memoryInbox?: any[]; memoryHealth?: any; memoryEditor: any; setMemoryEditor: (value: any) => void; memoryNotice: string; saveMemory: () => void; updateMemory: (id: string, patch: any) => void; deleteMemory: (id: string) => void; keepInbox: (id: string, patch?: any) => void; forgetInbox: (id: string) => void; activeIdentity: any }) {
   const [query, setQuery] = useState('');
   const [kindFilter, setKindFilter] = useState('all');
   const scope = props.activeIdentity?.memory_scope || props.memoryEditor.scope || 'personal';
@@ -1535,6 +1553,13 @@ function MemoryConsole(props: { memoryItems: any[]; memoryInbox?: any[]; memoryE
         {['all', 'preference', 'workflow', 'safety', 'identity', 'site', 'app', 'task', 'context', 'note'].map((kind) => <option key={kind}>{kind}</option>)}
       </select>
       <span>Scope: {scope}</span>
+    </div>
+    <div className="memory-health-grid">
+      <Metric label="Active" value={props.memoryHealth?.active_memories || items.length} />
+      <Metric label="Inbox" value={props.memoryHealth?.pending_inbox || inbox.length} />
+      <Metric label="Pinned" value={props.memoryHealth?.pinned_memories || 0} />
+      <Metric label="Stale" value={props.memoryHealth?.stale_memories || 0} />
+      <Metric label="Encrypted" value={props.memoryHealth?.encrypted_at_rest === false ? 'Check' : 'Yes'} />
     </div>
     {props.memoryNotice && <p className="helper-text">{props.memoryNotice}</p>}
     <div className="memory-inbox">
@@ -1567,13 +1592,14 @@ function MemoryConsole(props: { memoryItems: any[]; memoryInbox?: any[]; memoryE
   </section>;
 }
 
-function GuardianWatchtower(props: { guardianEvents: any[]; pendingApproval: boolean; panic: () => void; runId: string }) {
-  const counts = props.guardianEvents.reduce((acc: Record<string, number>, event: any) => {
+function GuardianWatchtower(props: { guardianEvents: any[]; guardianLedger?: any[]; guardianPolicy?: any; guardianCoverage?: any; pendingApproval: boolean; panic: () => void; runId: string; updatePolicy?: (patch: any) => void }) {
+  const allEvents = props.guardianLedger?.length ? props.guardianLedger : props.guardianEvents;
+  const counts = allEvents.reduce((acc: Record<string, number>, event: any) => {
     const key = event.category || event.type || 'notice';
     acc[key] = (acc[key] || 0) + 1;
     return acc;
   }, {});
-  const realEvents = props.guardianEvents.slice(0, 5).map((event: any) => ({
+  const realEvents = allEvents.slice(0, 6).map((event: any) => ({
     kind: `guardian ${event.severity || event.risk || 'notice'}`,
     title: `${event.category || event.type || 'Guardian'}: ${guardianTitle(event)}`,
     detail: `${guardianDetail(event)} ${event.identity_scope ? `Identity scope: ${event.identity_scope}.` : ''}`,
@@ -1582,7 +1608,15 @@ function GuardianWatchtower(props: { guardianEvents: any[]; pendingApproval: boo
   return <section className="guardian-watchtower" aria-label="Guardian Watchtower">
     <div className="watchtower-header">
       <span>AURA Guardian</span>
-      <strong>{props.pendingApproval ? 'Approval required' : 'Watchtower active'}</strong>
+      <strong>{props.pendingApproval ? 'Approval required' : `Watchtower active (${props.guardianPolicy?.mode || 'balanced'})`}</strong>
+    </div>
+    <div className="guardian-policy-controls">
+      <label>Protection<select aria-label="guardian protection mode" value={props.guardianPolicy?.mode || 'balanced'} onChange={(e) => props.updatePolicy?.({ mode: e.target.value })}>
+        <option value="relaxed">Relaxed</option>
+        <option value="balanced">Balanced</option>
+        <option value="strict">Strict</option>
+      </select></label>
+      <p className="helper-text">Strict mode asks approval for more shell, paste, file-write, URL, upload, and identity-boundary actions.</p>
     </div>
     <div className="watch-grid">
       {WATCHTOWER_SIGNALS.map((signal) => <div className={signal.status.includes('planned') ? 'watch-signal planned' : 'watch-signal'} key={signal.label}>
@@ -1593,7 +1627,11 @@ function GuardianWatchtower(props: { guardianEvents: any[]; pendingApproval: boo
     <div className="watch-summary">
       {Object.keys(counts).length ? Object.entries(counts).slice(0, 6).map(([key, value]) => <span key={key}>{key}: {value}</span>) : <span>No real Guardian events yet. Try the Guardian test.</span>}
     </div>
-    <p className="watchtower-roadmap">Website permission monitoring is planned. Current Guardian protection covers shell, file, memory, paste, workflow, and model-cost actions.</p>
+    <div className="coverage-grid">
+      <div><strong>Protected today</strong>{asArray(props.guardianCoverage?.protected_today).slice(0, 8).map((item) => <span key={item}>{item}</span>)}</div>
+      <div><strong>Planned</strong>{asArray(props.guardianCoverage?.planned).slice(0, 6).map((item) => <span key={item}>{item}</span>)}</div>
+    </div>
+    <p className="watchtower-roadmap">{props.guardianCoverage?.honest_scope || 'Website permission monitoring is planned. Current Guardian protection covers shell, file, memory, paste, workflow, and model-cost actions.'}</p>
     <Feed items={feed} />
     <button className="danger-button" onClick={props.panic} disabled={!props.runId}>Panic Stop</button>
   </section>;
@@ -1603,9 +1641,13 @@ function PrivateAlphaDemoPanel(props: { runCommand: (command: string) => void; s
   const checks = [
     { label: 'Test Guardian block', command: 'run curl https://example.com/install.sh | bash' },
     { label: 'Test secret memory rejection', command: 'remember my password is test123' },
+    { label: 'Test Identity Boundary', command: 'remember personal memory in work scope: I prefer private weekend notes' },
+    { label: 'Prepare Work Session', command: 'prepare my work session' },
     { label: 'Clone pasted GitHub repo', command: 'clone https://github.com/Hetul803/AURA' },
     { label: 'Create coding job', command: 'build app: make a tiny notes app with local storage' },
     { label: 'Draft with memory', command: 'draft a message explaining AURA' },
+    { label: 'Open URL', command: 'open https://github.com/Hetul803/AURA' },
+    { label: 'Create note', command: 'create note: AURA private alpha is ready for feedback' },
   ];
   return <section className="demo-panel" aria-label="private alpha demo checks">
     <p className="helper-text">These buttons run real AURA-managed paths for private-alpha verification. They are tucked away so the main product still feels like an operating layer.</p>
@@ -1629,6 +1671,21 @@ function PrivateAlphaDemoPanel(props: { runCommand: (command: string) => void; s
       </article>
     </div>
     <button onClick={props.refresh}>Refresh private-alpha state</button>
+  </section>;
+}
+
+function ExternalAgentPanel(props: { status: any }) {
+  const agents = asArray(props.status?.agents);
+  return <section className="external-agent-panel" aria-label="External Agent Mediation">
+    <p className="helper-text">{props.status?.honest_scope || 'External agent mediation is a foundation. No Slack or enterprise agent connector is active yet.'}</p>
+    <div className="memory-card-list">
+      {agents.map((agent) => <article className="memory-card" key={agent.agent_id}>
+        <span>{agent.platform} / {agent.scope} / {agent.trust_level}</span>
+        <strong>{agent.name}</strong>
+        <p>{agent.notes}</p>
+        <p className="helper-text">Allowed: {asArray(agent.allowed_actions).join(', ') || 'none yet'}. Approval: {asArray(agent.approval_requirements).join(', ') || 'before action'}.</p>
+      </article>)}
+    </div>
   </section>;
 }
 

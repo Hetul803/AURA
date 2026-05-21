@@ -14,6 +14,7 @@ echo "1/5 Backend compile"
 echo "2/5 Guardian, Memory, Identity backend tests"
 (cd "$ROOT/apps/backend" && pytest -q \
   tests/test_guardian_core_loop.py \
+  tests/test_completion_product_features.py \
   tests/test_memory_engine.py \
   tests/test_identity_boundary.py \
   tests/test_workflow_engine.py \

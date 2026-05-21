@@ -1657,6 +1657,53 @@ h1, h2, h3, p {
   gap: 14px;
 }
 
+.product-status-grid,
+.memory-health-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px;
+  margin: 14px 0;
+}
+
+.guardian-policy-controls {
+  border: 1px solid rgba(180, 222, 255, 0.12);
+  border-radius: 14px;
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.04);
+  margin: 12px 0;
+}
+
+.guardian-policy-controls label {
+  display: grid;
+  gap: 8px;
+}
+
+.coverage-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px;
+  margin: 12px 0;
+}
+
+.coverage-grid div {
+  display: grid;
+  gap: 6px;
+  border: 1px solid rgba(180, 222, 255, 0.12);
+  border-radius: 14px;
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.coverage-grid span {
+  color: #c7d7e6;
+  font-size: 13px;
+}
+
+.external-agent-panel {
+  display: grid;
+  gap: 12px;
+}
+
 @media (max-width: 820px) {
   .persona-stage {
     grid-template-columns: 1fr;

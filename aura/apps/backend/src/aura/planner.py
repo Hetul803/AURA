@@ -32,6 +32,14 @@ def intent_signature(text: str) -> str:
         return 'user_ai:web'
     if t.startswith('search '):
         return 'search:web'
+    if t.startswith('open url ') or re.match(r'^open https?://', t):
+        return 'open_url:browser'
+    if t.startswith('open app ') or t.startswith('open application '):
+        return 'open_app:os'
+    if t.startswith('create note') or t.startswith('write note'):
+        return 'file:note'
+    if 'prepare my work session' in t:
+        return 'daily:operator'
     if 'gmail' in t:
         return 'gmail:web'
     if t.startswith('find flights from'):
@@ -181,6 +189,60 @@ def _shell_command_plan(text: str, context: dict | None = None) -> dict:
         ],
         context={'request_text': text, 'command': command, 'workspace': workspace, 'context_snapshot': context or {}},
         success_criteria=[{'type': 'exit_code', 'expected': 0}],
+    )
+
+
+def _open_url_plan(text: str, context: dict | None = None) -> dict:
+    match = re.search(r'(https?://\S+)', text)
+    url = match.group(1) if match else text.replace('open url', '', 1).replace('open', '', 1).strip()
+    return _build_plan(
+        goal=f'Open {url} in the browser',
+        signature='open_url:browser',
+        steps=[Step(id='s1', name='Open requested URL', action_type='OS_OPEN_URL', tool='browser', args={'url': url}, expected_outcome={'url_contains': urlparse(url).netloc})],
+        context={'url': url, 'context_snapshot': context or {}},
+        success_criteria=[{'type': 'url_opened', 'expected': url}],
+    )
+
+
+def _open_app_plan(text: str, context: dict | None = None) -> dict:
+    app_name = re.sub(r'(?i)^open (app|application)\s+', '', text).strip()
+    return _build_plan(
+        goal=f'Open {app_name}',
+        signature='open_app:os',
+        steps=[Step(id='s1', name=f'Open {app_name}', action_type='OS_OPEN_APP', tool='os', args={'app_name': app_name}, expected_outcome={'active_app_contains': app_name})],
+        context={'app_name': app_name, 'context_snapshot': context or {}},
+        success_criteria=[{'type': 'app_opened', 'expected': app_name}],
+    )
+
+
+def _note_plan(text: str, context: dict | None = None) -> dict:
+    workspace = (context or {}).get('workspace_hint') or default_workspace_root()
+    body = text.split(':', 1)[1].strip() if ':' in text else text
+    safe_name = re.sub(r'[^a-z0-9]+', '-', body.lower()).strip('-')[:40] or 'aura-note'
+    path = str(Path(workspace).expanduser() / f'{safe_name}.md')
+    return _build_plan(
+        goal='Create a note in the approved AURA workspace',
+        signature='file:note',
+        steps=[
+            Step(id='s1', name='Write workspace note', action_type='FS_WRITE_TEXT', tool='filesystem', args={'path': path, 'text': f'# AURA Note\n\n{body}\n'}, expected_outcome={'written_gte': len(body)}, safety_level='CONFIRM'),
+            Step(id='s2', name='Verify note exists', action_type='FS_EXISTS', tool='filesystem', args={'path': path}, expected_outcome={'exists': True}),
+        ],
+        context={'path': path, 'workspace': workspace, 'request_text': text},
+        success_criteria=[{'type': 'artifact_exists', 'expected': path}],
+    )
+
+
+def _daily_operator_plan(text: str, context: dict | None = None) -> dict:
+    return _build_plan(
+        goal='Prepare a private local work session summary',
+        signature='daily:operator',
+        steps=[
+            Step(id='s1', name='Capture active work context', action_type='ASSIST_CAPTURE_CONTEXT', tool='assist', expected_outcome={'ok': True}),
+            Step(id='s2', name='Summarize current session readiness', action_type='NOOP', tool='control', args={'message': 'AURA checked identity, Guardian, memory, context, and pending approvals for this work session.'}, expected_outcome={'ok': True}),
+        ],
+        context={'request_text': text, 'context_snapshot': context or {}, 'operator_summary': 'Show active identity, recent memory, Guardian status, pending approvals, and next tasks.'},
+        success_criteria=[{'type': 'session_ready', 'expected': True}],
+        memory_scope='daily:operator',
     )
 
 
@@ -376,6 +438,18 @@ def plan_from_text(text: str, choices: dict | None = None, context: dict | None 
 
     if intent_signature(text) == 'shell:run':
         return _shell_command_plan(text, context)
+
+    if intent_signature(text) == 'open_url:browser':
+        return _open_url_plan(text, context)
+
+    if intent_signature(text) == 'open_app:os':
+        return _open_app_plan(text, context)
+
+    if intent_signature(text) == 'file:note':
+        return _note_plan(text, context)
+
+    if intent_signature(text) == 'daily:operator':
+        return _daily_operator_plan(text, context)
 
     if t.startswith('fix and run python script at') or t.startswith('run python script at'):
         return _code_plan(text)

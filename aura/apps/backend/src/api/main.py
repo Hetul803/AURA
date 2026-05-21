@@ -23,7 +23,9 @@ from aura.cost_router import (
     usage_summary,
 )
 from aura.guardian import record_human_guardian_event
+from aura.guardian_policy import guardian_policy, update_guardian_policy
 from aura.crypto_identity import identity_attestation, list_identity_keys, sign_identity_payload
+from aura.external_agents import external_agent_status, list_external_agents, upsert_external_agent
 from aura.device_handoff import create_handoff, get_handoff, list_handoffs, update_handoff
 from aura.identity_boundary import (
     check_boundary,
@@ -58,6 +60,7 @@ from aura.memory_engine import (
     keep_memory_inbox_item,
     list_memory_inbox,
     list_memory_items,
+    memory_health,
     memory_lifecycle_sweep,
     remember_item,
     reinforce_memory_item,
@@ -101,7 +104,7 @@ from aura.workflow_engine import (
     validate_workflow_run,
     workflow_update_suggestions,
 )
-from storage.export_import import export_profile, import_profile
+from storage.export_import import export_profile, import_profile, preview_profile_import
 from storage.migrations import run_migrations
 from storage.profile_paths import profile_dir
 from storage.retention import enforce_retention
@@ -209,6 +212,16 @@ class MemoryLifecycleBody(BaseModel):
     low_confidence: float = 0.25
 
 
+class GuardianPolicyPatch(BaseModel):
+    mode: str | None = None
+    trusted_domains: list[str] | None = None
+    trusted_folders: list[str] | None = None
+    trusted_workflows: list[str] | None = None
+    trusted_command_patterns: list[str] | None = None
+    blocked_command_patterns: list[str] | None = None
+    notes: str | None = None
+
+
 class MemoryInboxCreate(BaseModel):
     kind: str = 'preference'
     key: str
@@ -229,6 +242,19 @@ class MemoryInboxDecision(BaseModel):
     kind: str | None = None
     user_notes: str | None = None
     pinned: bool | None = None
+
+
+class ExternalAgentBody(BaseModel):
+    agent_id: str | None = None
+    name: str
+    platform: str
+    scope: str = 'session'
+    trust_level: str = 'not_connected'
+    allowed_actions: list[str] = []
+    approval_requirements: list[str] = []
+    last_interaction: str | None = None
+    notes: str = ''
+    connected: bool = False
 
 
 class AgentRouteBody(BaseModel):
@@ -1202,6 +1228,61 @@ def guardian_events(run_id: str | None = None, limit: int = 100):
     return list_guardian_events(run_id=run_id, limit=limit)
 
 
+@app.get('/guardian/ledger')
+def guardian_ledger(severity: str | None = None, category: str | None = None, identity_scope: str | None = None, approval_status: str | None = None, limit: int = 200):
+    entries = []
+    for row in list_audit_log(limit=limit * 3):
+        if not str(row.get('event_type') or '').startswith('guardian_'):
+            continue
+        event = row.get('payload') or {}
+        if severity and event.get('severity') != severity:
+            continue
+        if category and event.get('category') != category:
+            continue
+        if identity_scope and event.get('identity_scope') != identity_scope:
+            continue
+        if approval_status and event.get('approval_status') != approval_status:
+            continue
+        entries.append({**event, 'ledger_id': row.get('id'), 'created_at': row.get('created_at')})
+        if len(entries) >= limit:
+            break
+    return entries
+
+
+@app.get('/guardian/policy')
+def guardian_policy_get():
+    return guardian_policy()
+
+
+@app.patch('/guardian/policy')
+def guardian_policy_update(body: GuardianPolicyPatch):
+    return update_guardian_policy(body.model_dump(exclude_unset=True))
+
+
+@app.get('/guardian/coverage')
+def guardian_coverage():
+    return {
+        'protected_today': [
+            'AURA commands',
+            'memory writes and secret rejection',
+            'paste-back and send approvals',
+            'shell execution risk',
+            'workflow replay risk',
+            'profile import/export approval',
+            'identity boundary crossing',
+            'model-cost/privacy routing',
+        ],
+        'planned': [
+            'true OS-wide monitoring',
+            'browser permission interception',
+            'external app monitoring',
+            'Slack/agent mediation',
+            'phishing and scam detection',
+        ],
+        'honest_scope': 'Guardian currently protects AURA-managed actions. Ambient OS-wide protection is planned.',
+    }
+
+
 @app.get('/storage/stats')
 def storage_stats():
     base = profile_dir()
@@ -1361,6 +1442,11 @@ def memory_inbox_list(scope: str | None = None, limit: int = 50):
         )
         return []
     return list_memory_inbox(scope=decision['scope'], limit=limit)
+
+
+@app.get('/memory/health')
+def memory_health_status():
+    return memory_health()
 
 
 @app.post('/memory/inbox')
@@ -1531,6 +1617,56 @@ def profile_import(path: str, approved: bool = False):
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
     return {'ok': True}
+
+
+@app.get('/profile/import/preview')
+def profile_import_preview(path: str):
+    return preview_profile_import(path)
+
+
+@app.get('/identity/export')
+def identity_export(identity_id: str | None = None, approved: bool = False):
+    identity = get_active_identity() if not identity_id else next((item for item in list_identities() if item.get('identity_id') == identity_id), None)
+    if not identity:
+        raise HTTPException(404, 'identity not found')
+    if not approved:
+        record_human_guardian_event(
+            severity='approval_required',
+            title='Guardian needs approval before identity export.',
+            explanation='Exporting identity metadata can reveal account names, scopes, and public fingerprint. The private key is never exported.',
+            action_required='Approve export only when you intend to back up or inspect the public identity record.',
+            event_type='export_import',
+            action='IDENTITY_EXPORT',
+            risk='high',
+            context={'identity_id': identity.get('identity_id'), 'identity_scope': identity.get('memory_scope')},
+        )
+        raise HTTPException(403, {'requires_approval': True, 'reason': 'identity_export_requires_approval'})
+    attestation = identity_attestation(identity)
+    return {
+        'identity': identity,
+        'public_attestation': {
+            'fingerprint': attestation.get('key', {}).get('fingerprint'),
+            'algorithm': attestation.get('key', {}).get('algorithm'),
+            'public_key_pem': attestation.get('key', {}).get('public_key_pem'),
+        },
+        'private_key_exported': False,
+        'warning': 'Private signing key remains local and encrypted at rest.',
+    }
+
+
+@app.get('/external-agents')
+def external_agents_list():
+    return list_external_agents()
+
+
+@app.get('/external-agents/status')
+def external_agents_status():
+    return external_agent_status()
+
+
+@app.post('/external-agents')
+def external_agents_upsert(body: ExternalAgentBody):
+    return upsert_external_agent(body.model_dump())
 
 
 @app.get('/profile/status')

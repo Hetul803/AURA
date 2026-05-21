@@ -74,3 +74,30 @@ def import_profile(path: str) -> None:
                 vals = [row[k] for k in keys]
                 q = ",".join("?" for _ in keys)
                 conn.execute(f"INSERT INTO {table} ({','.join(keys)}) VALUES ({q})", vals)
+
+
+def preview_profile_import(path: str) -> dict:
+    target = _safe_bundle_path(path)
+    raw = target.read_text(encoding='utf-8')
+    contains_secret = detect_secret(raw)
+    try:
+        data = json.loads(raw)
+    except Exception as exc:
+        return {'ok': False, 'path': str(target), 'error': f'invalid_json:{exc}', 'contains_secret': contains_secret}
+    tables = {}
+    unknown_tables = []
+    for table, rows in data.items():
+        if table not in PROFILE_TABLES:
+            unknown_tables.append(table)
+            continue
+        tables[table] = len(rows) if isinstance(rows, list) else 0
+    return {
+        'ok': not contains_secret,
+        'path': str(target),
+        'format_version': data.get('format_version') if isinstance(data, dict) else None,
+        'contains_secret': contains_secret,
+        'tables': tables,
+        'unknown_tables': unknown_tables,
+        'total_rows': sum(tables.values()),
+        'recommendation': 'Do not import until secrets are removed.' if contains_secret else 'Preview looks importable after approval.',
+    }

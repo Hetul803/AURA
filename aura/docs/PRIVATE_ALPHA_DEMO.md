@@ -6,6 +6,7 @@ This is the five-minute founder-demo script for the current private alpha. It sh
 
 ```bash
 cd AURA/aura
+pnpm aura:alpha-check
 pnpm aura:demo-check
 pnpm aura:smoke
 ./start-aura.sh
@@ -66,6 +67,14 @@ Success: AURA plans, pauses, acts, and reports artifacts. It does not pretend un
 4. Show the Guardian identity-boundary event and the Identity Ledger.
 
 Success: AURA records actions under the active identity and refuses silent cross-scope memory mixing.
+
+## Demo 6: Daily Operator
+
+1. Ask: `prepare my work session`.
+2. Show AURA checking current context, active identity, recent memory, Guardian state, and pending approvals.
+3. Open Advanced -> External Agent Mediation and show Victor in Slack as a future, not-connected connector.
+
+Success: AURA feels like a private operating identity preparing the session, not just a task bot.
 
 ## Honest Guardian Scope
 

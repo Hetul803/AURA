@@ -17,6 +17,8 @@ Run:
 
 ```bash
 python infra/scripts/private_alpha_check.py
+pnpm aura:doctor
+pnpm aura:alpha-check
 pnpm aura:demo-check
 pnpm aura:smoke
 ```

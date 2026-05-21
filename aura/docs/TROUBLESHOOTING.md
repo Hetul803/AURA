@@ -16,6 +16,7 @@ The reset script prints targets and asks before moving local app data, logs, pro
 ```bash
 git clone https://github.com/Hetul803/AURA.git
 cd AURA/aura
+pnpm aura:doctor
 ./start-aura.sh
 ```
 
@@ -111,6 +112,14 @@ Manual Guardian checks:
 - profile export/import should require approval.
 - paste-back should require approval.
 - cross-identity memory mixing should create a boundary event.
+
+Guardian policy checks:
+
+```bash
+pnpm aura:alpha-check
+```
+
+Inside AURA, set Guardian to **Strict** to approval-gate more shell, paste, file-write, URL, upload, and identity-boundary actions. Trusted command patterns and domains should only relax safe medium/low-risk actions; blocked commands still stay blocked.
 
 ## Package
 
