@@ -51,8 +51,12 @@ from aura.memory import delete_memory, list_memories, update_memory
 from aura.memory_engine import (
     archive_memory_item,
     compact_memory_items,
+    create_memory_inbox_item,
     delete_memory_item,
     encrypt_existing_memory_items,
+    forget_memory_inbox_item,
+    keep_memory_inbox_item,
+    list_memory_inbox,
     list_memory_items,
     memory_lifecycle_sweep,
     remember_item,
@@ -203,6 +207,28 @@ class MemoryCompactBody(BaseModel):
 class MemoryLifecycleBody(BaseModel):
     stale_after_days: int = 180
     low_confidence: float = 0.25
+
+
+class MemoryInboxCreate(BaseModel):
+    kind: str = 'preference'
+    key: str
+    value: str
+    scope: str = 'active'
+    permission: str = 'private'
+    tags: list[str] = []
+    confidence: float = 0.55
+    source: str = 'aura_inbox'
+    provenance: dict = {}
+    user_notes: str = ''
+    metadata: dict = {}
+
+
+class MemoryInboxDecision(BaseModel):
+    key: str | None = None
+    value: str | None = None
+    kind: str | None = None
+    user_notes: str | None = None
+    pinned: bool | None = None
 
 
 class AgentRouteBody(BaseModel):
@@ -1045,6 +1071,58 @@ def audit(limit: int = 100):
     return list_audit_log(limit=limit)
 
 
+def _ledger_summary(entry: dict) -> str:
+    payload = entry.get('payload') or {}
+    identity = payload.get('identity') or {}
+    identity_name = identity.get('name') or payload.get('identity_name') or payload.get('identity_id') or 'active identity'
+    action = entry.get('action_type') or payload.get('action_type') or payload.get('action') or 'an action'
+    event_type = entry.get('event_type') or payload.get('event_type') or ''
+    message = entry.get('message') or payload.get('message')
+    if message:
+        return str(message)
+    if event_type in {'action_blocked', 'step_blocked'}:
+        return f'Guardian blocked {action} under {identity_name}.'
+    if event_type in {'action_needs_approval', 'approval_required', 'step_needs_confirmation'}:
+        return f'Guardian required approval before {action} under {identity_name}.'
+    if event_type in {'action_success', 'step_success'}:
+        return f'AURA acted under {identity_name} to complete {action}.'
+    if event_type == 'memory_used':
+        count = len(payload.get('memory_used') or payload.get('items') or [])
+        return f'AURA used {count} relevant memor{"y" if count == 1 else "ies"} under {identity_name}.'
+    return f'AURA recorded {event_type or "an event"} under {identity_name}.'
+
+
+@app.get('/identity/ledger')
+def identity_ledger(identity_id: str | None = None, limit: int = 60):
+    entries = []
+    for entry in list_audit_log(limit=limit * 3):
+        payload = entry.get('payload') or {}
+        identity = payload.get('identity') or {}
+        entry_identity_id = payload.get('identity_id') or identity.get('identity_id')
+        if identity_id and entry_identity_id != identity_id:
+            continue
+        entries.append(
+            {
+                'ledger_id': entry.get('id'),
+                'timestamp': entry.get('created_at'),
+                'run_id': entry.get('run_id') or payload.get('run_id'),
+                'identity_id': entry_identity_id,
+                'identity_name': identity.get('name') or payload.get('identity_name'),
+                'identity_scope': identity.get('memory_scope') or payload.get('identity_scope'),
+                'event_type': entry.get('event_type'),
+                'action_type': entry.get('action_type') or payload.get('action_type'),
+                'risk_level': entry.get('risk_level') or payload.get('risk_level'),
+                'approval_status': payload.get('approval_status') or payload.get('status'),
+                'memory_used': payload.get('memory_used') or [],
+                'result': payload.get('result') or payload.get('status'),
+                'summary': _ledger_summary(entry),
+            }
+        )
+        if len(entries) >= limit:
+            break
+    return entries
+
+
 @app.get('/runs/{run_id}/audit')
 def run_audit(run_id: str, limit: int = 100):
     return list_audit_log(run_id=run_id, limit=limit)
@@ -1263,8 +1341,98 @@ def memory_items_create(body: MemoryItemCreate):
             action='MEMORY_WRITE',
             risk='blocked' if secret else 'medium',
             context={'memory_key': body.key, 'kind': body.kind, 'scope': body.scope, 'reasons': reasons},
+            )
+    return result
+
+
+@app.get('/memory/inbox')
+def memory_inbox_list(scope: str | None = None, limit: int = 50):
+    decision = memory_scope_decision(requested_scope=scope, action='read')
+    if decision['decision'] in {'deny', 'require_approval'} and scope:
+        record_human_guardian_event(
+            severity='blocked' if decision['decision'] == 'deny' else 'approval_required',
+            title='Guardian protected identity-scoped memory inbox.',
+            explanation=decision['reason'],
+            action_required='Switch identity or approve a boundary workflow before viewing this inbox.',
+            event_type='identity_boundary',
+            action='MEMORY_INBOX_READ',
+            risk='blocked' if decision['decision'] == 'deny' else 'high',
+            context={'requested_scope': decision['scope'], 'active_identity': decision['identity'].get('identity_id')},
+        )
+        return []
+    return list_memory_inbox(scope=decision['scope'], limit=limit)
+
+
+@app.post('/memory/inbox')
+def memory_inbox_create(body: MemoryInboxCreate):
+    decision = memory_scope_decision(requested_scope=body.scope, action='remember')
+    if decision['decision'] in {'deny', 'require_approval'}:
+        record_human_guardian_event(
+            severity='blocked' if decision['decision'] == 'deny' else 'approval_required',
+            title='Guardian stopped cross-identity memory inbox capture.' if decision['decision'] == 'deny' else 'Guardian needs approval before cross-identity memory capture.',
+            explanation=decision['reason'],
+            action_required='Switch to the matching identity or save this memory in the active identity scope.',
+            event_type='identity_boundary',
+            action='MEMORY_INBOX_WRITE',
+            risk='blocked' if decision['decision'] == 'deny' else 'high',
+            context={'requested_scope': decision['scope'], 'active_identity': decision['identity'].get('identity_id')},
+        )
+        return {
+            'stored': False,
+            'rejected': True,
+            'reasons': ['identity_boundary_' + decision['decision']],
+            'scope': decision['scope'],
+            'active_identity': decision['identity'],
+        }
+    result = create_memory_inbox_item(
+        kind=body.kind,
+        key=body.key,
+        value=body.value,
+        scope=decision['scope'],
+        permission=body.permission,
+        tags=body.tags,
+        confidence=body.confidence,
+        source=body.source,
+        provenance={**body.provenance, 'active_identity': decision['identity'].get('identity_id')},
+        user_notes=body.user_notes,
+        metadata={**body.metadata, 'active_identity': decision['identity'].get('identity_id')},
+    )
+    if result.get('rejected'):
+        reasons = result.get('reasons') or []
+        record_human_guardian_event(
+            severity='blocked' if 'secret_never_stored' in reasons else 'notice',
+            title='Guardian rejected unsafe memory candidate.' if 'secret_never_stored' in reasons else 'Guardian declined this memory candidate.',
+            explanation='This looked like a password, API key, token, or secret, so AURA did not store it.' if 'secret_never_stored' in reasons else 'The memory did not meet AURA privacy or quality rules.',
+            action_required='Save only safe preferences, workflow patterns, or non-sensitive facts.',
+            event_type='memory_rejected',
+            action='MEMORY_INBOX_WRITE',
+            risk='blocked' if 'secret_never_stored' in reasons else 'medium',
+            context={'memory_key': body.key, 'kind': body.kind, 'scope': body.scope, 'reasons': reasons},
         )
     return result
+
+
+@app.post('/memory/inbox/{memory_id}/keep')
+def memory_inbox_keep(memory_id: str, body: MemoryInboxDecision):
+    updated = keep_memory_inbox_item(
+        memory_id,
+        key=body.key,
+        value=body.value,
+        kind=body.kind,
+        user_notes=body.user_notes,
+        pinned=body.pinned,
+    )
+    if not updated:
+        raise HTTPException(404, 'memory inbox item not found')
+    return updated
+
+
+@app.post('/memory/inbox/{memory_id}/forget')
+def memory_inbox_forget(memory_id: str):
+    updated = forget_memory_inbox_item(memory_id)
+    if not updated:
+        raise HTTPException(404, 'memory inbox item not found')
+    return {'ok': True, 'memory_id': memory_id}
 
 
 @app.patch('/memory/items/{memory_id}')

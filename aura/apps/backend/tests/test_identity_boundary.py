@@ -189,6 +189,10 @@ def test_command_memory_and_audit_use_active_identity():
     assert any((row.get('payload') or {}).get('identity_id') == 'work' for row in audit)
     assert any((row.get('payload') or {}).get('identity_signature') for row in audit)
 
+    ledger = client.get('/identity/ledger', params={'identity_id': 'work'})
+    assert ledger.status_code == 200
+    assert any('Work AURA' in row['summary'] or row['identity_id'] == 'work' for row in ledger.json())
+
 
 def test_identity_attestation_creates_ed25519_key():
     _clear_identity_tables()

@@ -38,6 +38,9 @@ pnpm aura:install
 pnpm aura:backend
 pnpm aura:desktop
 pnpm aura:test
+pnpm aura:smoke
+pnpm aura:demo-check
+pnpm aura:reset
 pnpm aura:package
 pnpm aura:web
 ```
@@ -122,10 +125,14 @@ Writes `test_runs/<timestamp>/results.json`.
 
 Useful focused checks during hardening:
 ```bash
+pnpm aura:smoke
+pnpm aura:demo-check
 cd apps/backend
 python -m compileall -q src
 pytest -q tests/test_identity_boundary.py tests/test_safety.py tests/test_memory_engine.py tests/test_workflow_engine.py tests/test_guardian.py
 ```
+
+`pnpm aura:smoke` verifies backend compile, Guardian/Memory/Identity/workflow readiness, desktop tests/build, and Electron install. `pnpm aura:demo-check` is the faster founder-demo gate.
 
 On Windows, the local reality-check runner is:
 ```powershell

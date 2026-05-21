@@ -218,6 +218,28 @@ Drag AURA into Applications, then right-click Open because the private-alpha app
 - Local Brain, skip if Ollama is not ready;
 - Optional Workers;
 - Permissions;
+
+## Private Alpha Completion Checks
+
+From `AURA/aura`, run:
+
+```bash
+pnpm aura:demo-check
+pnpm aura:smoke
+```
+
+Success means the demo-critical paths pass: Guardian blocks dangerous commands, memory rejects secrets and supports inbox/CRUD, identity scopes and ledger work, desktop tests pass, and the renderer builds.
+
+Inside the app, open **Advanced / Diagnostics -> Private alpha demo checks** only when rehearsing the founder demo. Those buttons verify real AURA-managed paths without making the main surface feel like a dashboard:
+
+- Test Guardian block;
+- Test secret memory rejection;
+- Clone pasted GitHub repo;
+- Create coding job;
+- Draft with memory;
+- Create Memory Inbox candidate;
+- Test voice;
+- Show overlay.
 - Start Using AURA.
 
 5. Type `Clone this repo locally` with no GitHub page visible.

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import time
+import uuid
 from typing import Any
 from urllib.parse import urlparse
 
@@ -29,6 +30,27 @@ RISK_TO_SEVERITY = {
     HIGH: 'approval_required',
     'critical': 'approval_required',
     'blocked': 'blocked',
+}
+
+CATEGORY_BY_TYPE = {
+    'approval_required': 'tool_risk',
+    'blocked': 'command_risk',
+    'clipboard_write': 'paste_requires_approval',
+    'clipboard_read': 'tool_risk',
+    'memory_rejected': 'memory_rejected',
+    'identity_boundary': 'identity_boundary',
+    'file_access': 'tool_risk',
+    'browser_access': 'tool_risk',
+    'network_action': 'tool_risk',
+    'workflow_replay_blocked': 'workflow_risk',
+    'workflow_risk': 'workflow_risk',
+    'missing_context': 'permission_missing',
+    'context_capture_failure': 'permission_missing',
+    'permission_missing': 'permission_missing',
+    'local_model_unavailable': 'tool_risk',
+    'backend_disconnect': 'permission_missing',
+    'export_import': 'export_import',
+    'secret_detected': 'secret_detected',
 }
 
 
@@ -67,9 +89,65 @@ def _size_hint(value: Any) -> int:
         return 0
 
 
+def _category(event_type: str, action: str = '') -> str:
+    if action in CLIPBOARD_WRITE_ACTIONS:
+        return 'paste_requires_approval'
+    if action in FILE_ACTIONS:
+        return 'tool_risk'
+    if action.startswith('WORKFLOW_'):
+        return 'workflow_risk'
+    if action.startswith('PROFILE_'):
+        return 'export_import'
+    if event_type in CATEGORY_BY_TYPE:
+        return CATEGORY_BY_TYPE[event_type]
+    return 'tool_risk'
+
+
+def _identity_context(run_id: str | None, context: dict | None) -> tuple[str | None, str | None]:
+    if context:
+        identity = context.get('identity') or {}
+        identity_id = context.get('identity_id') or identity.get('identity_id')
+        identity_scope = context.get('identity_scope') or identity.get('memory_scope') or identity.get('identity_type')
+        if identity_id or identity_scope:
+            return identity_id, identity_scope
+    if not run_id:
+        return None, None
+    run_context = get_run_context(run_id) or {}
+    identity = run_context.get('identity') or {}
+    return identity.get('identity_id'), identity.get('memory_scope') or identity.get('identity_type')
+
+
+def _approval_status(severity: str) -> str:
+    if severity == 'blocked':
+        return 'blocked'
+    if severity == 'approval_required':
+        return 'pending'
+    return 'not_required'
+
+
+def _enrich_event(event: dict) -> dict:
+    context = event.get('context') or {}
+    action = event.get('action') or ''
+    event_type = event.get('type') or 'notice'
+    identity_id, identity_scope = _identity_context(event.get('run_id'), context)
+    severity = event.get('severity') or RISK_TO_SEVERITY.get(event.get('risk'), 'notice')
+    event_id = event.get('event_id') or f'guardian_evt_{uuid.uuid4().hex}'
+    action_required = event.get('action_required') or 'No action needed.'
+    return {
+        **event,
+        'event_id': event_id,
+        'category': event.get('category') or _category(event_type, action),
+        'recommended_action': event.get('recommended_action') or action_required,
+        'identity_id': event.get('identity_id') or identity_id,
+        'identity_scope': event.get('identity_scope') or identity_scope,
+        'approval_status': event.get('approval_status') or _approval_status(severity),
+        'related_run_id': event.get('related_run_id') or event.get('run_id'),
+    }
+
+
 def _base_event(*, run_id: str | None, step, event_type: str, risk: str, summary: str, explanation: str, context: dict | None = None, severity: str | None = None, action_required: str = 'No action needed.') -> dict:
     severity = severity or RISK_TO_SEVERITY.get(risk, 'notice')
-    return {
+    return _enrich_event({
         'run_id': run_id,
         'step_id': getattr(step, 'id', None),
         'action': getattr(step, 'action_type', ''),
@@ -83,7 +161,7 @@ def _base_event(*, run_id: str | None, step, event_type: str, risk: str, summary
         'action_required': action_required,
         'context': context or {},
         'timestamp': time.time(),
-    }
+    })
 
 
 def human_guardian_event(
@@ -98,8 +176,10 @@ def human_guardian_event(
     risk: str | None = None,
     event_type: str = 'notice',
     context: dict | None = None,
+    category: str | None = None,
+    approval_status: str | None = None,
 ) -> dict:
-    return {
+    return _enrich_event({
         'run_id': run_id,
         'step_id': step_id,
         'action': action,
@@ -111,9 +191,12 @@ def human_guardian_event(
         'summary': title,
         'explanation': explanation,
         'action_required': action_required,
+        'recommended_action': action_required,
+        'category': category,
+        'approval_status': approval_status,
         'context': context or {},
         'timestamp': time.time(),
-    }
+    })
 
 
 def record_human_guardian_event(**kwargs) -> dict:

@@ -17,7 +17,24 @@ def _now() -> str:
 
 
 ALLOWED_SCOPES = {'personal', 'work', 'company', 'session', 'device'}
-ALLOWED_KINDS = {'preference', 'workflow', 'fact', 'person', 'project', 'failure', 'fix', 'safety', 'context', 'summary', 'note', 'execution'}
+ALLOWED_KINDS = {
+    'preference',
+    'workflow',
+    'fact',
+    'person',
+    'project',
+    'failure',
+    'fix',
+    'safety',
+    'context',
+    'summary',
+    'note',
+    'execution',
+    'identity',
+    'site',
+    'app',
+    'task',
+}
 SENSITIVE_MARKERS = {'api_key', 'password', 'secret', 'token', 'private key', 'ssn', 'credit card'}
 LOW_VALUE_VALUES = {'ok', 'done', 'success', 'failure', 'none', 'null', 'n/a', ''}
 
@@ -117,6 +134,11 @@ def _similar_existing(*, kind: str, key: str, value: str, scope: str) -> dict[st
         if same_key and same_value:
             return item
     return None
+
+
+def _is_pending_inbox(item: dict[str, Any]) -> bool:
+    metadata = item.get('metadata') or {}
+    return metadata.get('memory_state') == 'inbox' or metadata.get('inbox_status') == 'pending'
 
 
 def reinforce_memory_item(memory_id: str, *, evidence: str | None = None, confidence_delta: float = 0.06, source: str | None = None) -> dict[str, Any] | None:
@@ -271,6 +293,7 @@ def search_memory_items(
     limit: int = 10,
 ) -> list[dict[str, Any]]:
     candidates = list_memory_items(kind=kind, scope=scope, include_archived=False, limit=max(limit * 5, 50))
+    candidates = [item for item in candidates if not _is_pending_inbox(item)]
     if permission:
         candidates = [item for item in candidates if item.get('permission') in {permission, 'private'}]
     ranked = sorted(candidates, key=lambda item: _score(query, item, scope=scope, task_type=task_type, permission=permission), reverse=True)
@@ -282,6 +305,93 @@ def search_memory_items(
                 (_now(), item['memory_id']),
             )
     return selected
+
+
+def create_memory_inbox_item(
+    *,
+    kind: str,
+    key: str,
+    value: str,
+    scope: str = 'personal',
+    permission: str = 'private',
+    tags: list[str] | None = None,
+    confidence: float = 0.55,
+    source: str = 'aura_inbox',
+    provenance: dict[str, Any] | None = None,
+    user_notes: str = '',
+    metadata: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    now = _now()
+    result = remember_item(
+        kind=kind,
+        key=key,
+        value=value,
+        scope=scope,
+        permission=permission,
+        tags=tags or ['memory-inbox'],
+        confidence=confidence,
+        source=source,
+        pinned=False,
+        provenance={
+            'source': source,
+            'created_at': now,
+            'explanation': 'AURA learned this as a candidate memory and is waiting for you to keep, edit, or forget it.',
+            **(provenance or {}),
+        },
+        user_notes=user_notes,
+        metadata={
+            'memory_state': 'inbox',
+            'inbox_status': 'pending',
+            'why_it_matters': 'This may help AURA personalize future work.',
+            **(metadata or {}),
+        },
+    )
+    if result.get('stored'):
+        result['inbox'] = True
+    return result
+
+
+def list_memory_inbox(scope: str | None = None, limit: int = 50) -> list[dict[str, Any]]:
+    items = list_memory_items(scope=scope, include_archived=False, limit=max(limit * 3, 100))
+    inbox = [item for item in items if _is_pending_inbox(item)]
+    return inbox[:limit]
+
+
+def keep_memory_inbox_item(memory_id: str, *, value: str | None = None, key: str | None = None, kind: str | None = None, user_notes: str | None = None, pinned: bool | None = None) -> dict[str, Any] | None:
+    item = get_memory_item(memory_id)
+    if not item or item.get('archived'):
+        return None
+    metadata = {**(item.get('metadata') or {})}
+    metadata['memory_state'] = 'active'
+    metadata['inbox_status'] = 'kept'
+    metadata['kept_at'] = _now()
+    patch: dict[str, Any] = {
+        'metadata': metadata,
+        'source': item.get('source') or 'aura_inbox',
+        'confidence': max(float(item.get('confidence') or 0.0), 0.68),
+    }
+    if value is not None:
+        patch['value'] = value
+    if key is not None:
+        patch['key'] = key
+    if kind is not None:
+        patch['kind'] = kind
+    if user_notes is not None:
+        patch['user_notes'] = user_notes
+    if pinned is not None:
+        patch['pinned'] = pinned
+    return update_memory_item(memory_id, **patch)
+
+
+def forget_memory_inbox_item(memory_id: str) -> dict[str, Any] | None:
+    item = get_memory_item(memory_id)
+    if not item:
+        return None
+    metadata = {**(item.get('metadata') or {})}
+    metadata['memory_state'] = 'forgotten'
+    metadata['inbox_status'] = 'forgotten'
+    metadata['forgotten_at'] = _now()
+    return update_memory_item(memory_id, metadata=metadata, archived=True)
 
 
 def update_memory_item(memory_id: str, **changes: Any) -> dict[str, Any] | None:

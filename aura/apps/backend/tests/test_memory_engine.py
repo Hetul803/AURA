@@ -4,7 +4,11 @@ from api.main import app
 from aura.memory import write_memory
 from aura.memory_engine import (
     compact_memory_items,
+    create_memory_inbox_item,
     delete_memory_item,
+    forget_memory_inbox_item,
+    keep_memory_inbox_item,
+    list_memory_inbox,
     list_memory_items,
     memory_lifecycle_sweep,
     remember_item,
@@ -185,3 +189,55 @@ def test_memory_compaction_api_contract():
 
     assert compacted.status_code == 200
     assert compacted.json()['summaries_created'] == 1
+
+
+def test_memory_inbox_keep_edit_forget_and_search_exclusion():
+    _clear_memory_items()
+    candidate = create_memory_inbox_item(
+        kind='preference',
+        key='writing.style',
+        value='I prefer concise technical explanations.',
+        scope='personal',
+        confidence=0.6,
+        provenance={'source': 'command'},
+    )
+    assert candidate['stored'] is True
+    assert list_memory_inbox(scope='personal')[0]['memory_id'] == candidate['memory_id']
+    assert search_memory_items('concise technical explanations', scope='personal') == []
+
+    kept = keep_memory_inbox_item(candidate['memory_id'], value='I prefer short technical explanations.', pinned=True)
+    assert kept is not None
+    assert kept['pinned'] is True
+    assert kept['metadata']['memory_state'] == 'active'
+    found = search_memory_items('short technical explanations', scope='personal')
+    assert found[0]['memory_id'] == candidate['memory_id']
+
+    second = create_memory_inbox_item(kind='preference', key='draft.length', value='Use a brief draft.', scope='personal')
+    forgotten = forget_memory_inbox_item(second['memory_id'])
+    assert forgotten is not None
+    assert forgotten['archived'] is True
+    assert list_memory_inbox(scope='personal') == []
+
+
+def test_memory_inbox_api_contract_and_provenance_persistence():
+    _clear_memory_items()
+    created = client.post('/memory/inbox', json={
+        'kind': 'preference',
+        'key': 'writing.tone',
+        'value': 'Use warm direct language.',
+        'scope': 'personal',
+        'provenance': {'source': 'test_command'},
+    })
+    assert created.status_code == 200
+    memory_id = created.json()['memory_id']
+    assert created.json()['provenance']['source'] == 'test_command'
+
+    init_db()
+    inbox = client.get('/memory/inbox')
+    assert inbox.status_code == 200
+    assert any(item['memory_id'] == memory_id for item in inbox.json())
+
+    kept = client.post(f'/memory/inbox/{memory_id}/keep', json={'pinned': True})
+    assert kept.status_code == 200
+    assert kept.json()['metadata']['inbox_status'] == 'kept'
+    assert kept.json()['pinned'] is True

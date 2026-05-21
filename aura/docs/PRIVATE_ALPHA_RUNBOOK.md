@@ -17,6 +17,8 @@ Run:
 
 ```bash
 python infra/scripts/private_alpha_check.py
+pnpm aura:demo-check
+pnpm aura:smoke
 ```
 
 The check verifies required docs, packaging metadata, release targets, and constitution primitives.

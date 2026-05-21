@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { activateLicense, approveRun, captureAssistContext, compactMemory, createMemoryItem, deleteMemoryItem, getActiveIdentity, getActiveIdentityAttestation, getBrand, getCostModels, getCostSummary, getCurrentContext, getDevices, getGuardianStatus, getIdentities, getLicenseStatus, getLocalModelStatus, getMemoryItems, getProfileStatus, getRunState, getTools, getWorkflowSuggestions, getWorkflows, panicStop, pullLocalModel, rejectRun, resumeRun, retryRun, searchMemoryItems, selectModel, sendCommand, setActiveIdentity, startLocalModelRuntime as startLocalModelRuntimeApi, subscribeRun, updateBrand, updateMemoryItem, updateProfileStatus } from './state/api';
+import { activateLicense, approveRun, captureAssistContext, compactMemory, createMemoryInboxItem, createMemoryItem, deleteMemoryItem, forgetMemoryInboxItem, getActiveIdentity, getActiveIdentityAttestation, getBrand, getCostModels, getCostSummary, getCurrentContext, getDevices, getGuardianStatus, getIdentities, getIdentityLedger, getLicenseStatus, getLocalModelStatus, getMemoryInbox, getMemoryItems, getProfileStatus, getRunState, getTools, getWorkflowSuggestions, getWorkflows, keepMemoryInboxItem, panicStop, pullLocalModel, rejectRun, resumeRun, retryRun, searchMemoryItems, selectModel, sendCommand, setActiveIdentity, startLocalModelRuntime as startLocalModelRuntimeApi, subscribeRun, updateBrand, updateMemoryItem, updateProfileStatus } from './state/api';
 import ActionPanel from './ui/ActionPanel';
 import { pushEvent, store } from './state/store';
 import { BACKEND_URL } from '../shared/constants';
@@ -251,7 +251,7 @@ export default function App() {
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [onboardingOpen, setOnboardingOpen] = useState(() => localStorage.getItem('aura:onboarding-complete') !== '1');
   const [onboardingStep, setOnboardingStep] = useState(() => Number(localStorage.getItem('aura:onboarding-step') || '0'));
-  const [onboardingPrefs, setOnboardingPrefs] = useState({ memoryScope: 'personal', approvalMode: 'balanced', monthlyBudget: '0', workspace: '', selectedLocalModel: '', codexBridge: false, userAiHandoff: true, localModelSkipped: false });
+  const [onboardingPrefs, setOnboardingPrefs] = useState({ userDisplayName: '', memoryScope: 'personal', approvalMode: 'balanced', memoryConsent: true, guardianLevel: 'balanced', monthlyBudget: '0', workspace: '', selectedLocalModel: '', codexBridge: false, userAiHandoff: true, localModelSkipped: false });
   const [modelPullState, setModelPullState] = useState('');
   const [modelError, setModelError] = useState('');
 
@@ -263,6 +263,7 @@ export default function App() {
   const [tools, setTools] = useState<any[]>([]);
   const [devices, setDevices] = useState<any[]>([]);
   const [memoryItems, setMemoryItems] = useState<any[]>([]);
+  const [memoryInbox, setMemoryInbox] = useState<any[]>([]);
   const [workflows, setWorkflows] = useState<any[]>([]);
   const [workflowSuggestions, setWorkflowSuggestions] = useState<any[]>([]);
   const [profileStatus, setProfileStatus] = useState<any>(null);
@@ -273,6 +274,7 @@ export default function App() {
   const [identities, setIdentities] = useState<any[]>([]);
   const [activeIdentity, setActiveIdentityState] = useState<any>(null);
   const [identityAttestation, setIdentityAttestation] = useState<any>(null);
+  const [identityLedger, setIdentityLedger] = useState<any[]>([]);
   const [memoryEditor, setMemoryEditor] = useState({ kind: 'preference', key: '', value: '', scope: 'active' });
   const [memoryNotice, setMemoryNotice] = useState('');
   const [guardianStatus, setGuardianStatus] = useState<any>(null);
@@ -345,7 +347,7 @@ export default function App() {
   }
 
   async function refreshKnowledge() {
-    const [p, m, ss, st, se, ts, ds, mi, wf, ws, profile, brandInfo, license, ids, activeId, attestation, guardian, cost, models, localModel] = await Promise.all([
+    const [p, m, ss, st, se, ts, ds, mi, inbox, wf, ws, profile, brandInfo, license, ids, activeId, attestation, ledger, guardian, cost, models, localModel] = await Promise.all([
       safeJson(() => fetch(`${BACKEND_URL}/preferences`).then(r => r.json()), []),
       safeJson(() => fetch(`${BACKEND_URL}/memories`).then(r => r.json()), []),
       safeJson(() => fetch(`${BACKEND_URL}/browser/sessions`).then(r => r.json()), []),
@@ -354,6 +356,7 @@ export default function App() {
       safeJson(() => getTools(), []),
       safeJson(() => getDevices(), []),
       safeJson(() => getMemoryItems(), []),
+      safeJson(() => getMemoryInbox(), []),
       safeJson(() => getWorkflows(), []),
       safeJson(() => getWorkflowSuggestions(), []),
       safeJson(() => getProfileStatus(), null),
@@ -362,14 +365,15 @@ export default function App() {
       safeJson(() => getIdentities(), []),
       safeJson(() => getActiveIdentity(), null),
       safeJson(() => getActiveIdentityAttestation(), null),
+      safeJson(() => getIdentityLedger(), []),
       safeJson(() => getGuardianStatus(runId || undefined), null),
       safeJson(() => getCostSummary(), null),
       safeJson(() => getCostModels(), []),
       safeJson(() => getLocalModelStatus(), null),
     ]);
     setPrefs(asArray(p)); setMemories(asArray(m)); setSessions(asArray(ss)); setStorage(st || {}); setSafety(asArray(se));
-    setTools(asArray(ts)); setDevices(asArray(ds)); setMemoryItems(asArray(mi)); setWorkflows(asArray(wf));
-    setWorkflowSuggestions(asArray(ws)); setProfileStatus(profile); setBrand(brandInfo); setLicenseStatus(license); setIdentities(asArray(ids)); setActiveIdentityState(activeId); setIdentityAttestation(attestation); setGuardianStatus(guardian); setCostSummary(cost);
+    setTools(asArray(ts)); setDevices(asArray(ds)); setMemoryItems(asArray(mi)); setMemoryInbox(asArray(inbox)); setWorkflows(asArray(wf));
+    setWorkflowSuggestions(asArray(ws)); setProfileStatus(profile); setBrand(brandInfo); setLicenseStatus(license); setIdentities(asArray(ids)); setActiveIdentityState(activeId); setIdentityAttestation(attestation); setIdentityLedger(asArray(ledger)); setGuardianStatus(guardian); setCostSummary(cost);
     setCostModels(asArray(models));
     if (localModel) {
       setLocalModelStatus(localModel);
@@ -922,7 +926,7 @@ export default function App() {
     localStorage.setItem('aura:onboarding-complete', '1');
     const metadata = { ...(profileStatus?.metadata || {}), assistant_name: assistantName, onboarding: { completed: true, ...onboardingPrefs, local_model_status: localModelStatus?.summary, selected_model: selectedModelId, voice_enabled: voiceEnabled, voice_command_enabled: voiceCommandEnabled } };
     const usage_limits = onboardingPrefs.monthlyBudget ? { monthly_budget_usd: Number(onboardingPrefs.monthlyBudget) || 0 } : undefined;
-    const updated = await updateProfileStatus({ metadata, usage_limits });
+    const updated = await updateProfileStatus({ display_name: onboardingPrefs.userDisplayName || profileStatus?.display_name || 'AURA User', metadata, usage_limits });
     setProfileStatus(updated);
     setOnboardingOpen(false);
     if (voiceEnabled) speak(`Setup saved. Guardian is active. ${assistantName} is ready when AURA Core is connected.`, 'protected');
@@ -1072,6 +1076,34 @@ export default function App() {
     await refreshKnowledge();
   }
 
+  async function createMemoryInboxFromUi(value: string) {
+    const result = await createMemoryInboxItem({
+      kind: 'preference',
+      key: 'user.preference',
+      value,
+      scope: activeIdentity?.memory_scope || 'active',
+      permission: 'private',
+      source: 'user_command',
+      confidence: 0.64,
+      provenance: { source: 'private_alpha_demo', active_identity: activeIdentity?.identity_id },
+      metadata: { why_it_matters: 'This preference can shape future drafts and summaries.' },
+    });
+    setMemoryNotice(result.rejected ? `Guardian declined memory candidate: ${(result.reasons || []).join(', ')}` : 'Memory candidate added to inbox. Keep, edit, or forget it.');
+    await refreshKnowledge();
+  }
+
+  async function keepMemoryFromInbox(memoryId: string, patch: any = {}) {
+    await keepMemoryInboxItem(memoryId, patch);
+    setMemoryNotice('Memory kept. AURA can now use it in later commands.');
+    await refreshKnowledge();
+  }
+
+  async function forgetMemoryFromInbox(memoryId: string) {
+    await forgetMemoryInboxItem(memoryId);
+    setMemoryNotice('Memory candidate forgotten.');
+    await refreshKnowledge();
+  }
+
   function chooseCommand(command: string) {
     setInput(command);
     setCompactCommand(true);
@@ -1129,6 +1161,7 @@ export default function App() {
 
         <section className="conversation-choice-panel">
           {step === 'Rename AURA' && <div className="rename-panel conversational-control">
+            <label>Your display name<input aria-label="user display name" value={onboardingPrefs.userDisplayName} onChange={e => setOnboardingPrefs({ ...onboardingPrefs, userDisplayName: e.target.value })} placeholder={profileStatus?.display_name || 'Hetul'} /></label>
             <label>What would you like to call me?<input aria-label="assistant name" value={draftAssistantName} onChange={e => setDraftAssistantName(e.target.value)} placeholder="Alice" /></label>
             <button className="primary-button" onClick={saveAssistantName}>Save name</button>
           </div>}
@@ -1141,8 +1174,12 @@ export default function App() {
           </div>}
           {step === 'Guardian' && <div className="persona-stack watchtower-onboarding"><GuardianWatchtower guardianEvents={guardianEvents} pendingApproval={pendingApproval} panic={() => panicStop(runId)} runId={runId} /></div>}
           {step === 'Memory and Identity' && <div className="persona-stack">
-            <IdentityCard identities={identities} activeIdentity={activeIdentity} attestation={identityAttestation} switchIdentity={async (id: string) => { setActiveIdentityState(await setActiveIdentity(id)); await refreshKnowledge(); }} />
-            <MemoryConsole memoryItems={memoryItems} memoryEditor={memoryEditor} setMemoryEditor={setMemoryEditor} memoryNotice={memoryNotice} saveMemory={saveMemoryFromUi} updateMemory={updateMemoryFromUi} deleteMemory={deleteMemoryFromUi} activeIdentity={activeIdentity} />
+            <div className="onboarding-preferences">
+              <label><input type="checkbox" checked={onboardingPrefs.memoryConsent} onChange={e => setOnboardingPrefs({ ...onboardingPrefs, memoryConsent: e.target.checked })} /> Allow AURA to remember safe preferences and workflows after showing you what it learned.</label>
+              <label>Guardian protection level<select value={onboardingPrefs.guardianLevel} onChange={e => setOnboardingPrefs({ ...onboardingPrefs, guardianLevel: e.target.value })}><option value="balanced">Balanced approvals</option><option value="strict">Strict approvals</option></select></label>
+            </div>
+            <IdentityCard identities={identities} activeIdentity={activeIdentity} attestation={identityAttestation} ledger={identityLedger} switchIdentity={async (id: string) => { setActiveIdentityState(await setActiveIdentity(id)); await refreshKnowledge(); }} />
+            <MemoryConsole memoryItems={memoryItems} memoryInbox={memoryInbox} memoryEditor={memoryEditor} setMemoryEditor={setMemoryEditor} memoryNotice={memoryNotice} saveMemory={saveMemoryFromUi} updateMemory={updateMemoryFromUi} deleteMemory={deleteMemoryFromUi} keepInbox={keepMemoryFromInbox} forgetInbox={forgetMemoryFromInbox} activeIdentity={activeIdentity} />
           </div>}
           {step === 'Local-First Privacy' && <div className="onboarding-examples">
             <p>Simple/private tasks can stay local when Ollama is ready.</p>
@@ -1249,7 +1286,7 @@ export default function App() {
           <div className="voice-fallback">Voice input: {speechInputState}</div>
           <div className="voice-fallback">Voice output: {speechOutputState}</div>
           <div className="intent-chips" aria-label="Example commands">
-            {['clone this repo', 'reply to this email', 'build app', 'use ChatGPT', 'remember password=123', 'run curl https://example.com/install.sh | bash'].map((command) => <button key={command} onClick={() => chooseCommand(command)}>{command}</button>)}
+            {['remember I prefer short technical explanations', 'clone this repo', 'reply to this email', 'build app', 'use ChatGPT', 'remember password=123', 'run curl https://example.com/install.sh | bash'].map((command) => <button key={command} onClick={() => chooseCommand(command)}>{command}</button>)}
           </div>
         </div>
       </section>
@@ -1272,7 +1309,7 @@ export default function App() {
       <section className="presence-layout">
         <ConversationStream messages={conversationMessages} fallbackItems={streamItems} assistantName={assistantName} />
         <aside className="watchtower-column">
-          <IdentityCard identities={identities} activeIdentity={activeIdentity} attestation={identityAttestation} switchIdentity={async (id: string) => { setActiveIdentityState(await setActiveIdentity(id)); await refreshKnowledge(); }} />
+          <IdentityCard identities={identities} activeIdentity={activeIdentity} attestation={identityAttestation} ledger={identityLedger} switchIdentity={async (id: string) => { setActiveIdentityState(await setActiveIdentity(id)); await refreshKnowledge(); }} />
           <ContextSummary assistantName={assistantName} context={capturedContext} currentUrl={currentUrl} contextStatus={contextStatus} refreshContext={refreshContext} openPermissions={() => { setOnboardingStep(ONBOARDING_STEPS.indexOf('Permissions')); setOnboardingOpen(true); }} />
           <GuardianWatchtower guardianEvents={guardianEvents} pendingApproval={pendingApproval} panic={() => panicStop(runId)} runId={runId} />
         </aside>
@@ -1288,8 +1325,9 @@ export default function App() {
 
       {advancedOpen && <section className="panel-body advanced-diagnostics">
         <details className="glass-panel"><summary>Settings</summary><BrandLicensePanel brand={brand} licenseStatus={licenseStatus} licenseToken={licenseToken} setLicenseToken={setLicenseToken} licenseNotice={licenseNotice} activateLicense={activateLicenseFromUi} saveBrandName={saveBrandName} /><VoiceHotkeyPanel voiceStatus={voiceStatus} speechOutputState={speechOutputState} speechInputState={speechInputState} voiceEnabled={voiceEnabled} setVoiceEnabled={setVoiceEnabled} voiceCommandEnabled={voiceCommandEnabled} setVoiceCommandEnabled={setVoiceCommandEnabled} isListening={isListening} voiceTranscript={voiceTranscript} voiceUnsupportedReason={voiceUnsupportedReason} speak={speak} testVoice={testVoice} pushToTalk={pushToTalk} hotkeyStatus={hotkeyStatus} assistantName={assistantName} systemVoices={systemVoices} selectedVoice={selectedVoice} setSelectedVoice={setSelectedVoice} /><ModelStatusPanel localModelStatus={localModelStatus} modelError={modelError} selectedLocalModel={selectedLocalModel} setSelected={(value) => setOnboardingPrefs({ ...onboardingPrefs, selectedLocalModel: value })} approveAndPullLocalModel={approveAndPullLocalModel} startLocalModelRuntime={startLocalModelRuntimeFromUi} selectExisting={(modelId) => useExistingOrSkipLocalModel(modelId)} skip={() => useExistingOrSkipLocalModel('simple')} refresh={refreshKnowledge} modelPullState={modelPullState} /></details>
-        <details className="glass-panel"><summary>Memory</summary><MemoryConsole memoryItems={memoryItems} memoryEditor={memoryEditor} setMemoryEditor={setMemoryEditor} memoryNotice={memoryNotice} saveMemory={saveMemoryFromUi} updateMemory={updateMemoryFromUi} deleteMemory={deleteMemoryFromUi} activeIdentity={activeIdentity} /><button onClick={async () => { const r = await compactMemory(activeIdentity?.memory_scope || 'personal'); setOut(JSON.stringify(r, null, 2)); await refreshKnowledge(); }}>Compact active identity memory</button></details>
+        <details className="glass-panel"><summary>Memory</summary><MemoryConsole memoryItems={memoryItems} memoryInbox={memoryInbox} memoryEditor={memoryEditor} setMemoryEditor={setMemoryEditor} memoryNotice={memoryNotice} saveMemory={saveMemoryFromUi} updateMemory={updateMemoryFromUi} deleteMemory={deleteMemoryFromUi} keepInbox={keepMemoryFromInbox} forgetInbox={forgetMemoryFromInbox} activeIdentity={activeIdentity} /><button onClick={async () => { const r = await compactMemory(activeIdentity?.memory_scope || 'personal'); setOut(JSON.stringify(r, null, 2)); await refreshKnowledge(); }}>Compact active identity memory</button></details>
         <details className="glass-panel"><summary>Workflows</summary><Feed items={workflowSuggestions.length ? workflowSuggestions.map((item: any) => ({ title: item.suggested_workflow_name || 'Workflow suggestion', detail: item.command_template || item.task_type || 'Workflow signal' })) : [{ title: 'No workflow suggestions yet', detail: 'AURA will suggest repeatable workflows after useful runs.' }]} /><div className="metric-grid"><Metric label="Runs" value={events.length || 0} /><Metric label="Approvals" value={approvalsHandled} /><Metric label="Workflows" value={workflowsReplayed} /><Metric label="Blocked" value={blockedCount} /></div></details>
+        <details className="glass-panel"><summary>Private alpha demo checks</summary><PrivateAlphaDemoPanel runCommand={chooseCommand} startCommand={async (command: string) => { setInput(command); await executeCommand(command); }} testVoice={testVoice} showOverlay={() => window.auraDesktop?.showOverlay?.()} createMemoryCandidate={createMemoryInboxFromUi} refresh={refreshKnowledge} /></details>
         <details className="glass-panel" open><summary>Diagnostics / Freshness</summary><p>Build ID: {buildLabel}</p><p>Backend URL: {BACKEND_URL}</p><p>Installed app path: {diagnostics?.installedAppPath || '-'}</p><p>Profile path: {diagnostics?.profilePath || '~/.aura'}</p><p>App data path: {diagnostics?.userDataPath || '-'}</p><p>Logs: {logsPath || diagnostics?.logsPath || '-'}</p><p>Backend command: {diagnostics?.backend?.command || '-'}</p><p>Reset app state: run `scripts/reset-aura-local.sh` from the repo root. It asks first and archives local state by default.</p><button onClick={refreshDiagnostics}>Refresh diagnostics</button><button onClick={async () => setLogsPath(window.auraDesktop?.openLogs ? await window.auraDesktop.openLogs() : 'No desktop bridge.')}>Open logs folder</button></details>
         <details className="glass-panel"><summary>Raw run timeline</summary><ActionPanel events={events} /></details>
         <details className="glass-panel"><summary>Raw context JSON</summary><pre>{JSON.stringify(capturedContext, null, 2)}</pre></details>
@@ -1444,11 +1482,12 @@ function BrandLicensePanel(props: { brand: any; licenseStatus: any; licenseToken
   </div>;
 }
 
-function IdentityCard(props: { identities: any[]; activeIdentity: any; attestation?: any; switchIdentity: (id: string) => void }) {
+function IdentityCard(props: { identities: any[]; activeIdentity: any; attestation?: any; ledger?: any[]; switchIdentity: (id: string) => void }) {
   const active = props.activeIdentity || props.identities.find((item) => item.identity_id === 'personal') || {};
   const metadata = active.metadata || {};
   const scopes = asArray(metadata.allowed_memory_scopes).join(', ') || active.memory_scope || 'personal';
   const key = props.attestation?.key || {};
+  const ledger = asArray(props.ledger).filter((item) => !item.identity_id || item.identity_id === active.identity_id).slice(0, 3);
   return <section className="identity-card" aria-label="AURA identity">
     <div className="stream-heading">
       <span>AURA Identity</span>
@@ -1460,12 +1499,23 @@ function IdentityCard(props: { identities: any[]; activeIdentity: any; attestati
     <div className="identity-switcher">
       {props.identities.map((identity) => <button key={identity.identity_id} className={identity.identity_id === active.identity_id ? 'selected' : ''} onClick={() => props.switchIdentity(identity.identity_id)}>{identity.name}</button>)}
     </div>
+    <div className="identity-ledger">
+      <span>Identity Ledger</span>
+      {ledger.length ? ledger.map((entry) => <p key={entry.ledger_id || entry.summary}>{entry.summary}</p>) : <p>AURA will record useful actions under this identity.</p>}
+    </div>
   </section>;
 }
 
-function MemoryConsole(props: { memoryItems: any[]; memoryEditor: any; setMemoryEditor: (value: any) => void; memoryNotice: string; saveMemory: () => void; updateMemory: (id: string, patch: any) => void; deleteMemory: (id: string) => void; activeIdentity: any }) {
+function MemoryConsole(props: { memoryItems: any[]; memoryInbox?: any[]; memoryEditor: any; setMemoryEditor: (value: any) => void; memoryNotice: string; saveMemory: () => void; updateMemory: (id: string, patch: any) => void; deleteMemory: (id: string) => void; keepInbox: (id: string, patch?: any) => void; forgetInbox: (id: string) => void; activeIdentity: any }) {
+  const [query, setQuery] = useState('');
+  const [kindFilter, setKindFilter] = useState('all');
   const scope = props.activeIdentity?.memory_scope || props.memoryEditor.scope || 'personal';
-  const items = props.memoryItems.filter((item) => item.scope === scope).slice(0, 8);
+  const inbox = asArray(props.memoryInbox).filter((item) => item.scope === scope);
+  const items = props.memoryItems
+    .filter((item) => item.scope === scope && (item.metadata?.memory_state !== 'inbox'))
+    .filter((item) => kindFilter === 'all' || item.kind === kindFilter)
+    .filter((item) => !query.trim() || `${item.memory_key} ${item.value} ${item.kind} ${asArray(item.tags).join(' ')}`.toLowerCase().includes(query.toLowerCase()))
+    .slice(0, 16);
   return <section className="memory-console" aria-label="AURA Memory">
     <div className="stream-heading">
       <span>AURA Memory</span>
@@ -1479,15 +1529,37 @@ function MemoryConsole(props: { memoryItems: any[]; memoryEditor: any; setMemory
       <input aria-label="memory value" value={props.memoryEditor.value} onChange={(e) => props.setMemoryEditor({ ...props.memoryEditor, value: e.target.value })} placeholder="I prefer concise technical explanations" />
       <button onClick={props.saveMemory} disabled={!props.memoryEditor.value.trim()}>Keep memory</button>
     </div>
+    <div className="memory-filters">
+      <input aria-label="search memories" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search memory" />
+      <select aria-label="filter memory kind" value={kindFilter} onChange={(e) => setKindFilter(e.target.value)}>
+        {['all', 'preference', 'workflow', 'safety', 'identity', 'site', 'app', 'task', 'context', 'note'].map((kind) => <option key={kind}>{kind}</option>)}
+      </select>
+      <span>Scope: {scope}</span>
+    </div>
     {props.memoryNotice && <p className="helper-text">{props.memoryNotice}</p>}
+    <div className="memory-inbox">
+      <strong>Memory Inbox</strong>
+      {inbox.length ? inbox.map((item) => <article className="memory-card inbox" key={item.memory_id}>
+        <span>{item.kind} / {item.scope} / candidate</span>
+        <strong>{String(item.memory_key || 'candidate').replace(/[_:.]+/g, ' ')}</strong>
+        <p>{shortText(item.value, 'No value')}</p>
+        <p className="helper-text">{item.metadata?.why_it_matters || 'AURA learned this and is waiting for your decision.'}</p>
+        <div className="panel-actions">
+          <button onClick={() => props.keepInbox(item.memory_id, { pinned: true })}>Keep</button>
+          <button onClick={() => props.keepInbox(item.memory_id, { value: item.value, pinned: true })}>Keep + pin</button>
+          <button onClick={() => props.forgetInbox(item.memory_id)}>Forget</button>
+        </div>
+      </article>) : <p className="helper-text">No pending memory candidates. Tell AURA: “remember I prefer concise technical explanations.”</p>}
+    </div>
     <div className="memory-card-list">
       {items.length ? items.map((item) => <article className="memory-card" key={item.memory_id}>
         <span>{item.kind} / {item.scope} / {Math.round(Number(item.confidence || 0) * 100)}%</span>
         <strong>{String(item.memory_key || 'memory').replace(/[_:.]+/g, ' ')}</strong>
         <p>{shortText(item.value, 'No value')}</p>
-        <p className="helper-text">Learned from {item.source || item.provenance?.source || 'AURA'} on {String(item.created_at || '').slice(0, 10)}. Used {item.usage_count || 0} times.</p>
+        <p className="helper-text">Learned from {item.source || item.provenance?.source || 'AURA'} on {String(item.created_at || '').slice(0, 10)}. Used {item.usage_count || 0} times. {item.metadata?.why_it_matters || item.provenance?.explanation || 'User-owned local memory.'}</p>
         <div className="panel-actions">
           <button onClick={() => props.updateMemory(item.memory_id, { pinned: !item.pinned })}>{item.pinned ? 'Unpin' : 'Pin'}</button>
+          <button onClick={() => props.updateMemory(item.memory_id, { value: prompt('Edit memory', item.value || '') || item.value })}>Edit</button>
           <button onClick={() => props.deleteMemory(item.memory_id)}>Archive</button>
         </div>
       </article>) : <div className="feed-item empty"><div className="feed-dot" /><div><strong>Memory inbox is ready.</strong><p>Tell AURA: "remember that I prefer concise technical explanations."</p></div></div>}
@@ -1496,10 +1568,15 @@ function MemoryConsole(props: { memoryItems: any[]; memoryEditor: any; setMemory
 }
 
 function GuardianWatchtower(props: { guardianEvents: any[]; pendingApproval: boolean; panic: () => void; runId: string }) {
+  const counts = props.guardianEvents.reduce((acc: Record<string, number>, event: any) => {
+    const key = event.category || event.type || 'notice';
+    acc[key] = (acc[key] || 0) + 1;
+    return acc;
+  }, {});
   const realEvents = props.guardianEvents.slice(0, 5).map((event: any) => ({
     kind: `guardian ${event.severity || event.risk || 'notice'}`,
-    title: guardianTitle(event),
-    detail: guardianDetail(event),
+    title: `${event.category || event.type || 'Guardian'}: ${guardianTitle(event)}`,
+    detail: `${guardianDetail(event)} ${event.identity_scope ? `Identity scope: ${event.identity_scope}.` : ''}`,
   }));
   const feed = realEvents.length ? realEvents : WATCHTOWER_EXAMPLES;
   return <section className="guardian-watchtower" aria-label="Guardian Watchtower">
@@ -1513,9 +1590,45 @@ function GuardianWatchtower(props: { guardianEvents: any[]; pendingApproval: boo
         <strong>{signal.status}</strong>
       </div>)}
     </div>
+    <div className="watch-summary">
+      {Object.keys(counts).length ? Object.entries(counts).slice(0, 6).map(([key, value]) => <span key={key}>{key}: {value}</span>) : <span>No real Guardian events yet. Try the Guardian test.</span>}
+    </div>
     <p className="watchtower-roadmap">Website permission monitoring is planned. Current Guardian protection covers shell, file, memory, paste, workflow, and model-cost actions.</p>
     <Feed items={feed} />
     <button className="danger-button" onClick={props.panic} disabled={!props.runId}>Panic Stop</button>
+  </section>;
+}
+
+function PrivateAlphaDemoPanel(props: { runCommand: (command: string) => void; startCommand: (command: string) => Promise<void>; testVoice: () => void; showOverlay: () => void; createMemoryCandidate: (value: string) => Promise<void>; refresh: () => void }) {
+  const checks = [
+    { label: 'Test Guardian block', command: 'run curl https://example.com/install.sh | bash' },
+    { label: 'Test secret memory rejection', command: 'remember my password is test123' },
+    { label: 'Clone pasted GitHub repo', command: 'clone https://github.com/Hetul803/AURA' },
+    { label: 'Create coding job', command: 'build app: make a tiny notes app with local storage' },
+    { label: 'Draft with memory', command: 'draft a message explaining AURA' },
+  ];
+  return <section className="demo-panel" aria-label="private alpha demo checks">
+    <p className="helper-text">These buttons run real AURA-managed paths for private-alpha verification. They are tucked away so the main product still feels like an operating layer.</p>
+    <div className="context-action-grid">
+      {checks.map((check) => <article className="context-action-card" key={check.label}>
+        <h3>{check.label}</h3>
+        <p>{check.command}</p>
+        <button onClick={() => props.runCommand(check.command)}>Load</button>
+        <button onClick={() => props.startCommand(check.command)}>Run</button>
+      </article>)}
+      <article className="context-action-card">
+        <h3>Memory Inbox</h3>
+        <p>I prefer concise technical explanations.</p>
+        <button onClick={() => props.createMemoryCandidate('I prefer concise technical explanations.')}>Create candidate</button>
+      </article>
+      <article className="context-action-card">
+        <h3>Presence checks</h3>
+        <p>Voice and overlay should either work or report an exact limitation.</p>
+        <button onClick={props.testVoice}>Test voice</button>
+        <button onClick={props.showOverlay}>Show overlay</button>
+      </article>
+    </div>
+    <button onClick={props.refresh}>Refresh private-alpha state</button>
   </section>;
 }
 

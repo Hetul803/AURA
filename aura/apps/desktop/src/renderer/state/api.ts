@@ -42,12 +42,40 @@ export async function getMemoryItems() {
   return r.json();
 }
 
+export async function getMemoryInbox() {
+  const r = await fetch(`${BACKEND_URL}/memory/inbox`);
+  return r.json();
+}
+
 export async function createMemoryItem(body: any) {
   const r = await fetch(`${BACKEND_URL}/memory/items`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify(body)
   });
+  return r.json();
+}
+
+export async function createMemoryInboxItem(body: any) {
+  const r = await fetch(`${BACKEND_URL}/memory/inbox`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(body)
+  });
+  return r.json();
+}
+
+export async function keepMemoryInboxItem(memoryId: string, patch: any = {}) {
+  const r = await fetch(`${BACKEND_URL}/memory/inbox/${encodeURIComponent(memoryId)}/keep`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(patch)
+  });
+  return r.json();
+}
+
+export async function forgetMemoryInboxItem(memoryId: string) {
+  const r = await fetch(`${BACKEND_URL}/memory/inbox/${encodeURIComponent(memoryId)}/forget`, { method: 'POST' });
   return r.json();
 }
 
@@ -129,6 +157,12 @@ export async function getActiveIdentity() {
 
 export async function getActiveIdentityAttestation() {
   const r = await fetch(`${BACKEND_URL}/identities/active/attestation`);
+  return r.json();
+}
+
+export async function getIdentityLedger(identityId?: string) {
+  const qs = identityId ? `?identity_id=${encodeURIComponent(identityId)}` : '';
+  const r = await fetch(`${BACKEND_URL}/identity/ledger${qs}`);
   return r.json();
 }
 

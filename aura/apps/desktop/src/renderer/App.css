@@ -1597,6 +1597,66 @@ h1, h2, h3, p {
   letter-spacing: 0;
 }
 
+.memory-filters,
+.onboarding-preferences,
+.watch-summary,
+.identity-ledger {
+  display: grid;
+  gap: 10px;
+  margin: 12px 0;
+}
+
+.memory-filters {
+  grid-template-columns: minmax(180px, 1fr) 160px auto;
+  align-items: center;
+}
+
+.memory-inbox {
+  border: 1px solid rgba(147, 243, 228, 0.2);
+  border-radius: 14px;
+  background: rgba(20, 255, 224, 0.045);
+  padding: 12px;
+  margin: 12px 0;
+}
+
+.memory-card.inbox {
+  border-color: rgba(147, 243, 228, 0.32);
+}
+
+.identity-ledger {
+  border-top: 1px solid rgba(180, 222, 255, 0.12);
+  padding-top: 10px;
+  color: #c7d7e6;
+}
+
+.identity-ledger span,
+.memory-inbox > strong {
+  color: #f5fbff;
+}
+
+.identity-ledger p {
+  margin: 0;
+  font-size: 13px;
+}
+
+.watch-summary {
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+}
+
+.watch-summary span {
+  border: 1px solid rgba(180, 222, 255, 0.12);
+  border-radius: 999px;
+  padding: 8px 10px;
+  background: rgba(255, 255, 255, 0.04);
+  color: #c7d7e6;
+  font-size: 12px;
+}
+
+.demo-panel {
+  display: grid;
+  gap: 14px;
+}
+
 @media (max-width: 820px) {
   .persona-stage {
     grid-template-columns: 1fr;
@@ -1633,7 +1693,7 @@ h1, h2, h3, p {
     align-items: stretch;
   }
 
-  .dashboard-grid, .command-bar, .presence-core, .operating-grid, .presence-home, .presence-layout, .memory-editor {
+  .dashboard-grid, .command-bar, .presence-core, .operating-grid, .presence-home, .presence-layout, .memory-editor, .memory-filters {
     grid-template-columns: 1fr;
   }
 
