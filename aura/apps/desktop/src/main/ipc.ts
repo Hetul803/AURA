@@ -152,6 +152,12 @@ export function registerIpcHandlers(controls: WindowControls = {}) {
     fs.mkdirSync(logsPath, { recursive: true });
     const line = JSON.stringify({ at: new Date().toISOString(), source: 'renderer', issue }) + '\n';
     fs.appendFileSync(path.join(logsPath, 'aura-renderer.log'), line);
+    const backendUrl = process.env.AURA_BACKEND_URL || 'http://localhost:8000';
+    fetch(`${backendUrl}/crash/report`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ source: 'renderer', message: 'Renderer reported an issue.', metadata: issue }),
+    }).catch(() => undefined);
     return { ok: true };
   });
   ipcMain.handle('aura:get-system-voices', async () => listSystemVoices());

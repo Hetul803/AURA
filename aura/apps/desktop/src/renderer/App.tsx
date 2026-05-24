@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { activateLicense, approveRun, captureAssistContext, compactMemory, createMemoryInboxItem, createMemoryItem, deleteMemoryItem, forgetMemoryInboxItem, getActiveIdentity, getActiveIdentityAttestation, getBrand, getCostModels, getCostSummary, getCurrentContext, getDevices, getExternalAgentsStatus, getGuardianCoverage, getGuardianLedger, getGuardianPolicy, getGuardianStatus, getIdentities, getIdentityLedger, getLicenseStatus, getLocalModelStatus, getMemoryHealth, getMemoryInbox, getMemoryItems, getProfileStatus, getRunState, getTools, getWorkflowSuggestions, getWorkflows, keepMemoryInboxItem, panicStop, pullLocalModel, rejectRun, resumeRun, retryRun, searchMemoryItems, selectModel, sendCommand, setActiveIdentity, startLocalModelRuntime as startLocalModelRuntimeApi, subscribeRun, updateBrand, updateGuardianPolicy, updateMemoryItem, updateProfileStatus } from './state/api';
+import { activateLicense, approveRun, captureAssistContext, checkForUpdates, compactMemory, createMemoryInboxItem, createMemoryItem, deleteMemoryItem, forgetMemoryInboxItem, getActiveIdentity, getActiveIdentityAttestation, getBrand, getCostModels, getCostSummary, getCurrentContext, getDevices, getExternalAgentsStatus, getGuardianCoverage, getGuardianLedger, getGuardianPolicy, getGuardianStatus, getIdentities, getIdentityLedger, getLaunchStatus, getLicenseStatus, getLocalModelStatus, getMemoryHealth, getMemoryInbox, getMemoryItems, getProfileStatus, getRunState, getTools, getWorkflowSuggestions, getWorkflows, keepMemoryInboxItem, panicStop, pullLocalModel, rejectRun, reportCrashToBackend, resumeRun, retryRun, searchMemoryItems, selectModel, sendCommand, setActiveIdentity, startLocalModelRuntime as startLocalModelRuntimeApi, subscribeRun, updateBrand, updateGuardianPolicy, updateMemoryItem, updateProfileStatus } from './state/api';
 import ActionPanel from './ui/ActionPanel';
 import { pushEvent, store } from './state/store';
 import { BACKEND_URL } from '../shared/constants';
@@ -288,6 +288,9 @@ export default function App() {
   const [costModels, setCostModels] = useState<any[]>([]);
   const [localModelStatus, setLocalModelStatus] = useState<any>(null);
   const [diagnostics, setDiagnostics] = useState<any>(null);
+  const [launchStatus, setLaunchStatus] = useState<any>(null);
+  const [updateStatus, setUpdateStatus] = useState<any>(null);
+  const [crashReportState, setCrashReportState] = useState('');
   const [repairState, setRepairState] = useState('');
   const [overlayExpanded, setOverlayExpanded] = useState(false);
   const [systemVoices, setSystemVoices] = useState<string[]>([]);
@@ -410,8 +413,28 @@ export default function App() {
       if (voices?.ok) setSystemVoices(voices.voices || []);
       const nativeSpeech = await window.auraDesktop?.nativeSpeechStatus?.();
       if (nativeSpeech) setSpeechInputState(nativeSpeech.ok ? `Native Apple Speech ready (${nativeSpeech.provider}).` : nativeSpeech.message || nativeSpeech.status);
+      const launch = await safeJson(() => getLaunchStatus(), null);
+      if (launch) setLaunchStatus(launch);
+      const updates = await safeJson(() => checkForUpdates(BUILD_INFO.appVersion), null);
+      if (updates) setUpdateStatus(updates);
     } catch {
       setDiagnostics(null);
+    }
+  }
+
+  async function sendTestCrashReport() {
+    setCrashReportState('Preparing redacted test crash report...');
+    try {
+      const result = await reportCrashToBackend({
+        source: 'desktop_diagnostics_test',
+        message: 'Private-alpha crash reporting test from AURA diagnostics.',
+        error: 'test_error',
+        stack: 'No crash occurred. password=should-redact sk_test_shouldredact',
+        metadata: { build: BUILD_INFO, backend: BACKEND_URL },
+      });
+      setCrashReportState(result.ok ? 'Crash reporting endpoint accepted the redacted test report.' : (result.message || result.status || 'Crash report stayed local.'));
+    } catch (error: any) {
+      setCrashReportState(`Crash report test failed: ${error?.message || 'unknown error'}`);
     }
   }
 
@@ -1346,7 +1369,7 @@ export default function App() {
         <details className="glass-panel"><summary>Workflows</summary><Feed items={workflowSuggestions.length ? workflowSuggestions.map((item: any) => ({ title: item.suggested_workflow_name || 'Workflow suggestion', detail: item.command_template || item.task_type || 'Workflow signal' })) : [{ title: 'No workflow suggestions yet', detail: 'AURA will suggest repeatable workflows after useful runs.' }]} /><div className="metric-grid"><Metric label="Runs" value={events.length || 0} /><Metric label="Approvals" value={approvalsHandled} /><Metric label="Workflows" value={workflowsReplayed} /><Metric label="Blocked" value={blockedCount} /></div></details>
         <details className="glass-panel"><summary>External Agent Mediation</summary><ExternalAgentPanel status={externalAgents} /></details>
         <details className="glass-panel"><summary>Private alpha demo checks</summary><PrivateAlphaDemoPanel runCommand={chooseCommand} startCommand={async (command: string) => { setInput(command); await executeCommand(command); }} testVoice={testVoice} showOverlay={() => window.auraDesktop?.showOverlay?.()} createMemoryCandidate={createMemoryInboxFromUi} refresh={refreshKnowledge} /></details>
-        <details className="glass-panel" open><summary>Diagnostics / Freshness</summary><p>Build ID: {buildLabel}</p><p>Backend URL: {BACKEND_URL}</p><p>Installed app path: {diagnostics?.installedAppPath || '-'}</p><p>Profile path: {diagnostics?.profilePath || '~/.aura'}</p><p>App data path: {diagnostics?.userDataPath || '-'}</p><p>Logs: {logsPath || diagnostics?.logsPath || '-'}</p><p>Backend command: {diagnostics?.backend?.command || '-'}</p><p>Reset app state: run `scripts/reset-aura-local.sh` from the repo root. It asks first and archives local state by default.</p><button onClick={refreshDiagnostics}>Refresh diagnostics</button><button onClick={async () => setLogsPath(window.auraDesktop?.openLogs ? await window.auraDesktop.openLogs() : 'No desktop bridge.')}>Open logs folder</button></details>
+        <details className="glass-panel" open><summary>Diagnostics / Freshness</summary><p>Build ID: {buildLabel}</p><p>Backend URL: {BACKEND_URL}</p><p>Installed app path: {diagnostics?.installedAppPath || '-'}</p><p>Profile path: {diagnostics?.profilePath || '~/.aura'}</p><p>App data path: {diagnostics?.userDataPath || '-'}</p><p>Logs: {logsPath || diagnostics?.logsPath || '-'}</p><p>Backend command: {diagnostics?.backend?.command || '-'}</p><p>License server: {launchStatus?.launch_services?.license_server_configured ? launchStatus.launch_services.license_server_url : 'not configured'}</p><p>Update channel: {updateStatus?.channel || 'manual'} / {updateStatus?.artifact_ready ? 'download ready' : updateStatus?.status || 'not checked'}</p><p>Latest version: {updateStatus?.version || '-'} {updateStatus?.update_available ? '(update available)' : ''}</p><p>Crash reporting: {launchStatus?.launch_services?.crash_reporting_configured ? 'configured' : 'local redacted reports only'}</p><p>Reset app state: run `scripts/reset-aura-local.sh` from the repo root. It asks first and archives local state by default.</p><button onClick={refreshDiagnostics}>Refresh diagnostics</button><button onClick={async () => setLogsPath(window.auraDesktop?.openLogs ? await window.auraDesktop.openLogs() : 'No desktop bridge.')}>Open logs folder</button><button onClick={sendTestCrashReport}>Send redacted test crash report</button>{crashReportState && <p className="helper-text">{crashReportState}</p>}</details>
         <details className="glass-panel"><summary>Raw run timeline</summary><ActionPanel events={events} /></details>
         <details className="glass-panel"><summary>Raw context JSON</summary><pre>{JSON.stringify(capturedContext, null, 2)}</pre></details>
         <details className="glass-panel"><summary>System, model, and backend internals</summary><p>Backend: {BACKEND_URL} / {coreStatus} / Flow: {launchFlow} / Session: {sessionState}</p><pre>{JSON.stringify({ diagnostics, profileStatus, costSummary, costModels, tools, devices, sessions, storage, workflows, workflowSuggestions, out }, null, 2)}</pre></details>

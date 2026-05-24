@@ -28,6 +28,7 @@ function request(server, method, pathname, body) {
         method,
         headers: { 'content-type': 'application/json', 'x-test-request': req },
         body: data || undefined,
+        redirect: 'manual',
       });
       call.then(resolve).catch(reject).finally(() => server.close());
     });
@@ -36,6 +37,11 @@ function request(server, method, pathname, body) {
 
 afterEach(() => {
   delete process.env.AURA_VENDOR_PRIVATE_KEY;
+  delete process.env.AURA_LOCAL_MAC_ARTIFACT;
+  delete process.env.AURA_DOWNLOAD_MAC_URL;
+  delete process.env.STRIPE_SECRET_KEY;
+  delete process.env.STRIPE_PRICE_ID;
+  delete process.env.STRIPE_WEBHOOK_SECRET;
 });
 
 describe('download counter', () => {
@@ -101,6 +107,68 @@ describe('marketing website', () => {
     expect(res.status).toBe(400);
     expect(body.status).toBe('stripe_not_configured');
     expect(store.read().accounts['alpha@example.com']).toBeTruthy();
+  });
+
+  it('serves a local Mac DMG artifact instead of a JSON counter', async () => {
+    const downloads = tempJson({ mac: 0, windows: 0, linux: 0 });
+    const artifact = path.join(downloads.dir, 'AURA-test.dmg');
+    const releases = path.join(downloads.dir, 'releases.json');
+    fs.writeFileSync(artifact, 'fake-dmg-for-test');
+    fs.writeFileSync(releases, JSON.stringify({ version: '1.0.0', downloads: { mac: 'https://example.com/aura.dmg' } }));
+    process.env.AURA_LOCAL_MAC_ARTIFACT = artifact;
+
+    const res = await request(createServer({ releasesPath: releases, downloadsPath: downloads.file }), 'GET', '/api/download?os=mac');
+    const body = await res.text();
+
+    expect(res.status).toBe(200);
+    expect(res.headers.get('content-disposition')).toContain('AURA-test.dmg');
+    expect(body).toBe('fake-dmg-for-test');
+    expect(JSON.parse(fs.readFileSync(downloads.file, 'utf-8')).mac).toBe(1);
+  });
+
+  it('redirects download requests to configured hosted artifacts', async () => {
+    const downloads = tempJson({ mac: 0, windows: 0, linux: 0 });
+    const releases = path.join(downloads.dir, 'releases.json');
+    fs.writeFileSync(releases, JSON.stringify({ downloads: { mac: 'https://cdn.example.net/AURA.dmg' } }));
+
+    const res = await request(createServer({ releasesPath: releases, downloadsPath: downloads.file }), 'GET', '/api/download?os=mac');
+
+    expect(res.status).toBe(302);
+    expect(res.headers.get('location')).toBe('https://cdn.example.net/AURA.dmg');
+  });
+
+  it('exposes launch health and private-alpha update metadata', async () => {
+    const downloads = tempJson({ mac: 0, windows: 0, linux: 0 });
+    const artifact = path.join(downloads.dir, 'AURA-test.dmg');
+    const releases = path.join(downloads.dir, 'releases.json');
+    fs.writeFileSync(artifact, 'fake');
+    fs.writeFileSync(releases, JSON.stringify({ version: '1.2.0', channel: 'private-alpha', notes: 'test build', downloads: { mac: '/api/download?os=mac' } }));
+    process.env.AURA_LOCAL_MAC_ARTIFACT = artifact;
+
+    const health = await request(createServer({ releasesPath: releases, downloadsPath: downloads.file }), 'GET', '/api/launch/health');
+    const healthBody = await health.json();
+    expect(health.status).toBe(200);
+    expect(healthBody.configured.mac_download).toBe(true);
+
+    const update = await request(createServer({ releasesPath: releases, downloadsPath: downloads.file }), 'GET', '/api/updates/latest?platform=darwin&arch=arm64&version=1.0.0');
+    const body = await update.json();
+    expect(body.version).toBe('1.2.0');
+    expect(body.update_available).toBe(true);
+    expect(body.download_url).toBe('/api/download?os=mac');
+  });
+
+  it('records crash reports with secret redaction', async () => {
+    const { store } = tempStore();
+    const res = await request(createServer({ store }), 'POST', '/api/crash-reports', {
+      message: 'renderer failed',
+      stack: 'password=test123 sk_test_abc',
+    });
+    const body = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(body.ok).toBe(true);
+    expect(JSON.stringify(body.report)).not.toContain('test123');
+    expect(JSON.stringify(body.report)).not.toContain('sk_test_abc');
   });
 
   it('activates devices with signed tokens and enforces seat limits', async () => {

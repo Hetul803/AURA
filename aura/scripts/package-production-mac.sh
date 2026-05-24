@@ -5,9 +5,12 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
 missing=()
-for key in APPLE_ID APPLE_TEAM_ID APPLE_APP_SPECIFIC_PASSWORD CSC_NAME; do
+for key in APPLE_ID APPLE_TEAM_ID APPLE_APP_SPECIFIC_PASSWORD; do
   [[ -n "${!key:-}" ]] || missing+=("$key")
 done
+if [[ -z "${CSC_NAME:-}" && -z "${CSC_LINK:-}" ]]; then
+  missing+=("CSC_NAME or CSC_LINK")
+fi
 
 if (( ${#missing[@]} )); then
   printf 'Missing production signing/notarization env vars:\n'
@@ -20,6 +23,9 @@ EOF
   exit 2
 fi
 
+echo "Running release checklist..."
+scripts/aura-release-checklist.sh || true
+
 echo "Building native macOS speech helper..."
 scripts/build-macos-speech-helper.sh
 
@@ -31,4 +37,3 @@ scripts/notarize-mac.sh apps/desktop/release/AURA-1.0.0-mac-arm64.dmg
 
 echo "Production Mac artifact ready:"
 echo "  apps/desktop/release/AURA-1.0.0-mac-arm64.dmg"
-

@@ -20,6 +20,8 @@
     "aura:web": "pnpm --filter aura-web dev",
     "aura:package": "bash scripts/build-mac-dmg.sh",
     "aura:package:prod": "bash scripts/package-production-mac.sh",
+    "aura:release-checklist": "bash scripts/aura-release-checklist.sh",
+    "aura:clean-mac-qa": "bash scripts/clean-mac-qa.sh",
     "aura:voice:build": "bash scripts/build-macos-speech-helper.sh",
     "aura:verify-electron": "node scripts/verify-electron.cjs",
     "aura:brand": "node scripts/set-brand.mjs"

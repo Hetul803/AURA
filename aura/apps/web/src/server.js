@@ -12,6 +12,7 @@ const repoRoot = path.resolve(__dirname, '../../..');
 export const defaultReleasesPath = path.join(repoRoot, 'infra/releases/releases.json');
 export const defaultDownloadsPath = path.join(repoRoot, 'infra/releases/downloads.json');
 export const defaultAlphaStorePath = process.env.AURA_WEB_DB_PATH || path.join(repoRoot, 'var/private-alpha-store.json');
+const defaultMacDmgPath = path.join(repoRoot, 'apps/desktop/release/AURA-1.0.0-mac-arm64.dmg');
 
 const brand = {
   name: 'AURA',
@@ -52,6 +53,21 @@ function asset(res, content, type) {
   res.setHeader('content-type', type);
   res.setHeader('cache-control', 'public, max-age=3600');
   res.end(content);
+}
+
+function redirect(res, location) {
+  res.statusCode = 302;
+  res.setHeader('location', location);
+  res.end();
+}
+
+function fileDownload(res, filePath, filename) {
+  const stat = fs.statSync(filePath);
+  res.statusCode = 200;
+  res.setHeader('content-type', 'application/octet-stream');
+  res.setHeader('content-length', String(stat.size));
+  res.setHeader('content-disposition', `attachment; filename="${filename || path.basename(filePath)}"`);
+  fs.createReadStream(filePath).pipe(res);
 }
 
 async function readBody(req) {
@@ -222,6 +238,105 @@ function sanitizeCrashReport(report) {
   return JSON.parse(redacted);
 }
 
+function isPlaceholderDownload(url) {
+  return !url || /example\.com|your-domain\.com/i.test(String(url));
+}
+
+function resolveDownloadTarget(os, releases = {}) {
+  const normalized = String(os || 'mac').toLowerCase();
+  const configured = process.env[`AURA_DOWNLOAD_${normalized.toUpperCase()}_URL`] || releases?.downloads?.[normalized];
+  const localOverride = process.env[`AURA_LOCAL_${normalized.toUpperCase()}_ARTIFACT`] || process.env.AURA_LOCAL_DMG_PATH;
+  if (localOverride && fs.existsSync(localOverride)) {
+    return { ok: true, type: 'file', path: localOverride, filename: path.basename(localOverride), source: 'env_local_artifact' };
+  }
+  if (configured && !isPlaceholderDownload(configured) && String(configured).startsWith('http')) {
+    return { ok: true, type: 'redirect', url: configured, source: 'configured_url' };
+  }
+  if (normalized === 'mac' && fs.existsSync(defaultMacDmgPath)) {
+    return { ok: true, type: 'file', path: defaultMacDmgPath, filename: path.basename(defaultMacDmgPath), source: 'repo_release_artifact' };
+  }
+  return {
+    ok: false,
+    type: 'missing',
+    os: normalized,
+    configured: configured || null,
+    message: normalized === 'mac'
+      ? 'Mac DMG is not available on this server yet. Build it with `pnpm aura:package` or set AURA_DOWNLOAD_MAC_URL to a hosted artifact.'
+      : `${normalized} download is coming soon.`,
+  };
+}
+
+function compareSemver(a, b) {
+  const left = String(a || '0.0.0').replace(/^v/, '').split(/[.-]/).map((part) => Number.parseInt(part, 10) || 0);
+  const right = String(b || '0.0.0').replace(/^v/, '').split(/[.-]/).map((part) => Number.parseInt(part, 10) || 0);
+  for (let i = 0; i < Math.max(left.length, right.length); i += 1) {
+    const diff = (left[i] || 0) - (right[i] || 0);
+    if (diff !== 0) return diff;
+  }
+  return 0;
+}
+
+function updatePayload(url, releases = {}) {
+  const platform = url.searchParams.get('platform') || 'darwin';
+  const arch = url.searchParams.get('arch') || 'arm64';
+  const currentVersion = url.searchParams.get('version') || url.searchParams.get('current_version') || '';
+  const os = platform === 'darwin' ? 'mac' : platform === 'win32' ? 'windows' : 'linux';
+  const downloadTarget = resolveDownloadTarget(os, releases);
+  const latestVersion = releases.version || '1.0.0';
+  return {
+    ok: true,
+    channel: releases.channel || process.env.AURA_UPDATE_CHANNEL || 'private-alpha',
+    version: latestVersion,
+    current_version: currentVersion || null,
+    update_available: currentVersion ? compareSemver(latestVersion, currentVersion) > 0 : false,
+    platform,
+    arch,
+    download_url: downloadTarget.ok && downloadTarget.type === 'redirect'
+      ? downloadTarget.url
+      : downloadTarget.ok
+      ? `/api/download?os=${encodeURIComponent(os)}`
+      : null,
+    artifact_ready: Boolean(downloadTarget.ok),
+    artifact_source: downloadTarget.source || downloadTarget.type,
+    sha512: releases?.checksums?.[os]?.sha512 || null,
+    release_date: releases.release_date || null,
+    notes: releases.notes || 'Private alpha release.',
+    minimum_supported_version: releases.minimum_supported_version || null,
+  };
+}
+
+function launchHealth(releases = {}) {
+  const macTarget = resolveDownloadTarget('mac', releases);
+  const configured = {
+    stripe: Boolean(process.env.STRIPE_SECRET_KEY && (process.env.STRIPE_PRICE_ID || process.env.STRIPE_ALPHA_PRICE_ID)),
+    stripe_webhook: Boolean(process.env.STRIPE_WEBHOOK_SECRET),
+    license_signing: Boolean(process.env.AURA_VENDOR_PRIVATE_KEY),
+    license_public_key: Boolean(process.env.AURA_VENDOR_PUBLIC_KEY || process.env.AURA_VENDOR_PRIVATE_KEY),
+    admin_token: Boolean(process.env.AURA_ADMIN_TOKEN),
+    mac_download: Boolean(macTarget.ok),
+  };
+  return {
+    ok: configured.mac_download,
+    configured,
+    missing_for_paid_launch: Object.entries({
+      STRIPE_SECRET_KEY: !process.env.STRIPE_SECRET_KEY,
+      STRIPE_PRICE_ID: !(process.env.STRIPE_PRICE_ID || process.env.STRIPE_ALPHA_PRICE_ID),
+      STRIPE_WEBHOOK_SECRET: !process.env.STRIPE_WEBHOOK_SECRET,
+      AURA_VENDOR_PRIVATE_KEY: !process.env.AURA_VENDOR_PRIVATE_KEY,
+      AURA_ADMIN_TOKEN: !process.env.AURA_ADMIN_TOKEN,
+    }).filter(([, missing]) => missing).map(([key]) => key),
+    downloads: { mac: macTarget },
+    release: {
+      version: releases.version || '1.0.0',
+      channel: releases.channel || 'private-alpha',
+      notes: releases.notes || '',
+    },
+    message: macTarget.ok
+      ? 'Launch server can serve the Mac private-alpha download. Configure Stripe and signing keys before charging users.'
+      : macTarget.message,
+  };
+}
+
 const styles = `
 :root{color-scheme:dark;--bg:#030712;--panel:rgba(8,18,34,.72);--line:rgba(137,231,255,.18);--text:#f3fbff;--muted:#9db7c9;--cyan:#70f4ff;--green:#79f7c3;--gold:#ffe08a;--red:#ff6682}
 *{box-sizing:border-box}body{margin:0;font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:radial-gradient(circle at 48% 0%,rgba(95,228,255,.22),transparent 36%),radial-gradient(circle at 78% 18%,rgba(121,247,195,.12),transparent 28%),linear-gradient(180deg,#030712,#06111d 52%,#02050b);color:var(--text);overflow-x:hidden}a{color:inherit;text-decoration:none}input{border:1px solid var(--line);background:rgba(3,9,18,.72);color:var(--text);border-radius:14px;padding:13px 14px;min-width:260px}button,.button{border:1px solid var(--line);background:rgba(112,244,255,.12);color:var(--text);border-radius:14px;padding:13px 18px;font-weight:800;cursor:pointer;display:inline-flex;gap:9px;align-items:center;justify-content:center}.button.primary,button.primary{background:linear-gradient(135deg,#70f4ff,#79f7c3);color:#031018;box-shadow:0 0 34px rgba(112,244,255,.26)}.button.disabled{opacity:.55;cursor:not-allowed;background:rgba(255,255,255,.06)}nav{position:sticky;top:0;z-index:10;backdrop-filter:blur(22px);background:rgba(3,7,18,.72);border-bottom:1px solid var(--line)}.nav-inner{max-width:1180px;margin:auto;padding:16px 22px;display:flex;align-items:center;justify-content:space-between;gap:18px}.brand{display:flex;align-items:center;gap:12px;font-weight:950}.mark{width:36px;height:36px;border-radius:50%;background:radial-gradient(circle,#fff 0 8%,#70f4ff 14%,rgba(112,244,255,.12) 55%,transparent 70%);box-shadow:0 0 26px rgba(112,244,255,.52)}.nav-links{display:flex;gap:18px;color:var(--muted);font-size:14px}.hero{min-height:calc(100vh - 68px);max-width:1180px;margin:auto;padding:70px 22px 34px;display:grid;grid-template-columns:minmax(0,1.05fr) minmax(360px,.95fr);gap:54px;align-items:center}.eyebrow{color:var(--green);text-transform:uppercase;font-size:12px;font-weight:950;letter-spacing:.08em}.hero h1{font-size:clamp(48px,7vw,92px);line-height:.93;margin:14px 0 22px;letter-spacing:0}.lead{font-size:clamp(18px,2.2vw,24px);color:#cfe6f2;line-height:1.48;max-width:720px}.hero-actions,.checkout-form{display:flex;flex-wrap:wrap;gap:12px;margin:30px 0}.checkout-form{margin:20px 0 8px}.form-status{color:var(--gold);min-height:24px}.trust-row{display:flex;flex-wrap:wrap;gap:10px;color:#b9d2df}.trust-row span{border:1px solid var(--line);border-radius:999px;padding:9px 12px;background:rgba(255,255,255,.045)}.presence{position:relative;min-height:560px;border:1px solid var(--line);border-radius:34px;background:linear-gradient(145deg,rgba(9,20,38,.72),rgba(4,9,20,.88));box-shadow:0 34px 120px rgba(0,0,0,.46),inset 0 0 80px rgba(112,244,255,.04);overflow:hidden}.presence:before{content:"";position:absolute;inset:-40%;background:conic-gradient(from 180deg,transparent,rgba(112,244,255,.18),transparent,rgba(121,247,195,.16),transparent);animation:spin 18s linear infinite}.orb{position:absolute;inset:70px;display:grid;place-items:center}.core{width:245px;height:245px;border-radius:50%;background:radial-gradient(circle,#fff 0 5%,#83f7ff 9%,rgba(112,244,255,.18) 34%,rgba(7,17,30,.88) 63%,transparent 71%);box-shadow:0 0 70px rgba(112,244,255,.54),inset 0 0 34px rgba(255,255,255,.22);animation:breathe 3.4s ease-in-out infinite}.ring{position:absolute;border:1px solid rgba(112,244,255,.28);border-radius:50%;animation:pulse 4s ease-in-out infinite}.r1{width:330px;height:330px}.r2{width:430px;height:430px;animation-delay:.8s}.r3{width:520px;height:520px;animation-delay:1.6s}.status-card{position:absolute;left:26px;right:26px;bottom:26px;padding:22px;border:1px solid var(--line);border-radius:22px;background:rgba(3,9,18,.82);backdrop-filter:blur(18px)}.status-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-top:16px}.status-grid div,.tile{border:1px solid rgba(255,255,255,.1);border-radius:16px;padding:14px;background:rgba(255,255,255,.045)}.status-grid span,.tile span{display:block;color:var(--muted);font-size:12px}.status-grid strong,.tile strong{display:block;margin-top:6px}.section{max-width:1180px;margin:auto;padding:82px 22px}.section h2{font-size:clamp(34px,4.5vw,58px);line-height:1.02;margin:10px 0 18px}.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px}.card{border:1px solid var(--line);border-radius:22px;background:var(--panel);padding:22px;min-height:220px;box-shadow:inset 0 0 48px rgba(112,244,255,.035)}.card h3{font-size:22px;margin:10px 0}.card p{color:#bfd4e2;line-height:1.55}.flow{display:grid;grid-template-columns:1fr 1fr;gap:18px}.dialogue{display:grid;gap:12px}.turn{padding:16px 18px;border-radius:20px;border:1px solid var(--line);background:rgba(255,255,255,.045)}.turn span{color:var(--green);font-size:12px;text-transform:uppercase;font-weight:900}.guardian span{color:var(--gold)}.download{display:grid;grid-template-columns:1.2fr .8fr;gap:18px;align-items:stretch}.download-panel{border:1px solid rgba(121,247,195,.28);border-radius:28px;padding:28px;background:linear-gradient(145deg,rgba(13,34,44,.82),rgba(4,12,20,.88));box-shadow:0 0 56px rgba(121,247,195,.12)}.download-options{display:grid;gap:12px}.legal-page{max-width:880px;margin:auto;padding:80px 22px;color:#d6e8f0}.legal-page h1{font-size:48px}.legal-page p,.legal-page li{color:#bfd4e2;line-height:1.7}footer{border-top:1px solid var(--line);padding:30px 22px;color:var(--muted)}.footer-inner{max-width:1180px;margin:auto;display:flex;gap:16px;justify-content:space-between;flex-wrap:wrap}@keyframes spin{to{transform:rotate(360deg)}}@keyframes breathe{0%,100%{transform:scale(.96);filter:hue-rotate(0)}50%{transform:scale(1.04);filter:hue-rotate(18deg)}}@keyframes pulse{0%,100%{transform:scale(.94);opacity:.45}50%{transform:scale(1.04);opacity:1}}@media(max-width:900px){.hero,.flow,.download{grid-template-columns:1fr}.grid{grid-template-columns:1fr 1fr}.presence{min-height:460px}.nav-links{display:none}}@media(max-width:560px){.grid{grid-template-columns:1fr}.hero{padding-top:42px}.status-grid{grid-template-columns:1fr}.core{width:180px;height:180px}.r1{width:240px;height:240px}.r2{width:300px;height:300px}.r3{width:360px;height:360px}}
@@ -282,7 +397,7 @@ function legalPage(kind) {
 }
 
 function clientScript() {
-  return `document.querySelectorAll('[data-download]').forEach(link=>{link.addEventListener('click',async()=>{try{await fetch('/api/download?os='+encodeURIComponent(link.dataset.download||'unknown'))}catch{}})});const f=document.getElementById('checkout-form');const s=document.getElementById('checkout-status');if(f){f.addEventListener('submit',async e=>{e.preventDefault();s.textContent='Creating secure checkout...';const email=new FormData(f).get('email');try{const r=await fetch('/api/checkout/create',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({email})});const j=await r.json();if(j.ok&&j.url){location.href=j.url}else{s.textContent=j.message||'Checkout is not configured yet.'}}catch(err){s.textContent='Checkout failed. Please email support.'}})}`;
+  return `document.querySelectorAll('[data-download]').forEach(link=>{link.addEventListener('click',async()=>{try{await fetch('/api/download/track?os='+encodeURIComponent(link.dataset.download||'unknown'))}catch{}})});const f=document.getElementById('checkout-form');const s=document.getElementById('checkout-status');if(f){f.addEventListener('submit',async e=>{e.preventDefault();s.textContent='Creating secure checkout...';const email=new FormData(f).get('email');try{const r=await fetch('/api/checkout/create',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({email})});const j=await r.json();if(j.ok&&j.url){location.href=j.url}else{s.textContent=j.message||'Checkout is not configured yet.'}}catch(err){s.textContent='Checkout failed. Please email support.'}})}`;
 }
 
 export function createServer(options = {}) {
@@ -299,9 +414,18 @@ export function createServer(options = {}) {
     if (url.pathname === '/terms') return html(res, legalPage('terms'));
     if (url.pathname === '/security') return html(res, legalPage('security'));
     if (url.pathname === '/api/releases') return json(res, 200, readJson(releasesPath, {}));
-    if (url.pathname === '/api/download') {
+    if (url.pathname === '/api/launch/health') return json(res, 200, launchHealth(readJson(releasesPath, {})));
+    if (url.pathname === '/api/download/track') {
       const os = url.searchParams.get('os') || 'unknown';
       return json(res, 200, incrementDownload(os, downloadsPath));
+    }
+    if (url.pathname === '/api/download') {
+      const os = url.searchParams.get('os') || 'unknown';
+      incrementDownload(os, downloadsPath);
+      const target = resolveDownloadTarget(os, readJson(releasesPath, {}));
+      if (target.ok && target.type === 'file') return fileDownload(res, target.path, target.filename);
+      if (target.ok && target.type === 'redirect') return redirect(res, target.url);
+      return json(res, 404, { ok: false, status: 'download_unavailable', ...target });
     }
     if (url.pathname === '/api/license/issue' && req.method === 'POST') {
       const body = await readBody(req);
@@ -365,16 +489,9 @@ export function createServer(options = {}) {
       const report = sanitizeCrashReport(await readBody(req));
       return json(res, 200, { ok: true, report: store.recordCrash(report) });
     }
-    if (url.pathname === '/api/update/latest') {
+    if (url.pathname === '/api/update/latest' || url.pathname === '/api/updates/latest') {
       const releases = readJson(releasesPath, {});
-      return json(res, 200, {
-        ok: true,
-        version: releases.version || '1.0.0',
-        platform: url.searchParams.get('platform') || 'darwin',
-        arch: url.searchParams.get('arch') || 'arm64',
-        download: releases?.downloads?.mac || null,
-        notes: releases.notes || 'Private alpha release.',
-      });
+      return json(res, 200, updatePayload(url, releases));
     }
     html(res, shell(`<main class="legal-page"><h1>Not found</h1><p>That page does not exist.</p></main>`, `Not found — ${brand.name}`), 404);
   });

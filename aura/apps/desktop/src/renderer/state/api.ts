@@ -145,6 +145,25 @@ export async function activateLicense(token: string, accountEmail?: string) {
   return r.json();
 }
 
+export async function getLaunchStatus() {
+  const r = await fetch(`${BACKEND_URL}/launch/status`);
+  return r.json();
+}
+
+export async function checkForUpdates(currentVersion = '1.0.0') {
+  const r = await fetch(`${BACKEND_URL}/updates/latest?current_version=${encodeURIComponent(currentVersion)}`);
+  return r.json();
+}
+
+export async function reportCrashToBackend(payload: any) {
+  const r = await fetch(`${BACKEND_URL}/crash/report`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(payload)
+  });
+  return r.json();
+}
+
 export async function getIdentities() {
   const r = await fetch(`${BACKEND_URL}/identities`);
   return r.json();

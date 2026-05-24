@@ -48,6 +48,7 @@ from aura.learning import (
     list_workflow_memory,
     query_relevant_memory,
 )
+from aura.launch_services import check_for_updates, launch_env_template, launch_status, report_crash
 from aura.macros import list_macros
 from aura.memory import delete_memory, list_memories, update_memory
 from aura.memory_engine import (
@@ -445,6 +446,20 @@ class LicenseActivationBody(BaseModel):
     account_email: str | None = None
 
 
+class UpdateCheckBody(BaseModel):
+    current_version: str = '1.0.0'
+    platform: str | None = None
+    arch: str | None = None
+
+
+class CrashReportBody(BaseModel):
+    source: str = 'desktop'
+    message: str | None = None
+    error: str | None = None
+    stack: str | None = None
+    metadata: dict = {}
+
+
 class BrandPatchBody(BaseModel):
     product_name: str | None = None
     assistant_default_name: str | None = None
@@ -539,6 +554,31 @@ def license_activate(body: LicenseActivationBody):
     if not result.get('activated') and not result.get('ok'):
         raise HTTPException(400, result)
     return result
+
+
+@app.get('/launch/status')
+def launch_get():
+    return launch_status()
+
+
+@app.get('/updates/latest')
+def updates_get(current_version: str = '1.0.0', platform: str | None = None, arch: str | None = None):
+    return check_for_updates(current_version=current_version, platform_name=platform, arch=arch)
+
+
+@app.post('/updates/check')
+def updates_check(body: UpdateCheckBody):
+    return check_for_updates(current_version=body.current_version, platform_name=body.platform, arch=body.arch)
+
+
+@app.post('/crash/report')
+def crash_report(body: CrashReportBody):
+    return report_crash(body.model_dump())
+
+
+@app.get('/launch/env-template')
+def launch_env():
+    return {'ok': True, 'env': launch_env_template()}
 
 
 @app.get('/models')

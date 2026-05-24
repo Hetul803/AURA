@@ -317,24 +317,27 @@ Expected: the current run is cancelled, the presence changes state, and later st
 
 Use this exact script for a clean first-user pass:
 
-1. Reset local app data if needed: `scripts/reset-aura-local.sh`
-2. Launch AURA.
-3. Confirm you meet AURA on a cinematic first-launch screen with animated avatar and captions.
-4. Confirm AURA speaks automatically unless muted. Use Mute AURA / Replay message to test controls.
-5. Rename AURA to Alice, then verify the interface changes name and saves it after restart.
-6. Step through What I Can Do, Guardian, Local-First Privacy, workspace, local model, Optional Workers, Permissions, and Start Using AURA.
-7. Press Enter command layer.
-8. Open a GitHub repo in your browser.
-9. Press `Command/Control+Shift+Space` or Refresh context.
-10. Confirm the home surface is not a dashboard: living AURA presence, one command input, conversation stream, context summary, Guardian Watchtower, and pending approval only.
-11. Click `Test AURA voice` and verify you hear AURA. If not, read the voice output status and logs.
-12. Click `Show overlay`, minimize the full app, move the orb, expand it, and type `clone this repo`.
-13. Press Mic and say `Hey AURA clone this repo`. If speech recognition is available, verify the transcript appears and AURA starts the clone flow. If not, type `Clone this repo locally`.
-14. Verify approval is required before shell/file execution.
-15. Open Gmail or email, refresh context, and verify Draft reply appears.
-16. Try the blocked shell command and verify Guardian blocks it.
-17. Try memory rejection with `password=supersecret12345`.
-18. Start a build-app prompt and verify it routes toward coding worker/Codex setup instead of pretending local model can do everything.
+1. Run the launch checks: `pnpm aura:clean-mac-qa`
+2. Build or download the DMG. Local build: `pnpm aura:package`. Website path: start `pnpm aura:web`, open `http://localhost:3000`, and click Download Mac DMG.
+3. Reset local app data if needed: `scripts/clean-mac-qa.sh --reset-local-state`
+4. Open `apps/desktop/release/AURA-1.0.0-mac-arm64.dmg`, drag AURA to Applications, and launch AURA.
+5. Confirm you meet AURA on a cinematic first-launch screen with animated avatar and captions.
+6. Confirm AURA speaks automatically unless muted. Use Mute AURA / Replay message to test controls.
+7. Rename AURA to Alice, then verify the interface changes name and saves it after restart.
+8. Step through What I Can Do, Guardian, Local-First Privacy, workspace, local model, Optional Workers, Permissions, and Start Using AURA.
+9. Press Enter command layer.
+10. Open a GitHub repo in your browser.
+11. Press `Command/Control+Shift+Space` or Refresh context.
+12. Confirm the home surface is not a dashboard: living AURA presence, one command input, conversation stream, context summary, Guardian Watchtower, and pending approval only.
+13. Click `Test AURA voice` and verify you hear AURA. If not, read the voice output status and logs.
+14. Click `Show overlay`, minimize the full app, move the orb, expand it, and type `clone this repo`.
+15. Press Mic and say `clone this repo`. If native speech is available, verify the transcript appears and AURA starts the clone flow. If not, type `Clone this repo locally`. Wake word is not claimed in this build.
+16. Verify approval is required before shell/file execution.
+17. Open Gmail or email, refresh context, and verify Draft reply appears.
+18. Try the blocked shell command and verify Guardian blocks it.
+19. Try memory rejection with `password=supersecret12345`.
+20. Start a build-app prompt and verify it routes toward coding worker/Codex setup instead of pretending local model can do everything.
+21. Open Advanced / Diagnostics and verify build ID, update channel, license server status, crash-report status, and logs path are visible.
 
 ## Logs
 
@@ -382,13 +385,13 @@ scripts/reset-aura-local.sh --yes --delete
 
 ## Known Limitations
 
-- The private-alpha macOS app is unsigned and not notarized.
+- The private-alpha macOS app is unsigned unless you run `pnpm aura:package:prod` with Apple Developer ID credentials.
 - First launch may require right-click Open or quarantine removal.
 - Packaged AURA still depends on local Python 3.10+ and backend Python dependencies; the backend source is bundled in app resources, but Python itself is not embedded yet.
 - Ollama model pull progress is shown as an in-app pulling state plus final command output; detailed streaming progress is not yet polished.
 - If Ollama is installed but stopped, AURA can try `ollama serve` after approval/setup. If that fails, the UI shows the exact command to run manually.
-- Web Speech API support depends on the Electron/Chromium runtime and microphone permission. Typed command input is the supported fallback.
+- Native Apple Speech requires the bundled helper and microphone permission; typed command input is the supported fallback.
 - The overlay accepts typed commands and quick context refresh. Approval editing and rich draft review still open in the full app.
 - Browser/live-site automation is experimental and approval-gated.
 - Local models are for private/simple tasks; heavy coding still belongs to Codex or another explicit worker.
-- Cloud account, payment, and sync are not required for first-user testing.
+- Stripe checkout, signed license issuance, online device activation, crash-report upload, and update checks are implemented as launch-server plumbing. They require your production environment variables and a hosted server before charging users.

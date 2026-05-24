@@ -40,8 +40,19 @@ Routes:
 - `POST /api/devices/activate`
 - `POST /api/devices/revoke`
 - `POST /api/crash-reports`
+- `GET /api/updates/latest`
+- `GET /api/download?os=mac`
+- `GET /api/launch/health`
 
 For the first 10 users, the durable JSON store is acceptable on one server with backups. Before broad launch, replace `AlphaStore` with Postgres.
+
+The website serves real downloads in this order:
+
+1. `AURA_LOCAL_MAC_ARTIFACT` or `AURA_LOCAL_DMG_PATH` if present on the server.
+2. `apps/desktop/release/AURA-1.0.0-mac-arm64.dmg` for local/private testing.
+3. `AURA_DOWNLOAD_MAC_URL` or the URL in `infra/releases/releases.json`.
+
+Set `AURA_DOWNLOAD_MAC_URL` to the final hosted notarized DMG before inviting users.
 
 ## 4. Build Native Speech Helper
 
@@ -79,10 +90,9 @@ apps/desktop/release/AURA-1.0.0-mac-arm64.dmg
 ## 6. Clean Install Test
 
 ```bash
-rm -rf "/Applications/AURA.app"
-rm -rf "$HOME/Library/Application Support/aura-desktop"
-rm -rf "$HOME/Library/Logs/aura-desktop"
-rm -rf "$HOME/.aura"
+pnpm aura:clean-mac-qa
+pnpm aura:package
+scripts/clean-mac-qa.sh --reset-local-state
 open apps/desktop/release/AURA-1.0.0-mac-arm64.dmg
 ```
 
@@ -95,3 +105,13 @@ Expected:
 - License token activates locally and, when `AURA_LICENSE_SERVER_URL` is set, activates the device online.
 - Guardian blocks dangerous commands and secret memory.
 
+## 7. Release Gate Commands
+
+```bash
+pnpm aura:release-checklist
+pnpm aura:smoke
+pnpm aura:alpha-check
+pnpm aura:package
+```
+
+`pnpm aura:release-checklist` is allowed to warn on a development machine, but every warning should be cleared before a paid public release.

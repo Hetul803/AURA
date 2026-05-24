@@ -48,7 +48,7 @@ export AURA_LICENSE_PUBLIC_KEY="$(cat ~/AURA_VENDOR_KEYS/vendor_public.pem)"
 
 Then paste the generated token into Settings -> License.
 
-For paid launch, the website should issue signed tokens after checkout. The app should verify them locally and later sync device activations to a server.
+For paid launch, the website issues signed tokens after Stripe checkout, the app verifies them locally, and `AURA_LICENSE_SERVER_URL` enables online device activation/revocation.
 
 ## Cryptographic Identity
 
@@ -90,19 +90,19 @@ Before giving the app to 10 users:
 5. Prepare a clean download page with reset/troubleshooting docs.
 6. Test fresh install on at least two Macs.
 7. Verify voice output, overlay, local model setup, Guardian blocking, memory persistence, identity switching, and clone/coding-job flows.
-8. Collect logs manually from users; automatic crash/error reporting is not implemented yet.
+8. Configure `AURA_CRASH_REPORT_URL` or `AURA_LICENSE_SERVER_URL`; renderer/backend crash reports are redacted before upload.
 
 ## Reality Boundary
 
 AURA is much closer to private-alpha readiness, but not yet a fully public production product. The biggest remaining public-launch gaps are:
 
-- code signing and notarization;
-- real account server;
-- license device activation/revocation;
+- Apple Developer ID code signing and notarization credentials;
+- replacing the JSON alpha store with Postgres before broad scale;
+- production Stripe products/prices/webhooks;
 - robust native speech-to-text beyond browser Web Speech fallback;
 - OS-wide Guardian monitoring outside AURA-managed actions;
 - full database encryption and backup/recovery;
-- crash reporting and auto-update.
+- auto-update installation/apply flow; update checks and release feed exist, but users still install DMGs manually in private alpha.
 ## Current Private-Alpha Launch Gate
 
 Run:
@@ -110,6 +110,7 @@ Run:
 ```bash
 pnpm aura:alpha-check
 pnpm aura:smoke
+pnpm aura:release-checklist
 pnpm aura:package
 ```
 

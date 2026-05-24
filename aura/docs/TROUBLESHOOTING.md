@@ -129,3 +129,44 @@ open apps/desktop/release/AURA-1.0.0-mac-arm64.dmg
 ```
 
 Private alpha builds may be unsigned unless you configure Apple Developer ID signing and notarization.
+
+## Website Download / Checkout
+
+Run the private-alpha website locally:
+
+```bash
+pnpm aura:web
+open http://localhost:3000
+```
+
+Click **Download Mac DMG**. The server will serve the local DMG if it exists, or redirect to `AURA_DOWNLOAD_MAC_URL` when configured. If checkout says Stripe is not configured, set:
+
+```bash
+PUBLIC_BASE_URL=https://your-domain.com
+STRIPE_SECRET_KEY=sk_live_...
+STRIPE_PRICE_ID=price_...
+STRIPE_WEBHOOK_SECRET=whsec_...
+AURA_VENDOR_PRIVATE_KEY=...
+AURA_VENDOR_PUBLIC_KEY=...
+```
+
+Check launch readiness:
+
+```bash
+pnpm aura:release-checklist
+curl http://localhost:3000/api/launch/health
+```
+
+## Updates And Crash Reports
+
+Private alpha supports update checks and redacted crash-report upload, but it does not silently auto-install updates yet.
+
+Set one of:
+
+```bash
+AURA_LICENSE_SERVER_URL=https://your-domain.com
+AURA_UPDATE_FEED_URL=https://your-domain.com/api/updates/latest
+AURA_CRASH_REPORT_URL=https://your-domain.com/api/crash-reports
+```
+
+In the app, open **Advanced / Diagnostics** to see update channel, latest version, crash reporting status, and a redacted test-crash button.
