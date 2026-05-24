@@ -88,7 +88,7 @@ from aura.proactive import proactive_suggestions_for_context
 from aura.profile_account import ensure_local_profile, get_profile_status, update_profile_status
 from aura.state import cancel_run, db_conn, get_run_context, list_audit_log, list_run_events, list_safety_events, record_run_event, set_panic
 from aura.state import list_guardian_events
-from aura.user_tools import build_user_ai_prompt, get_user_web_tool, list_user_web_tools
+from aura.user_tools import build_user_ai_prompt, get_user_web_tool, list_user_web_tools, privacy_check_for_handoff
 from aura.workflow_engine import (
     create_workflow,
     create_workflow_version,
@@ -897,6 +897,12 @@ def user_tools_get(tool_id: str):
 @app.post('/user-tools/prompt')
 def user_tools_prompt(body: UserToolPromptBody):
     return build_user_ai_prompt(task=body.task, tool_id=body.tool_id, context=body.context, mode=body.mode)
+
+
+@app.post('/user-tools/privacy-check')
+def user_tools_privacy_check(body: UserToolPromptBody):
+    prepared = build_user_ai_prompt(task=body.task, tool_id=body.tool_id, context=body.context, mode=body.mode)
+    return privacy_check_for_handoff(prompt=prepared['prompt'], destination=prepared['tool']['label'], context=body.context)
 
 
 @app.get('/workflows')

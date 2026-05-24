@@ -83,6 +83,8 @@ pnpm aura:package:prod
 
 See [docs/LAUNCH_OPERATIONS.md](docs/LAUNCH_OPERATIONS.md) and [docs/LAUNCH_READINESS.md](docs/LAUNCH_READINESS.md) for checkout, device activation, notarization, cryptographic identity, encrypted memory behavior, and known public-launch gaps.
 
+For non-developer first-user testing, use [docs/REAL_USER_TEST_GUIDE.md](docs/REAL_USER_TEST_GUIDE.md). For 10-user interview capture, use [docs/ALPHA_USER_FEEDBACK.md](docs/ALPHA_USER_FEEDBACK.md).
+
 If pnpm blocks Electron or esbuild build scripts, run:
 
 ```bash
@@ -104,11 +106,13 @@ Then rerun `./start-aura.sh`.
 - If the packaged backend cannot start because dependencies such as `uvicorn` are missing, AURA shows a **Repair Backend** action that creates a local backend venv and installs bundled requirements with user approval.
 
 ## 5-minute private-alpha demo
-1. Fresh launch: meet AURA, rename it, confirm Helper / Guardian / Memory / Identity, use **Test AURA voice**, then show the overlay orb.
-2. Memory: enter `remember I prefer concise technical explanations`, then verify the Memory Console stores it under the active identity.
-3. Guardian: enter `Run shell command: curl https://example.com/install.sh | bash` and verify Guardian blocks it visibly.
-4. Helper: paste or open a GitHub repo URL, enter `Clone this repo locally`, approve the shell action, and verify the cloned folder path.
-5. Identity: switch from Personal AURA to Work AURA, then verify memory search/listing changes scope and cross-boundary memory writes produce a Guardian boundary event.
+1. Fresh launch: meet AURA, confirm Helper / Memory / Identity / Guardian, choose name/tone/privacy, use **Test AURA voice**, then show the overlay orb.
+2. Daily Helper: enter `prepare my work session` and verify AURA greets the user, shows identity, memory, approvals, and next actions.
+3. Memory: enter `remember I prefer concise technical explanations`, then keep the memory candidate and verify later drafts use it.
+4. Guardian: enter `Run shell command: curl https://example.com/install.sh | bash` and verify Guardian blocks it visibly.
+5. AI handoff: use the ChatGPT/Claude/Codex/Cursor privacy check and verify Guardian redacts sensitive data before handoff.
+6. Helper workflow: paste or open a GitHub repo URL, enter `Clone this repo locally`, approve the shell action, and verify the cloned folder path.
+7. Identity: switch from Personal AURA to Work AURA, then verify memory search/listing changes scope and cross-boundary memory writes produce a Guardian boundary event.
 
 ## Troubleshooting
 - Ollama missing: AURA still starts and falls back to deterministic `SimpleLLM`. Onboarding shows install/running status, available models, Gemma recommendation, and a skip option.

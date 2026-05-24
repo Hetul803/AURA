@@ -2,7 +2,7 @@ from fastapi.testclient import TestClient
 
 from api.main import app
 from aura.planner import intent_signature, plan_from_text
-from aura.user_tools import build_user_ai_prompt, infer_user_tool, list_user_web_tools
+from aura.user_tools import build_user_ai_prompt, infer_user_tool, list_user_web_tools, privacy_check_for_handoff
 from tools.user_ai import handle_user_ai_action
 
 client = TestClient(app)
@@ -23,6 +23,32 @@ def test_user_tool_registry_and_prompt_builder():
     assert prepared['tool']['tool_id'] == 'chatgpt'
     assert 'draft only; do not send' in prepared['prompt']
     assert 'Professor' in prepared['prompt']
+
+
+def test_user_ai_privacy_check_redacts_secrets_email_and_phone():
+    prepared = build_user_ai_prompt(
+        task='Use Claude to draft a customer note',
+        tool_id='claude',
+        mode='email',
+        context={'input_text': 'Email pat@example.com at 312-555-0199. api_key=supersecret12345'},
+    )
+
+    check = prepared['privacy_check']
+    assert check['requires_approval'] is True
+    assert check['redacted'] is True
+    assert 'pat@example.com' not in prepared['prompt']
+    assert '312-555-0199' not in prepared['prompt']
+    assert 'supersecret12345' not in prepared['prompt']
+    assert {'email_address', 'phone_number', 'secret'} & set(check['labels'])
+
+
+def test_private_key_handoff_is_blocked_from_prompt_body():
+    prompt = 'Send this to ChatGPT: -----BEGIN PRIVATE KEY-----abc-----END PRIVATE KEY-----'
+    check = privacy_check_for_handoff(prompt=prompt, destination='ChatGPT')
+
+    assert check['secret_detected'] is True
+    assert check['requires_approval'] is True
+    assert 'PRIVATE KEY' not in check['safe_prompt']
 
 
 def test_user_ai_prepare_prompt_tool():
@@ -52,6 +78,7 @@ def test_planner_creates_user_subscription_browser_handoff_plan():
     assert [step.action_type for step in plan['steps']] == ['USER_AI_PREPARE_PROMPT', 'WEB_NAVIGATE', 'OS_WRITE_CLIPBOARD', 'OS_PASTE']
     assert plan['steps'][-1].safety_level == 'CONFIRM'
     assert 'Client asks for pricing.' in plan['context']['prepared_prompt']['prompt']
+    assert plan['context']['privacy_check']['destination'] == 'ChatGPT'
 
 
 def test_user_tool_api_contracts():
@@ -74,3 +101,13 @@ def test_user_tool_api_contracts():
     })
     assert prompt.status_code == 200
     assert 'coding agent can execute' in prompt.json()['prompt']
+
+    privacy = client.post('/user-tools/privacy-check', json={
+        'task': 'Use ChatGPT for a reply',
+        'tool_id': 'chatgpt',
+        'mode': 'email',
+        'context': {'input_text': 'Call me at 312-555-0199 and use token=abc123456789'},
+    })
+    assert privacy.status_code == 200
+    assert privacy.json()['requires_approval'] is True
+    assert '312-555-0199' not in privacy.json()['safe_prompt']

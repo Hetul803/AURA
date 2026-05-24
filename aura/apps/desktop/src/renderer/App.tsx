@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { activateLicense, approveRun, captureAssistContext, checkForUpdates, compactMemory, createMemoryInboxItem, createMemoryItem, deleteMemoryItem, forgetMemoryInboxItem, getActiveIdentity, getActiveIdentityAttestation, getBrand, getCostModels, getCostSummary, getCurrentContext, getDevices, getExternalAgentsStatus, getGuardianCoverage, getGuardianLedger, getGuardianPolicy, getGuardianStatus, getIdentities, getIdentityLedger, getLaunchStatus, getLicenseStatus, getLocalModelStatus, getMemoryHealth, getMemoryInbox, getMemoryItems, getProfileStatus, getRunState, getTools, getWorkflowSuggestions, getWorkflows, keepMemoryInboxItem, panicStop, pullLocalModel, rejectRun, reportCrashToBackend, resumeRun, retryRun, searchMemoryItems, selectModel, sendCommand, setActiveIdentity, startLocalModelRuntime as startLocalModelRuntimeApi, subscribeRun, updateBrand, updateGuardianPolicy, updateMemoryItem, updateProfileStatus } from './state/api';
+import { activateLicense, approveRun, captureAssistContext, checkForUpdates, checkUserToolPrivacy, compactMemory, createMemoryInboxItem, createMemoryItem, deleteMemoryItem, forgetMemoryInboxItem, getActiveIdentity, getActiveIdentityAttestation, getBrand, getCostModels, getCostSummary, getCurrentContext, getDevices, getExternalAgentsStatus, getGuardianCoverage, getGuardianLedger, getGuardianPolicy, getGuardianStatus, getIdentities, getIdentityLedger, getLaunchStatus, getLicenseStatus, getLocalModelStatus, getMemoryHealth, getMemoryInbox, getMemoryItems, getProfileStatus, getRunState, getTools, getUserTools, getWorkflowSuggestions, getWorkflows, keepMemoryInboxItem, panicStop, pullLocalModel, rejectRun, reportCrashToBackend, resumeRun, retryRun, searchMemoryItems, selectModel, sendCommand, setActiveIdentity, startLocalModelRuntime as startLocalModelRuntimeApi, subscribeRun, updateBrand, updateGuardianPolicy, updateMemoryItem, updateProfileStatus } from './state/api';
 import ActionPanel from './ui/ActionPanel';
 import { pushEvent, store } from './state/store';
 import { BACKEND_URL } from '../shared/constants';
@@ -42,6 +42,7 @@ declare global {
 const IS_OVERLAY = typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('overlay') === '1';
 
 const QUICK_ACTIONS = [
+  'Prepare my work session',
   'Clone this repo locally',
   'Reply to this email',
   'Build me a small app from this prompt',
@@ -53,10 +54,10 @@ const ONBOARDING_STEPS = [
   'Meet AURA',
   'Rename AURA',
   'What I Can Do',
-  'Guardian',
-  'Permissions',
   'Memory and Identity',
+  'Guardian',
   'Local-First Privacy',
+  'Permissions',
   'Workspace',
   'Local Brain',
   'Optional Workers',
@@ -86,6 +87,30 @@ const WATCHTOWER_SIGNALS = [
   { label: 'Watching memory/secrets', status: 'active' },
   { label: 'Watching paste/send', status: 'approval-gated' },
   { label: 'Watching model cost/privacy', status: 'approval-gated' },
+];
+
+const OS_GUARDIAN_ACTIVE = [
+  'AURA-managed commands and tool use',
+  'Memory writes and secret rejection',
+  'Paste/upload/share actions through AURA',
+  'Shell, file, workflow, and import/export approvals',
+  'Identity boundary checks',
+];
+
+const OS_GUARDIAN_REQUIRES_PERMISSION = [
+  'Accessibility for app control and hotkey reliability',
+  'Automation prompts for controlling other apps',
+  'Screen Recording for visual context',
+  'Microphone for native push-to-talk',
+  'Full Disk Access only if you want broad file context',
+];
+
+const OS_GUARDIAN_FUTURE = [
+  'Endpoint Security native extension',
+  'true process monitoring',
+  'system-wide file event blocking',
+  'browser permission interception',
+  'system-wide network/app monitoring',
 ];
 
 const WATCHTOWER_EXAMPLES = [
@@ -251,7 +276,7 @@ export default function App() {
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [onboardingOpen, setOnboardingOpen] = useState(() => localStorage.getItem('aura:onboarding-complete') !== '1');
   const [onboardingStep, setOnboardingStep] = useState(() => Number(localStorage.getItem('aura:onboarding-step') || '0'));
-  const [onboardingPrefs, setOnboardingPrefs] = useState({ userDisplayName: '', memoryScope: 'personal', approvalMode: 'balanced', memoryConsent: true, guardianLevel: 'balanced', monthlyBudget: '0', workspace: '', selectedLocalModel: '', codexBridge: false, userAiHandoff: true, localModelSkipped: false });
+  const [onboardingPrefs, setOnboardingPrefs] = useState({ userDisplayName: '', personality: 'calm, capable, concise', memoryScope: 'personal', approvalMode: 'balanced', memoryConsent: true, guardianLevel: 'balanced', preferLocalMode: true, monthlyBudget: '0', workspace: '', selectedLocalModel: '', codexBridge: false, userAiHandoff: true, localModelSkipped: false });
   const [modelPullState, setModelPullState] = useState('');
   const [modelError, setModelError] = useState('');
 
@@ -284,6 +309,8 @@ export default function App() {
   const [localGuardianEvents, setLocalGuardianEvents] = useState<any[]>([]);
   const [memoryHealth, setMemoryHealth] = useState<any>(null);
   const [externalAgents, setExternalAgents] = useState<any>(null);
+  const [userTools, setUserTools] = useState<any[]>([]);
+  const [privacyCheck, setPrivacyCheck] = useState<any>(null);
   const [costSummary, setCostSummary] = useState<any>(null);
   const [costModels, setCostModels] = useState<any[]>([]);
   const [localModelStatus, setLocalModelStatus] = useState<any>(null);
@@ -355,7 +382,7 @@ export default function App() {
   }
 
   async function refreshKnowledge() {
-    const [p, m, ss, st, se, ts, ds, mi, inbox, memoryHealthData, wf, ws, profile, brandInfo, license, ids, activeId, attestation, ledger, guardian, guardianLedgerData, guardianPolicyData, guardianCoverageData, externalAgentData, cost, models, localModel] = await Promise.all([
+    const [p, m, ss, st, se, ts, ds, mi, inbox, memoryHealthData, wf, ws, profile, brandInfo, license, ids, activeId, attestation, ledger, guardian, guardianLedgerData, guardianPolicyData, guardianCoverageData, externalAgentData, userToolData, cost, models, localModel] = await Promise.all([
       safeJson(() => fetch(`${BACKEND_URL}/preferences`).then(r => r.json()), []),
       safeJson(() => fetch(`${BACKEND_URL}/memories`).then(r => r.json()), []),
       safeJson(() => fetch(`${BACKEND_URL}/browser/sessions`).then(r => r.json()), []),
@@ -380,13 +407,14 @@ export default function App() {
       safeJson(() => getGuardianPolicy(), null),
       safeJson(() => getGuardianCoverage(), null),
       safeJson(() => getExternalAgentsStatus(), null),
+      safeJson(() => getUserTools(), []),
       safeJson(() => getCostSummary(), null),
       safeJson(() => getCostModels(), []),
       safeJson(() => getLocalModelStatus(), null),
     ]);
     setPrefs(asArray(p)); setMemories(asArray(m)); setSessions(asArray(ss)); setStorage(st || {}); setSafety(asArray(se));
     setTools(asArray(ts)); setDevices(asArray(ds)); setMemoryItems(asArray(mi)); setMemoryInbox(asArray(inbox)); setMemoryHealth(memoryHealthData); setWorkflows(asArray(wf));
-    setWorkflowSuggestions(asArray(ws)); setProfileStatus(profile); setBrand(brandInfo); setLicenseStatus(license); setIdentities(asArray(ids)); setActiveIdentityState(activeId); setIdentityAttestation(attestation); setIdentityLedger(asArray(ledger)); setGuardianStatus(guardian); setGuardianLedger(asArray(guardianLedgerData)); setGuardianPolicy(guardianPolicyData); setGuardianCoverage(guardianCoverageData); setExternalAgents(externalAgentData); setCostSummary(cost);
+    setWorkflowSuggestions(asArray(ws)); setProfileStatus(profile); setBrand(brandInfo); setLicenseStatus(license); setIdentities(asArray(ids)); setActiveIdentityState(activeId); setIdentityAttestation(attestation); setIdentityLedger(asArray(ledger)); setGuardianStatus(guardian); setGuardianLedger(asArray(guardianLedgerData)); setGuardianPolicy(guardianPolicyData); setGuardianCoverage(guardianCoverageData); setExternalAgents(externalAgentData); setUserTools(asArray(userToolData)); setCostSummary(cost);
     setCostModels(asArray(models));
     if (localModel) {
       setLocalModelStatus(localModel);
@@ -1125,6 +1153,21 @@ export default function App() {
     await refreshKnowledge();
   }
 
+  async function runPrivacyCheckForTool(toolId = 'chatgpt') {
+    const context = capturedContext || previewContext || {};
+    const result = await checkUserToolPrivacy({
+      task: input.trim() || `Use ${toolId} to help with my current task`,
+      tool_id: toolId,
+      mode: input.toLowerCase().includes('code') || input.toLowerCase().includes('app') ? 'coding' : input.toLowerCase().includes('reply') || input.toLowerCase().includes('email') ? 'email' : 'general',
+      context,
+    });
+    setPrivacyCheck(result);
+    const tone = result.requires_approval ? 'approval_required' : 'protected';
+    addConversation('Guardian', `Privacy check for ${result.destination || toolId}: ${result.approval_reason || 'checked.'}`, tone);
+    setCaption(result.requires_approval ? 'Guardian found sensitive data in this external handoff. Review before sharing.' : 'Guardian found no sensitive data in this handoff prompt.');
+    setAssistantMode(result.requires_approval ? 'protected' : 'idle');
+  }
+
   async function keepMemoryFromInbox(memoryId: string, patch: any = {}) {
     await keepMemoryInboxItem(memoryId, patch);
     setMemoryNotice('Memory kept. AURA can now use it in later commands.');
@@ -1154,17 +1197,17 @@ export default function App() {
   }
 
   function onboardingCopy(step: string) {
-    if (step === 'Meet AURA') return { title: `Hello. I'm ${assistantName}.`, body: "I'm your personal AI operating layer. Think of me as your hands on this computer. You tell me what you want done. I plan it, use the right tools, and ask before anything sensitive.", does: 'Starts with AURA as a presence, not a dashboard.', why: 'The user should feel they are meeting an assistant that can operate the computer.', spoken: `Hello. I'm ${assistantName}. Nice to meet you. I'm your personal AI operating layer. Think of me as your hands on this computer. You tell me what you want done. I plan it, use the right tools, and ask before anything sensitive.` };
+    if (step === 'Meet AURA') return { title: `Welcome to ${assistantName}.`, body: "Your AI is here. I help you do work, remember what matters, act under your identity, and stay protected through Guardian. Think of me as a personal AI companion that can become your hands across the computer.", does: 'Starts with AURA as a presence, not a dashboard.', why: 'The user should feel they are meeting an assistant that can operate the computer.', spoken: `Hello. I'm ${assistantName}. Nice to meet you. I'm your personal AI operating companion. I help you do work, remember what matters, act under your identity, and ask before anything sensitive.` };
     if (step === 'Rename AURA') return { title: `${assistantName} is yours to name.`, body: 'You can keep AURA, or choose a name like Alice or Jarvis. The name is saved locally and used everywhere.', does: 'Saves a local assistant identity.', why: 'A personal operating layer should feel personal without requiring a cloud account.', spoken: assistantName === 'AURA' ? `You can rename me. What would you like to call me?` : `Good choice. I'm ${assistantName} now.` };
-    if (step === 'What I Can Do') return { title: 'Tell me intent. I choose the tools.', body: "I can write emails, clone repos, build apps, summarize documents, use ChatGPT or Claude for you, create workflows, and remember how you work. Some abilities are active now; deeper app and website monitoring will arrive later.", does: "Explains AURA as the user's hands, not a menu of buttons.", why: 'The product should feel open-ended while staying honest about current capabilities.', spoken: "I can write emails, clone repos, build apps, summarize documents, use ChatGPT or Claude for you, create workflows, and remember how you work." };
+    if (step === 'What I Can Do') return { title: 'Tell me intent. I choose the tools.', body: "I can prepare your work session, draft replies, clone repos, create coding jobs, open apps and URLs, write safe workspace notes, prepare ChatGPT/Claude/Codex handoffs, create workflows, and remember how you like to work.", does: "Explains AURA as the user's hands, not a menu of buttons.", why: 'The product should feel open-ended while staying honest about current capabilities.', spoken: "I can draft replies, clone repos, create coding jobs, open apps and URLs, use other AI tools with your approval, and remember how you work." };
     if (step === 'Guardian') return { title: 'Guardian is my watchtower.', body: 'Guardian watches risky commands, file access through AURA tools, paste and send actions, memory storage, workflow replay, model cost, and privacy boundaries. Website permission monitoring and third-party app file-access monitoring are planned, not active yet.', does: 'Turns safety into a visible product layer.', why: 'AURA should feel powerful because Guardian is clearly watching.', spoken: 'My Guardian protects you. I will not send emails, paste into apps, delete files, run risky commands, spend money, export memory, or save secrets without approval.' };
     if (step === 'Memory and Identity') return { title: 'Memory and Identity belong to you.', body: 'Memory stores useful preferences, workflows, safety decisions, site/app patterns, task context, and identity profile locally. Identity tells AURA whether it is acting as Personal, Work, Company, or Session AURA, so memory and actions stay in the right boundary.', does: 'Makes AURA a user-owned operating identity, not a chatbot account.', why: 'AURA should remember across models and act under the right scope.', spoken: 'My memory belongs to you. I remember useful preferences and workflows, not secrets. My identity layer records whether I am acting as Personal, Work, Company, or Session AURA.' };
-    if (step === 'Local-First Privacy') return { title: 'Local-first. Permission-first.', body: 'For private and simple tasks I can use a local model when available. For heavier work, you can allow Codex, ChatGPT, Claude, or other tools. You stay in control.', does: 'Keeps cloud AI optional and explicit.', why: 'AURA must be useful without forcing accounts or hidden data movement.', spoken: "I'm local-first. I can use a local model for private and simple tasks, and Codex, ChatGPT, or Claude for heavier work if you allow it." };
+    if (step === 'Local-First Privacy') return { title: 'Local-first. Useful immediately.', body: 'For private and simple tasks I can use a local model when available. If no local model is ready, I still work in a limited local fallback mode. For heavier work, you can allow Codex, ChatGPT, Claude, Cursor, or browser handoff. Guardian checks what leaves AURA.', does: 'Keeps cloud AI optional and explicit.', why: 'AURA must be useful without forcing accounts or hidden data movement.', spoken: "I'm local-first. I can use a local model for private and simple tasks, and Codex, ChatGPT, Claude, or other tools for heavier work if you allow it." };
     if (step === 'Workspace') return { title: `Choose where ${assistantName} can work.`, body: 'Use the default local workspace or type a folder you prefer. Clones, coding jobs, and generated files stay contained there.', does: 'Keeps file work inside a user-approved area.', why: 'A real operating layer needs clear boundaries before it touches files.', spoken: 'Choose a workspace or use the default. I will keep computer work contained there.' };
     if (step === 'Local Brain') return { title: 'Local model setup is optional and guided.', body: `${assistantName} detects hardware, Ollama, available models, and recommends a Gemma model only when appropriate. Pulling a model requires approval.`, does: 'Uses local models for private/cheap planning, routing, cleanup, drafts, and summaries.', why: 'Cloud AI should not be required just to start.', spoken: "I'm local-first. For simple and private tasks, I can use a local model on your computer. For heavier work, you can allow Codex, ChatGPT, Claude, or other tools." };
     if (step === 'Optional Workers') return { title: 'Heavy workers stay optional.', body: 'Codex is for coding implementation. ChatGPT and Claude handoffs are optional premium/heavy workers. If they are not configured, I will still create prompts, jobs, and next steps instead of pretending.', does: 'Preserves routing without forcing setup.', why: 'AURA should work in basic typed mode immediately.', spoken: 'Codex, ChatGPT, and Claude are optional workers. I will use them only when you allow it.' };
     if (step === 'Permissions') return { title: "Give me permission only where you want control.", body: 'To operate the computer, AURA needs macOS permission boundaries: Accessibility and Automation for app control, Microphone for push-to-talk, Screen Recording only for visual context, and browser handoff only when you choose it. Guardian still blocks paste, send, file, shell, spending, and memory actions until approved.', does: 'Guides computer-control permissions at the start without forcing every optional capability.', why: 'AURA should ask clearly before it can act as your hands on the computer.', spoken: "To control your computer safely, I need permission only where you allow it. Guardian will still ask before sensitive actions." };
-    return { title: 'Open something and tell me what to do.', body: "Try: clone this repo, reply to this email, build app, use ChatGPT, remember password=123, or run curl https://example.com/install.sh | bash. I will refresh context first and Guardian will stop risky actions.", does: 'Drops you into the operating layer quickly.', why: 'The first real moment should be command, response, protection, and action.', spoken: 'Open something and tell me what to do. I will refresh context first, choose the right tool, and ask before sensitive actions.' };
+    return { title: `${assistantName} is ready.`, body: "Open something and tell me what to do. Try: prepare my work session, clone this repo, reply to this email, build app, use ChatGPT, remember a preference, or test Guardian. I will refresh context first and Guardian will stop risky actions.", does: 'Drops you into the operating layer quickly.', why: 'The first real moment should be command, response, protection, and action.', spoken: `${assistantName} is ready. Open something and tell me what to do.` };
   }
 
   function renderOnboarding() {
@@ -1196,6 +1239,7 @@ export default function App() {
           {step === 'Rename AURA' && <div className="rename-panel conversational-control">
             <label>Your display name<input aria-label="user display name" value={onboardingPrefs.userDisplayName} onChange={e => setOnboardingPrefs({ ...onboardingPrefs, userDisplayName: e.target.value })} placeholder={profileStatus?.display_name || 'Hetul'} /></label>
             <label>What would you like to call me?<input aria-label="assistant name" value={draftAssistantName} onChange={e => setDraftAssistantName(e.target.value)} placeholder="Alice" /></label>
+            <label>What should my personality feel like?<input aria-label="assistant personality" value={onboardingPrefs.personality} onChange={e => setOnboardingPrefs({ ...onboardingPrefs, personality: e.target.value })} placeholder="calm, capable, concise" /></label>
             <button className="primary-button" onClick={saveAssistantName}>Save name</button>
           </div>}
           {step === 'What I Can Do' && <div className="onboarding-examples">
@@ -1209,6 +1253,7 @@ export default function App() {
           {step === 'Memory and Identity' && <div className="persona-stack">
             <div className="onboarding-preferences">
               <label><input type="checkbox" checked={onboardingPrefs.memoryConsent} onChange={e => setOnboardingPrefs({ ...onboardingPrefs, memoryConsent: e.target.checked })} /> Allow AURA to remember safe preferences and workflows after showing you what it learned.</label>
+              <label><input type="checkbox" checked={onboardingPrefs.preferLocalMode} onChange={e => setOnboardingPrefs({ ...onboardingPrefs, preferLocalMode: e.target.checked })} /> Prefer local/private mode when it can still do the job.</label>
               <label>Guardian protection level<select value={onboardingPrefs.guardianLevel} onChange={e => setOnboardingPrefs({ ...onboardingPrefs, guardianLevel: e.target.value })}><option value="balanced">Balanced approvals</option><option value="strict">Strict approvals</option></select></label>
             </div>
             <IdentityCard identities={identities} activeIdentity={activeIdentity} attestation={identityAttestation} ledger={identityLedger} switchIdentity={async (id: string) => { setActiveIdentityState(await setActiveIdentity(id)); await refreshKnowledge(); }} />
@@ -1348,6 +1393,19 @@ export default function App() {
         </aside>
       </section>
 
+      <section className="helper-now-section" aria-label="What AURA can do right now">
+        <div className="stream-heading">
+          <span>What {assistantName} can do right now</span>
+          <strong>{contextKind(capturedContext) === 'none' ? 'Ask directly, or open context first' : 'Context-aware actions ready'}</strong>
+        </div>
+        <ContextActionCards cards={contextActions} startAction={startAction} coreOnline={coreStatus === 'connected'} contextKindValue={contextKind(capturedContext)} assistantName={assistantName} />
+      </section>
+
+      <section className="companion-grid" aria-label="AURA continuity and connectors">
+        <MemoryInsightPanel memoryItems={memoryItems} memoryInbox={memoryInbox} activeIdentity={activeIdentity} />
+        <AIConnectorPanel tools={userTools} privacyCheck={privacyCheck} runPrivacyCheck={runPrivacyCheckForTool} chooseCommand={chooseCommand} />
+      </section>
+
       <section className="product-status-grid" aria-label="AURA product status">
         <Metric label="AURA Status" value={coreStatus === 'connected' ? 'Online' : 'Needs Core'} />
         <Metric label="Memory Status" value={`${memoryHealth?.active_memories || 0} active`} />
@@ -1367,7 +1425,8 @@ export default function App() {
         <details className="glass-panel"><summary>Settings</summary><BrandLicensePanel brand={brand} licenseStatus={licenseStatus} licenseToken={licenseToken} setLicenseToken={setLicenseToken} licenseNotice={licenseNotice} activateLicense={activateLicenseFromUi} saveBrandName={saveBrandName} /><VoiceHotkeyPanel voiceStatus={voiceStatus} speechOutputState={speechOutputState} speechInputState={speechInputState} voiceEnabled={voiceEnabled} setVoiceEnabled={setVoiceEnabled} voiceCommandEnabled={voiceCommandEnabled} setVoiceCommandEnabled={setVoiceCommandEnabled} isListening={isListening} voiceTranscript={voiceTranscript} voiceUnsupportedReason={voiceUnsupportedReason} speak={speak} testVoice={testVoice} pushToTalk={pushToTalk} hotkeyStatus={hotkeyStatus} assistantName={assistantName} systemVoices={systemVoices} selectedVoice={selectedVoice} setSelectedVoice={setSelectedVoice} /><ModelStatusPanel localModelStatus={localModelStatus} modelError={modelError} selectedLocalModel={selectedLocalModel} setSelected={(value) => setOnboardingPrefs({ ...onboardingPrefs, selectedLocalModel: value })} approveAndPullLocalModel={approveAndPullLocalModel} startLocalModelRuntime={startLocalModelRuntimeFromUi} selectExisting={(modelId) => useExistingOrSkipLocalModel(modelId)} skip={() => useExistingOrSkipLocalModel('simple')} refresh={refreshKnowledge} modelPullState={modelPullState} /></details>
         <details className="glass-panel"><summary>Memory</summary><MemoryConsole memoryItems={memoryItems} memoryInbox={memoryInbox} memoryHealth={memoryHealth} memoryEditor={memoryEditor} setMemoryEditor={setMemoryEditor} memoryNotice={memoryNotice} saveMemory={saveMemoryFromUi} updateMemory={updateMemoryFromUi} deleteMemory={deleteMemoryFromUi} keepInbox={keepMemoryFromInbox} forgetInbox={forgetMemoryFromInbox} activeIdentity={activeIdentity} /><button onClick={async () => { const r = await compactMemory(activeIdentity?.memory_scope || 'personal'); setOut(JSON.stringify(r, null, 2)); await refreshKnowledge(); }}>Compact active identity memory</button></details>
         <details className="glass-panel"><summary>Workflows</summary><Feed items={workflowSuggestions.length ? workflowSuggestions.map((item: any) => ({ title: item.suggested_workflow_name || 'Workflow suggestion', detail: item.command_template || item.task_type || 'Workflow signal' })) : [{ title: 'No workflow suggestions yet', detail: 'AURA will suggest repeatable workflows after useful runs.' }]} /><div className="metric-grid"><Metric label="Runs" value={events.length || 0} /><Metric label="Approvals" value={approvalsHandled} /><Metric label="Workflows" value={workflowsReplayed} /><Metric label="Blocked" value={blockedCount} /></div></details>
-        <details className="glass-panel"><summary>External Agent Mediation</summary><ExternalAgentPanel status={externalAgents} /></details>
+        <details className="glass-panel"><summary>Use AURA with other AI tools</summary><AIConnectorPanel tools={userTools} privacyCheck={privacyCheck} runPrivacyCheck={runPrivacyCheckForTool} chooseCommand={chooseCommand} /><ExternalAgentPanel status={externalAgents} /></details>
+        <details className="glass-panel"><summary>OS Guardian Foundation</summary><OSGuardianFoundation hotkeyStatus={hotkeyStatus} contextStatus={contextStatus} refreshContext={refreshContext} /></details>
         <details className="glass-panel"><summary>Private alpha demo checks</summary><PrivateAlphaDemoPanel runCommand={chooseCommand} startCommand={async (command: string) => { setInput(command); await executeCommand(command); }} testVoice={testVoice} showOverlay={() => window.auraDesktop?.showOverlay?.()} createMemoryCandidate={createMemoryInboxFromUi} refresh={refreshKnowledge} /></details>
         <details className="glass-panel" open><summary>Diagnostics / Freshness</summary><p>Build ID: {buildLabel}</p><p>Backend URL: {BACKEND_URL}</p><p>Installed app path: {diagnostics?.installedAppPath || '-'}</p><p>Profile path: {diagnostics?.profilePath || '~/.aura'}</p><p>App data path: {diagnostics?.userDataPath || '-'}</p><p>Logs: {logsPath || diagnostics?.logsPath || '-'}</p><p>Backend command: {diagnostics?.backend?.command || '-'}</p><p>License server: {launchStatus?.launch_services?.license_server_configured ? launchStatus.launch_services.license_server_url : 'not configured'}</p><p>Update channel: {updateStatus?.channel || 'manual'} / {updateStatus?.artifact_ready ? 'download ready' : updateStatus?.status || 'not checked'}</p><p>Latest version: {updateStatus?.version || '-'} {updateStatus?.update_available ? '(update available)' : ''}</p><p>Crash reporting: {launchStatus?.launch_services?.crash_reporting_configured ? 'configured' : 'local redacted reports only'}</p><p>Reset app state: run `scripts/reset-aura-local.sh` from the repo root. It asks first and archives local state by default.</p><button onClick={refreshDiagnostics}>Refresh diagnostics</button><button onClick={async () => setLogsPath(window.auraDesktop?.openLogs ? await window.auraDesktop.openLogs() : 'No desktop bridge.')}>Open logs folder</button><button onClick={sendTestCrashReport}>Send redacted test crash report</button>{crashReportState && <p className="helper-text">{crashReportState}</p>}</details>
         <details className="glass-panel"><summary>Raw run timeline</summary><ActionPanel events={events} /></details>
@@ -1423,17 +1482,20 @@ function GuardianPromise() {
 
 function PermissionCards(props: { contextStatus: string; hotkeyStatus: { ok: boolean; accelerator: string; error?: string }; refreshContext: () => void }) {
   const permissions = [
-    { name: 'Accessibility', use: 'Bring AURA forward, capture app context, and control apps when approved.', never: 'Never controls apps silently.', status: props.hotkeyStatus.ok ? 'Likely enabled' : 'May be needed for hotkey/control' },
-    { name: 'Automation', use: 'macOS may ask before AURA interacts with another app.', never: 'Never sends, pastes, or clicks through approval gates.', status: 'Requested per app by macOS' },
-    { name: 'Microphone', use: 'Push-to-talk permission check and future voice input.', never: 'No always-listening wake word in this build.', status: 'Optional' },
-    { name: 'Screen Recording', use: 'Visual context only when needed.', never: 'Never stores screenshots as memory without permission.', status: 'Optional until visual context is enabled' },
-    { name: 'Browser handoff', use: 'Prepare ChatGPT/Claude prompts or read current URL when available.', never: 'Never claims page context it cannot see.', status: 'Optional' },
+    { name: 'Accessibility', use: 'Bring AURA forward, capture app context, and control apps when approved.', never: 'Never controls apps silently.', status: props.hotkeyStatus.ok ? 'Likely enabled' : 'May be needed for hotkey/control', enable: 'System Settings > Privacy & Security > Accessibility, then enable AURA or Electron.', without: 'Typed commands, memory, identity, and Guardian command checks still work.' },
+    { name: 'Automation', use: 'macOS may ask before AURA interacts with another app.', never: 'Never sends, pastes, or clicks through approval gates.', status: 'Requested per app by macOS', enable: 'macOS prompts per target app the first time AURA requests control.', without: 'AURA can prepare drafts and prompts, but may ask you to copy/paste manually.' },
+    { name: 'Microphone', use: 'Push-to-talk permission check and future voice input.', never: 'No always-listening wake word in this build.', status: 'Optional', enable: 'System Settings > Privacy & Security > Microphone.', without: 'You can type commands and AURA can still speak responses.' },
+    { name: 'Screen Recording', use: 'Visual context only when needed.', never: 'Never stores screenshots as memory without permission.', status: 'Optional until visual context is enabled', enable: 'System Settings > Privacy & Security > Screen Recording.', without: 'AURA uses app names, browser URLs, selected text, and clipboard fallback where available.' },
+    { name: 'Full Disk Access', use: 'Broad file help when you explicitly ask AURA to inspect files outside the workspace.', never: 'Never scans your whole disk by default.', status: 'Advanced / optional', enable: 'System Settings > Privacy & Security > Full Disk Access.', without: 'Workspace-safe file operations still work.' },
+    { name: 'Browser handoff', use: 'Prepare ChatGPT/Claude/Codex/Cursor prompts or read current URL when available.', never: 'Never claims page context it cannot see.', status: 'Optional', enable: 'Grant browser automation only when macOS asks, or paste the URL/text into AURA.', without: 'Manual handoff prompts still work with pasted context.' },
   ];
   return <div className="permission-grid">{permissions.map((permission) => <article className="permission-card" key={permission.name}>
     <span>{permission.status}</span>
     <h3>{permission.name}</h3>
     <p><strong>Why:</strong> {permission.use}</p>
     <p><strong>Never:</strong> {permission.never}</p>
+    <p><strong>Enable:</strong> {permission.enable}</p>
+    <p><strong>Without it:</strong> {permission.without}</p>
   </article>)}<button onClick={props.refreshContext}>Check permissions / refresh context</button><p className="helper-text">{props.contextStatus}</p></div>;
 }
 
@@ -1712,6 +1774,98 @@ function ExternalAgentPanel(props: { status: any }) {
   </section>;
 }
 
+function MemoryInsightPanel(props: { memoryItems: any[]; memoryInbox?: any[]; activeIdentity: any }) {
+  const scope = props.activeIdentity?.memory_scope || 'personal';
+  const visible = props.memoryItems
+    .filter((item) => item.scope === scope && item.metadata?.memory_state !== 'inbox')
+    .slice(0, 18);
+  const byKind = visible.reduce((acc: Record<string, any[]>, item: any) => {
+    const kind = memoryKindLabel(item.kind || item.metadata?.kind || 'note');
+    acc[kind] = acc[kind] || [];
+    acc[kind].push(item);
+    return acc;
+  }, {});
+  const featured = visible.slice(0, 3);
+  return <section className="memory-insight-panel" aria-label="What AURA knows about me">
+    <div className="stream-heading">
+      <span>What AURA knows about me</span>
+      <strong>{visible.length ? `${visible.length} active memories` : 'Ready to learn'}</strong>
+    </div>
+    <p className="helper-text">Memory is local, user-owned, identity-scoped, and only shown here when it helps the user understand why AURA behaves a certain way.</p>
+    <div className="knowledge-grid">
+      {['Preference', 'Project', 'Workflow', 'Person', 'Safety', 'Writing style'].map((kind) => <div className="knowledge-tile" key={kind}>
+        <span>{kind}</span>
+        <strong>{byKind[kind]?.length || 0}</strong>
+      </div>)}
+    </div>
+    <div className="memory-used-list">
+      {featured.length ? featured.map((item) => <article className="memory-used-card" key={item.memory_id || item.memory_key}>
+        <span>{memoryKindLabel(item.kind)} / {item.scope || scope}</span>
+        <strong>{shortText(item.value, item.memory_key || 'Memory')}</strong>
+        <p>{item.metadata?.why_it_matters || item.provenance?.explanation || `This belongs to ${props.activeIdentity?.name || 'Personal AURA'} and can shape future drafts, workflows, and Guardian decisions.`}</p>
+      </article>) : <article className="memory-used-card empty">
+        <span>Start here</span>
+        <strong>Teach AURA a preference.</strong>
+        <p>Try: “Remember I prefer concise technical explanations.” AURA will ask you to keep, edit, or forget it.</p>
+      </article>}
+    </div>
+    {asArray(props.memoryInbox).length > 0 && <p className="helper-text">Memory Inbox has {asArray(props.memoryInbox).length} candidate item(s) waiting for keep, edit, or forget.</p>}
+  </section>;
+}
+
+function AIConnectorPanel(props: { tools: any[]; privacyCheck: any; runPrivacyCheck: (toolId?: string) => Promise<void>; chooseCommand: (command: string) => void }) {
+  const tools = props.tools.length ? props.tools : [
+    { id: 'chatgpt', name: 'ChatGPT', status: 'manual_handoff' },
+    { id: 'claude', name: 'Claude', status: 'manual_handoff' },
+    { id: 'codex', name: 'Codex', status: 'manual_handoff' },
+    { id: 'cursor', name: 'Cursor', status: 'manual_handoff' },
+  ];
+  return <section className="ai-connector-panel" aria-label="Use AURA with other AI tools">
+    <div className="stream-heading">
+      <span>Use AURA with other AI tools</span>
+      <strong>Guardian checks the handoff</strong>
+    </div>
+    <p className="helper-text">AURA can prepare a helpful prompt for ChatGPT, Claude, Codex, Cursor, or the browser. Guardian scans, redacts, and asks approval before sensitive data leaves AURA.</p>
+    <div className="connector-grid">
+      {tools.slice(0, 6).map((tool) => <article className="connector-card" key={tool.id || tool.name}>
+        <span>{tool.status || tool.platform || 'manual handoff'}</span>
+        <strong>{tool.name || tool.id}</strong>
+        <p>{tool.description || tool.notes || 'Prepare a prompt, inspect privacy risk, then decide whether to copy/open.'}</p>
+        <div className="panel-actions">
+          <button onClick={() => props.runPrivacyCheck(tool.id || tool.name)}>Privacy check</button>
+          <button onClick={() => props.chooseCommand(`use ${tool.name || tool.id} to help with the current task`)}>Prepare handoff</button>
+        </div>
+      </article>)}
+    </div>
+    {props.privacyCheck && <div className={props.privacyCheck.requires_approval ? 'privacy-check-card warning' : 'privacy-check-card'}>
+      <span>Guardian Privacy Check</span>
+      <strong>{props.privacyCheck.requires_approval ? 'Approval required before handoff' : 'No sensitive data detected'}</strong>
+      <p>Destination: {props.privacyCheck.destination || props.privacyCheck.data_destination || 'external AI tool'}</p>
+      <p>{props.privacyCheck.summary || props.privacyCheck.approval_reason || 'Guardian scanned the prompt.'}</p>
+      {asArray(props.privacyCheck.labels).length > 0 && <p className="helper-text">Detected: {asArray(props.privacyCheck.labels).join(', ')}</p>}
+      {props.privacyCheck.redacted && <p className="helper-text">AURA prepared a redacted version before any handoff.</p>}
+    </div>}
+  </section>;
+}
+
+function OSGuardianFoundation(props: { hotkeyStatus: { ok: boolean; accelerator: string; error?: string }; contextStatus: string; refreshContext: () => void }) {
+  return <section className="os-guardian-foundation" aria-label="OS Guardian Foundation">
+    <div className="stream-heading">
+      <span>OS Guardian Foundation</span>
+      <strong>Honest protection map</strong>
+    </div>
+    <p>AURA Guardian protects AURA-managed actions today. True OS-wide process, network, and file-event blocking needs a signed native system extension and explicit user permission.</p>
+    <div className="guardian-foundation-grid">
+      <div><strong>Active today</strong>{OS_GUARDIAN_ACTIVE.map((item) => <span key={item}>{item}</span>)}</div>
+      <div><strong>Needs permission</strong>{OS_GUARDIAN_REQUIRES_PERMISSION.map((item) => <span key={item}>{item}</span>)}</div>
+      <div><strong>Future native extension</strong>{OS_GUARDIAN_FUTURE.map((item) => <span key={item}>{item}</span>)}</div>
+    </div>
+    <p className="helper-text">Hotkey: {props.hotkeyStatus.ok ? `${props.hotkeyStatus.accelerator} active` : props.hotkeyStatus.error || 'Accessibility permission may be needed.'}</p>
+    <div className="panel-actions"><button onClick={props.refreshContext}>Check context and permissions</button></div>
+    <p className="helper-text">{props.contextStatus}</p>
+  </section>;
+}
+
 function ContextActionCards(props: { cards: Array<any>; startAction: (card: any) => void; coreOnline: boolean; contextKindValue: string; assistantName: string }) {
   return <div className="context-action-grid">{props.cards.map((card) => <article className="context-action-card" key={card.title}>
     <span>{props.coreOnline ? card.readiness : 'AURA Core must connect first'}</span>
@@ -1775,6 +1929,17 @@ function ModelStatusPanel(props: { localModelStatus: any; modelError: string; se
       {props.modelPullState && <pre>{props.modelPullState}</pre>}
     </div>
   </div>;
+}
+
+function memoryKindLabel(kind?: string) {
+  const normalized = String(kind || 'note').toLowerCase();
+  if (normalized.includes('style') || normalized.includes('writing')) return 'Writing style';
+  if (normalized.includes('project')) return 'Project';
+  if (normalized.includes('workflow')) return 'Workflow';
+  if (normalized.includes('person')) return 'Person';
+  if (normalized.includes('safety') || normalized.includes('guardian')) return 'Safety';
+  if (normalized.includes('preference')) return 'Preference';
+  return normalized.slice(0, 1).toUpperCase() + normalized.slice(1);
 }
 
 function VoiceHotkeyPanel(props: { voiceStatus: string; speechOutputState: string; speechInputState: string; voiceEnabled: boolean; setVoiceEnabled: (value: boolean) => void; voiceCommandEnabled: boolean; setVoiceCommandEnabled: (value: boolean) => void; isListening: boolean; voiceTranscript: string; voiceUnsupportedReason: string; speak: (text: string) => void; testVoice: () => void; pushToTalk: () => void; hotkeyStatus: { ok: boolean; accelerator: string; error?: string }; assistantName: string; systemVoices: string[]; selectedVoice: string; setSelectedVoice: (value: string) => void }) {

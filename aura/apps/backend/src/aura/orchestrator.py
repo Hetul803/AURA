@@ -248,6 +248,23 @@ def run_command(text: str, event_cb=lambda e: None, choices: dict | None = None,
     if relevant_memory.get('workspace_hint') and not planning_context.get('workspace_hint'):
         planning_context['workspace_hint'] = relevant_memory['workspace_hint']
     plan = plan_from_text(text, choices, planning_context)
+    if plan.get('signature') == 'user_ai:web':
+        privacy_check = (plan.get('context') or {}).get('privacy_check') or {}
+        if privacy_check.get('requires_approval') or privacy_check.get('redacted'):
+            event = record_human_guardian_event(
+                severity='approval_required' if privacy_check.get('requires_approval') else 'notice',
+                title='Guardian checked this external AI handoff.',
+                explanation=f"Destination: {privacy_check.get('destination') or 'external AI tool'}. {privacy_check.get('approval_reason') or 'AURA prepared a privacy-checked prompt.'}",
+                action_required='Review the prompt before AURA copies or pastes it into another AI tool.',
+                run_id=run_id,
+                event_type='external_ai_privacy_check',
+                action='USER_AI_HANDOFF',
+                risk='high' if privacy_check.get('requires_approval') else 'medium',
+                category='tool_risk',
+                approval_status='pending' if privacy_check.get('requires_approval') else 'not_required',
+                context={'destination': privacy_check.get('destination'), 'labels': privacy_check.get('labels'), 'redacted': privacy_check.get('redacted'), 'identity': identity_context},
+            )
+            event_cb({**event, 'type': 'guardian_event', 'guardian_type': event.get('type'), 'run_id': run_id, 'status': 'awaiting_review'})
     _send_event(event_cb, {
         'type': 'memory_used',
         'run_id': run_id,

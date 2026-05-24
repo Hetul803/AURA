@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
+import re
 from typing import Any
+
+from .privacy import detect_secret, detect_sensitive, redact_text, sensitivity_labels
 
 
 @dataclass(frozen=True)
@@ -23,7 +26,49 @@ class UserWebTool:
 _TOOLS = {
     'chatgpt': UserWebTool('chatgpt', 'ChatGPT', 'openai', 'https://chatgpt.com/', 'Use the user-owned ChatGPT web session.'),
     'claude': UserWebTool('claude', 'Claude', 'anthropic', 'https://claude.ai/new', 'Use the user-owned Claude web session.'),
+    'codex': UserWebTool('codex', 'Codex', 'openai', 'https://chatgpt.com/codex', 'Prepare a safe coding handoff for Codex or Codex CLI.', safety_notes=('AURA prepares coding prompts and job files.', 'External execution requires explicit approval.')),
+    'cursor': UserWebTool('cursor', 'Cursor', 'cursor', 'cursor://', 'Prepare a safe coding handoff for Cursor.', safety_notes=('AURA can prepare prompts for Cursor.', 'Pasting into Cursor requires approval.')),
 }
+
+EMAIL_RE = re.compile(r'\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b', re.I)
+PHONE_RE = re.compile(r'(?<!\d)(?:\+?1[-.\s]?)?(?:\(?\d{3}\)?[-.\s]?)\d{3}[-.\s]?\d{4}(?!\d)')
+
+
+def _mask_contact(text: str) -> str:
+    text = EMAIL_RE.sub('[REDACTED_EMAIL]', text)
+    return PHONE_RE.sub('[REDACTED_PHONE]', text)
+
+
+def privacy_check_for_handoff(*, prompt: str, destination: str, context: dict[str, Any] | None = None) -> dict[str, Any]:
+    ctx = context or {}
+    context_text = str(ctx)
+    inspection_text = f'{prompt}\n{context_text}'
+    labels = set(sensitivity_labels(inspection_text))
+    if EMAIL_RE.search(inspection_text):
+        labels.add('email_address')
+    if PHONE_RE.search(inspection_text):
+        labels.add('phone_number')
+    if detect_sensitive(context_text):
+        labels.add('sensitive_context')
+    redacted = _mask_contact(redact_text(prompt, limit=12000))
+    context_redacted = _mask_contact(redact_text(context_text, limit=12000))
+    secret_detected = detect_secret(inspection_text) or '[REDACTED]' in redacted or '[REDACTED]' in context_redacted
+    requires_approval = bool(labels)
+    return {
+        'destination': destination,
+        'labels': sorted(labels),
+        'secret_detected': secret_detected,
+        'redacted': redacted != prompt or context_redacted != context_text,
+        'requires_approval': requires_approval,
+        'approval_reason': 'External AI handoff contains sensitive or identifying data.' if requires_approval else 'No sensitive data detected in the prepared handoff prompt.',
+        'data_destination': destination,
+        'safe_prompt': redacted,
+        'summary': {
+            'prompt_chars': len(prompt),
+            'safe_prompt_chars': len(redacted),
+            'context_fields': sorted(ctx.keys())[:20],
+        },
+    }
 
 
 def list_user_web_tools() -> list[dict[str, Any]]:
@@ -39,6 +84,10 @@ def infer_user_tool(text: str) -> str:
     low = text.lower()
     if 'claude' in low:
         return 'claude'
+    if 'codex' in low:
+        return 'codex'
+    if 'cursor' in low:
+        return 'cursor'
     return 'chatgpt'
 
 
@@ -69,16 +118,20 @@ def build_user_ai_prompt(*, task: str, tool_id: str = 'chatgpt', context: dict[s
         'Rules:',
         *[f'- {rule}' for rule in boundaries],
         'Context:',
-        source_text or '(No selected text was captured. Ask one concise clarification if needed.)',
+        _mask_contact(redact_text(source_text)) or '(No selected text was captured. Ask one concise clarification if needed.)',
         'Return:',
         '- The final answer/draft/prompt only.',
         '- No hidden actions.',
     ])
+    privacy_check = privacy_check_for_handoff(prompt=prompt, destination=tool['label'], context=ctx)
+    safe_prompt = privacy_check['safe_prompt']
     return {
         'tool': tool,
-        'prompt': prompt,
-        'prompt_length': len(prompt),
+        'prompt': safe_prompt,
+        'raw_prompt_was_redacted': safe_prompt != prompt,
+        'prompt_length': len(safe_prompt),
         'mode': mode,
+        'privacy_check': privacy_check,
         'context_used': {
             'has_source_text': bool(source_text),
             'browser_url': browser_url,

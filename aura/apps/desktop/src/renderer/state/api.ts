@@ -283,6 +283,20 @@ export async function getExternalAgentsStatus() {
   return r.json();
 }
 
+export async function getUserTools() {
+  const r = await fetch(`${BACKEND_URL}/user-tools`);
+  return r.json();
+}
+
+export async function checkUserToolPrivacy(body: any) {
+  const r = await fetch(`${BACKEND_URL}/user-tools/privacy-check`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(body)
+  });
+  return r.json();
+}
+
 export async function createWorkflow(body: any) {
   const r = await fetch(`${BACKEND_URL}/workflows`, {
     method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body)

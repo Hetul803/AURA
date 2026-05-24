@@ -261,6 +261,7 @@ def _user_ai_web_plan(text: str, context: dict | None = None) -> dict:
     prepared = build_user_ai_prompt(task=text, tool_id=tool_id, context=context or {}, mode=mode)
     tool = prepared['tool']
     prompt = prepared['prompt']
+    privacy_check = prepared.get('privacy_check') or {}
     domain = tool['url'].split('//', 1)[1].split('/', 1)[0]
     steps = [
         Step(
@@ -301,7 +302,7 @@ def _user_ai_web_plan(text: str, context: dict | None = None) -> dict:
         goal=f"Use the user's {tool['label']} subscription for the requested task",
         signature='user_ai:web',
         steps=steps,
-        context={'request_text': text, 'tool': tool, 'mode': mode, 'prepared_prompt': prepared, 'context_snapshot': context or {}},
+        context={'request_text': text, 'tool': tool, 'mode': mode, 'prepared_prompt': prepared, 'privacy_check': privacy_check, 'context_snapshot': context or {}},
         success_criteria=[{'type': 'prompt_ready', 'expected': True}, {'type': 'approval_received', 'expected': True}],
         memory_scope=f'user_ai:{tool_id}:{mode}',
         slots={'tool_id': tool_id, 'mode': mode},

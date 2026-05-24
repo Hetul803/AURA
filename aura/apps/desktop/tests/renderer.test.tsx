@@ -28,6 +28,8 @@ function setupFetch(commandResponses: any[], contextOverride?: any, localModelOv
     if (url.includes('/health')) return { ok: true, json: async () => ({ ok: true }) } as any;
     if (url.includes('/context/current')) return { ok: true, json: async () => context } as any;
     if (url.includes('/assist/context')) return { ok: true, json: async () => context } as any;
+    if (url.includes('/user-tools/privacy-check')) return { ok: true, json: async () => ({ destination: 'ChatGPT', labels: ['email'], redacted: true, requires_approval: true, summary: 'Guardian redacted contact details before handoff.' }) } as any;
+    if (url.includes('/user-tools')) return { ok: true, json: async () => [{ id: 'chatgpt', name: 'ChatGPT', status: 'manual_handoff' }, { id: 'claude', name: 'Claude', status: 'manual_handoff' }, { id: 'codex', name: 'Codex', status: 'manual_handoff' }] } as any;
     if (url.includes('/tools')) return { ok: true, json: async () => [{ action_type: 'OS_PASTE', tool: 'os', risk_level: 'high', requires_approval: true }] } as any;
     if (url.includes('/devices')) return { ok: true, json: async () => [{ adapter_id: 'desktop-local', name: 'Local Desktop', surface: 'desktop', status: 'available' }] } as any;
     if (url.includes('/memory/search')) return { ok: true, json: async () => [{ memory_id: 'm1', memory_key: 'workspace.preference', value: 'prefers ~/AURA/workspaces', score: 0.8 }] } as any;
@@ -118,8 +120,8 @@ describe('renderer', () => {
     setupFetch([{ ok: true, run_id: 'r1' }]);
     vi.stubGlobal('EventSource', class { onmessage: any; close() {} } as any);
     render(<App />);
-    await waitFor(() => expect(screen.getByText(/First Launch Encounter/)).toBeTruthy());
-    expect(screen.getByText(/Hello. I'm AURA/)).toBeTruthy();
+    await waitFor(() => expect(screen.getByText(/Welcome to AURA/)).toBeTruthy());
+    expect(screen.getByText(/Your AI is here/)).toBeTruthy();
     expect((window.speechSynthesis.speak as any).mock.calls.length).toBeGreaterThan(0);
     await advanceOnboardingTo(/Local model setup is optional/);
     await waitFor(() => expect(screen.getByText(/Recommended local model/)).toBeTruthy());
@@ -137,7 +139,7 @@ describe('renderer', () => {
     setupFetch([{ ok: true, run_id: 'r1' }]);
     vi.stubGlobal('EventSource', class { onmessage: any; close() {} } as any);
     const { unmount } = render(<App />);
-    await waitFor(() => expect(screen.getByText(/First Launch Encounter/)).toBeTruthy());
+    await waitFor(() => expect(screen.getByText(/Welcome to AURA/)).toBeTruthy());
     expect(screen.queryByText(/Restart onboarding/)).toBeNull();
     unmount();
     cleanup();
@@ -145,7 +147,7 @@ describe('renderer', () => {
     render(<App />);
     await waitFor(() => expect(screen.getByText(/Restart onboarding/)).toBeTruthy());
     fireEvent.click(screen.getByText(/Restart onboarding/));
-    await waitFor(() => expect(screen.getByText(/First Launch Encounter/)).toBeTruthy());
+    await waitFor(() => expect(screen.getByText(/Welcome to AURA/)).toBeTruthy());
   });
 
   it('can finish onboarding when hardware or model detection fails', async () => {
@@ -158,7 +160,7 @@ describe('renderer', () => {
     }) as any);
     vi.stubGlobal('EventSource', class { onmessage: any; close() {} } as any);
     render(<App />);
-    await waitFor(() => expect(screen.getByText(/First Launch Encounter/)).toBeTruthy());
+    await waitFor(() => expect(screen.getByText(/Welcome to AURA/)).toBeTruthy());
     fireEvent.click(screen.getByText('Enter command layer'));
     await waitFor(() => expect(screen.getByText(/AI operating layer/)).toBeTruthy());
   });
@@ -298,7 +300,7 @@ describe('renderer', () => {
     setupFetch([{ ok: true, run_id: 'r1' }]);
     vi.stubGlobal('EventSource', class { onmessage: any; close() {} } as any);
     render(<App />);
-    await waitFor(() => expect(screen.getByText(/First Launch Encounter/)).toBeTruthy());
+    await waitFor(() => expect(screen.getByText(/Welcome to AURA/)).toBeTruthy());
     await advanceOnboardingTo(/yours to name/);
     fireEvent.change(screen.getByLabelText('assistant name'), { target: { value: 'Alice' } });
     fireEvent.click(screen.getByText('Save name'));
@@ -395,6 +397,8 @@ describe('renderer', () => {
     render(<App />);
     await waitFor(() => expect(screen.getAllByText(/GitHub repo/).length).toBeGreaterThan(0));
     expect(screen.getByText(/github.com\/Hetul803\/AURA/)).toBeTruthy();
+    expect(screen.getByText(/What AURA can do right now/)).toBeTruthy();
+    expect(screen.getAllByText(/Clone this repo/).length).toBeGreaterThan(0);
   });
 
   it('shows email context actions when mail context is supplied', async () => {
@@ -469,5 +473,33 @@ describe('renderer', () => {
     fireEvent.click(screen.getByText(/Advanced \/ Diagnostics/));
     await waitFor(() => expect(screen.getByText(/Diagnostics \/ Freshness/)).toBeTruthy());
     expect(screen.getByText(/Build ID:/)).toBeTruthy();
+  });
+
+  it('shows memory continuity and AI handoff privacy checks for real users', async () => {
+    localStorage.setItem('aura:onboarding-complete', '1');
+    setupSpeech();
+    setupFetch([{ ok: true, run_id: 'r1' }]);
+    vi.stubGlobal('EventSource', class { onmessage: any; close() {} } as any);
+    render(<App />);
+    await waitFor(() => expect(screen.getByText(/What AURA knows about me/)).toBeTruthy());
+    expect(screen.getByText(/Teach AURA a preference/)).toBeTruthy();
+    expect(screen.getByText(/Use AURA with other AI tools/)).toBeTruthy();
+    fireEvent.click(screen.getAllByText(/Privacy check/)[0]);
+    await waitFor(() => expect(screen.getByText(/Guardian Privacy Check/)).toBeTruthy());
+    expect(screen.getByText(/Approval required before handoff/)).toBeTruthy();
+  });
+
+  it('shows honest OS Guardian Foundation in Advanced', async () => {
+    localStorage.setItem('aura:onboarding-complete', '1');
+    setupSpeech();
+    setupFetch([{ ok: true, run_id: 'r1' }]);
+    vi.stubGlobal('EventSource', class { onmessage: any; close() {} } as any);
+    render(<App />);
+    await waitFor(() => expect(screen.getByText(/AI operating layer/)).toBeTruthy());
+    fireEvent.click(screen.getByText(/Advanced \/ Diagnostics/));
+    fireEvent.click(screen.getAllByText(/OS Guardian Foundation/)[0]);
+    await waitFor(() => expect(screen.getByText(/Honest protection map/)).toBeTruthy());
+    expect(screen.getByText(/AURA-managed actions today/)).toBeTruthy();
+    expect(screen.getByText(/Endpoint Security native extension/)).toBeTruthy();
   });
 });

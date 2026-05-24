@@ -22,5 +22,7 @@ def handle_user_ai_action(step, run_context: dict | None = None) -> dict:
             'provider': prepared['tool']['provider'],
             'prompt_length': prepared['prompt_length'],
             'prompt_ready': True,
+            'privacy_check': prepared.get('privacy_check'),
+            'requires_approval': bool((prepared.get('privacy_check') or {}).get('requires_approval')),
         },
     )
