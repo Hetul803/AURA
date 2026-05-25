@@ -38,6 +38,13 @@ for key in APPLE_ID APPLE_TEAM_ID APPLE_APP_SPECIFIC_PASSWORD; do
   if [[ -n "${!key:-}" ]]; then pass "$key configured"; else note "$key not set"; fi
 done
 
+if [[ -z "${CSC_NAME:-}" && -z "${CSC_LINK:-}" ]]; then
+  detected_identity="$(security find-identity -v -p codesigning 2>/dev/null | sed -n 's/.*"Developer ID Application: \(.*([^)]*)\)".*/\1/p' | head -1 || true)"
+  if [[ -n "$detected_identity" ]]; then
+    export CSC_NAME="$detected_identity"
+  fi
+fi
+
 if [[ -n "${CSC_NAME:-}" || -n "${CSC_LINK:-}" ]]; then
   pass "Electron signing identity/certificate env configured"
 else

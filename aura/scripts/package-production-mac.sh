@@ -8,6 +8,15 @@ missing=()
 for key in APPLE_ID APPLE_TEAM_ID APPLE_APP_SPECIFIC_PASSWORD; do
   [[ -n "${!key:-}" ]] || missing+=("$key")
 done
+
+if [[ -z "${CSC_NAME:-}" && -z "${CSC_LINK:-}" ]]; then
+  detected_identity="$(security find-identity -v -p codesigning 2>/dev/null | sed -n 's/.*"Developer ID Application: \(.*([^)]*)\)".*/\1/p' | head -1 || true)"
+  if [[ -n "$detected_identity" ]]; then
+    export CSC_NAME="$detected_identity"
+    echo "Using detected Developer ID signing identity: $CSC_NAME"
+  fi
+fi
+
 if [[ -z "${CSC_NAME:-}" && -z "${CSC_LINK:-}" ]]; then
   missing+=("CSC_NAME or CSC_LINK")
 fi
