@@ -1,4 +1,45 @@
-# AURA v1
+# AURA
+
+## Pivot: trust layer for AI coding agents
+
+AURA is pivoting from a consumer Mac companion into a GitHub-first trust, memory, and control layer for AI coding agents: Codex, Claude Code, Cursor, Copilot, Cline, and Roo.
+
+The new developer product has three surfaces over the existing Python core:
+
+- **Web dashboard:** Next.js App Router dashboard for repos, PR risk reports, Constitution editing, cross-agent memory export, attribution, provenance, policy rules, and audit.
+- **GitHub App:** verified webhooks, PR diff analysis, check-run/comment reporting, and repair prompts.
+- **CLI:** local-first `aura` commands for repo initialization, diff scanning, memory export, second opinion, repair prompts, and provenance capture.
+
+Local M1-M4 quick start:
+
+```bash
+cd apps/backend
+PYTHONPATH=src python -m aura.cli init --path /path/to/repo
+PYTHONPATH=src python -m aura.cli scan --path /path/to/repo --staged
+PYTHONPATH=src python -m aura.cli export --path /path/to/repo
+PYTHONPATH=src python -m aura.cli review --path /path/to/repo --staged
+PYTHONPATH=src python -m aura.cli repair --path /path/to/repo --staged
+```
+
+Dashboard:
+
+```bash
+pnpm --filter aura-web dev
+```
+
+Hosted database for the GitHub-first app:
+
+```bash
+docker compose up -d postgres
+cd apps/backend
+DATABASE_URL=postgresql+psycopg://aura:aura@localhost:5432/aura alembic upgrade head
+```
+
+The older desktop product is still in this repository for continuity and will be moved to an archive branch before the pivot launch branch becomes the main product surface.
+
+---
+
+# AURA v1 legacy desktop context
 
 Private, local-first AI operating identity monorepo for desktop (Electron + Python backend).
 

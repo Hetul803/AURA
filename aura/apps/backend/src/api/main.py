@@ -7,6 +7,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
+from api.routes.pivot import router as pivot_router
 
 from aura.assist import capture_structured_context
 from aura.agent_router import get_agent, list_agents, route_agent, workflow_suggestions
@@ -127,8 +128,9 @@ app.add_middleware(
     ],
     allow_credentials=False,
     allow_methods=['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
-    allow_headers=['content-type'],
+    allow_headers=['content-type', 'authorization', 'x-aura-workspace', 'x-github-event', 'x-github-delivery', 'x-hub-signature-256'],
 )
+app.include_router(pivot_router)
 EVENTS: dict[str, queue.Queue[str]] = {}
 
 
