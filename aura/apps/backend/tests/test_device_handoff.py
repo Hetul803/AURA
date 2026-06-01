@@ -3,8 +3,8 @@ from pathlib import Path
 from fastapi.testclient import TestClient
 
 from api.main import app
-from aura.device_handoff import create_handoff, get_handoff, list_handoffs, update_handoff
-from aura.state import db_conn
+from aegisure.device_handoff import create_handoff, get_handoff, list_handoffs, update_handoff
+from aegisure.state import db_conn
 from storage.db import init_db
 
 client = TestClient(app)

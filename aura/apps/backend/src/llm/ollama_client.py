@@ -40,7 +40,7 @@ def ollama_available() -> bool:
 
 
 def default_ollama_model() -> str:
-    configured = os.getenv('AURA_ASSIST_MODEL') or os.getenv('OLLAMA_MODEL')
+    configured = os.getenv('AEGISURE_ASSIST_MODEL') or os.getenv('OLLAMA_MODEL')
     if configured:
         return configured
     try:

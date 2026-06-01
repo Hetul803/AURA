@@ -1,12 +1,12 @@
 from fastapi.testclient import TestClient
 
 from api.main import app
-from aura import executor
-from aura.orchestrator import run_command
-from aura.safety import classify_shell_command, step_risk
-from aura.state import GUARDIAN_EVENTS, db_conn, get_run_context, list_guardian_events, set_run_context
-from aura.steps import Step
-from aura.workflow_engine import create_workflow
+from aegisure import executor
+from aegisure.orchestrator import run_command
+from aegisure.safety import classify_shell_command, step_risk
+from aegisure.state import GUARDIAN_EVENTS, db_conn, get_run_context, list_guardian_events, set_run_context
+from aegisure.steps import Step
+from aegisure.workflow_engine import create_workflow
 from storage.db import init_db
 from tools.tool_result import success
 

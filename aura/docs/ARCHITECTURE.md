@@ -1,6 +1,6 @@
 # ARCHITECTURE
 
-AURA v1 documentation for ARCHITECTURE.
+Aegisure v1 documentation for ARCHITECTURE.
 
 - Local-first profile storage.
 - Deterministic execution runtime.

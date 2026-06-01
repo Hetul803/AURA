@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from aura.guardian import events_for_step, record_step_events
-from aura.state import list_guardian_events, set_run_context
+from aegisure.guardian import events_for_step, record_step_events
+from aegisure.state import list_guardian_events, set_run_context
 
 
 def _step(action_type: str, **args):
@@ -42,4 +42,4 @@ def test_guardian_records_external_research_events_and_global_feed():
 
     assert recorded[0]['type'] == 'network_action'
     assert recorded[0]['risk'] == 'high'
-    assert list_guardian_events(run_id=run_id, limit=5)[0]['summary'].startswith('AURA performed an external research query')
+    assert list_guardian_events(run_id=run_id, limit=5)[0]['summary'].startswith('Aegisure performed an external research query')

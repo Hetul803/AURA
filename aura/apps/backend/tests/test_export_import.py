@@ -71,7 +71,7 @@ def test_export_profile_includes_learning_tables(tmp_path):
                 profile_id, display_name, local_user_id
             ) VALUES (?, ?, ?)
             """,
-            ('profile-export', 'Local AURA User', 'local-export'),
+            ('profile-export', 'Local Aegisure User', 'local-export'),
         )
         conn.execute(
             """

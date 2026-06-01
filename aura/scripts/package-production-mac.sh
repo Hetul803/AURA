@@ -42,7 +42,7 @@ echo "Building signed DMG..."
 pnpm aura:package
 
 echo "Submitting DMG for notarization..."
-scripts/notarize-mac.sh apps/desktop/release/AURA-1.0.0-mac-arm64.dmg
+scripts/notarize-mac.sh apps/desktop/release/Aegisure-1.0.0-mac-arm64.dmg
 
 echo "Production Mac artifact ready:"
-echo "  apps/desktop/release/AURA-1.0.0-mac-arm64.dmg"
+echo "  apps/desktop/release/Aegisure-1.0.0-mac-arm64.dmg"

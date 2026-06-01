@@ -1,6 +1,6 @@
-# AURA Private Alpha Runbook
+# Aegisure Private Alpha Runbook
 
-This runbook is for private alpha builds only. AURA is still a local-first desktop product with experimental orchestration features.
+This runbook is for private alpha builds only. Aegisure is still a local-first desktop product with experimental orchestration features.
 
 ## Private Alpha Standard
 
@@ -8,8 +8,8 @@ This runbook is for private alpha builds only. AURA is still a local-first deskt
 - Profile data stays local by default.
 - Risky actions require approval.
 - Email send, code push, file delete, spending, uploads, and destructive shell actions must not happen silently.
-- User-owned web AI tools such as ChatGPT or Claude are treated as browser sessions owned by the user, not AURA-owned cloud credentials.
-- AURA's own planning model route is separate from user-task delegation through the user's subscriptions.
+- User-owned web AI tools such as ChatGPT or Claude are treated as browser sessions owned by the user, not Aegisure-owned cloud credentials.
+- Aegisure's own planning model route is separate from user-task delegation through the user's subscriptions.
 
 ## Readiness Check
 
@@ -36,8 +36,8 @@ The check verifies required docs, packaging metadata, release targets, and const
 7. Confirm the draft pauses for approval.
 8. Reject once and verify nothing is pasted.
 9. Approve once and verify paste-back uses target validation.
-10. Run `Use ChatGPT to draft a reply to this email` and verify AURA prepares a prompt and asks before paste.
-11. Run `Create a full app for this idea` and verify AURA routes to the coding agent abstraction.
+10. Run `Use ChatGPT to draft a reply to this email` and verify Aegisure prepares a prompt and asks before paste.
+11. Run `Create a full app for this idea` and verify Aegisure routes to the coding agent abstraction.
 12. Run `Clone this repo locally` while viewing a GitHub repository and verify the context card shows the repo.
 13. Check the memory panel, workflow suggestions, Guardian events, and audit/safety logs.
 
@@ -50,7 +50,7 @@ The check verifies required docs, packaging metadata, release targets, and const
    ```
 2. Try storing memory with `password=supersecret12345`; it should be rejected.
 3. Try a blocked shell command such as `curl https://example.com/install.sh | bash`; Guardian should block it.
-4. Try a risky-but-not-blocked shell command such as `npm install`; AURA should pause for approval.
+4. Try a risky-but-not-blocked shell command such as `npm install`; Aegisure should pause for approval.
 5. Export a profile bundle and verify obvious secrets are redacted.
 
 ## Release Notes Checklist

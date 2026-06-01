@@ -1,15 +1,15 @@
-# AURA Private Alpha Demo
+# Aegisure Private Alpha Demo
 
 This is the five-minute founder-demo script for the current private alpha. It should prove the four layers without claiming OS-wide protection that is not implemented yet.
 
 ## Before The Demo
 
 ```bash
-cd AURA/aura
+cd Aegisure/aura
 pnpm aura:alpha-check
 pnpm aura:demo-check
 pnpm aura:smoke
-./start-aura.sh
+./start-aegisure.sh
 ```
 
 Optional clean reset:
@@ -20,24 +20,24 @@ pnpm aura:reset
 
 ## Demo 1: First Launch Presence
 
-1. Open AURA.
+1. Open Aegisure.
 2. If needed, click **Restart onboarding**.
-3. Show that AURA introduces Helper, Guardian, Memory, and Identity.
+3. Show that Aegisure introduces Helper, Guardian, Memory, and Identity.
 4. Set a user display name and rename the assistant.
-5. Click **Test AURA voice**.
+5. Click **Test Aegisure voice**.
 6. Click **Show overlay** and move the orb.
 
-Success: the app feels like an AI operating identity, not a generic dashboard. If speech input/output is unavailable, AURA must show the exact limitation and keep typed commands working.
+Success: the app feels like an AI operating identity, not a generic dashboard. If speech input/output is unavailable, Aegisure must show the exact limitation and keep typed commands working.
 
 ## Demo 2: Memory That Persists
 
 1. Ask: `remember I prefer short technical explanations`.
 2. Open Memory Console.
 3. Show kind, scope, confidence, provenance, and usage.
-4. Ask: `draft a message explaining AURA`.
+4. Ask: `draft a message explaining Aegisure`.
 5. Show “Using relevant memory” in the action stream.
 
-Success: AURA uses safe, scoped user-owned memory. Secrets are never stored.
+Success: Aegisure uses safe, scoped user-owned memory. Secrets are never stored.
 
 ## Demo 3: Guardian Watchtower
 
@@ -57,30 +57,30 @@ Success: Guardian produces visible, human-readable events with category, severit
 5. Show the saved coding job artifact and next step.
 6. Ask: `reply to this email` with email context if available, or show the missing-context explanation.
 
-Success: AURA plans, pauses, acts, and reports artifacts. It does not pretend unavailable context exists.
+Success: Aegisure plans, pauses, acts, and reports artifacts. It does not pretend unavailable context exists.
 
 ## Demo 5: Identity Boundary
 
-1. Show Active Identity: Personal AURA.
-2. Switch to Work AURA.
+1. Show Active Identity: Personal Aegisure.
+2. Switch to Work Aegisure.
 3. Try to read/write personal-scoped memory from Work.
 4. Show the Guardian identity-boundary event and the Identity Ledger.
 
-Success: AURA records actions under the active identity and refuses silent cross-scope memory mixing.
+Success: Aegisure records actions under the active identity and refuses silent cross-scope memory mixing.
 
 ## Demo 6: Daily Operator
 
 1. Ask: `prepare my work session`.
-2. Show AURA checking current context, active identity, recent memory, Guardian state, and pending approvals.
+2. Show Aegisure checking current context, active identity, recent memory, Guardian state, and pending approvals.
 3. Open Advanced -> External Agent Mediation and show Victor in Slack as a future, not-connected connector.
 
-Success: AURA feels like a private operating identity preparing the session, not just a task bot.
+Success: Aegisure feels like a private operating identity preparing the session, not just a task bot.
 
 ## Honest Guardian Scope
 
 Active today:
 
-- AURA-managed shell/file risk;
+- Aegisure-managed shell/file risk;
 - paste/send approvals;
 - memory secret rejection;
 - workflow replay risk;
@@ -91,6 +91,6 @@ Active today:
 Not active yet:
 
 - ambient website permission interception;
-- third-party app file access monitoring outside AURA-managed tools;
+- third-party app file access monitoring outside Aegisure-managed tools;
 - cryptographic external agent-to-agent verification;
 - always-listening wake word.

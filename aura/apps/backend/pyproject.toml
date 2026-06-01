@@ -1,5 +1,5 @@
 [project]
-name = "aura-backend"
+name = "aegisure"
 version = "0.1.0"
 requires-python = ">=3.10"
 dependencies = [
@@ -20,7 +20,7 @@ dependencies = [
 ]
 
 [project.scripts]
-aura = "aura.cli:main"
+aegisure = "aegisure.cli:main"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

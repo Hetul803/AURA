@@ -2,13 +2,13 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from aura.agent_failure_memory import AgentFailureRecord, list_agent_failures, record_agent_failure
-from aura.constitution import scan_repository
-from aura.diff_parser import parse_unified_diff
-from aura.diff_risk import analyze_diff
-from aura.policy_engine import default_policy_yaml, evaluate_policy
-from aura.repair_prompt import generate_repair_prompt
-from aura.second_opinion import heuristic_second_opinion
+from aegisure.agent_failure_memory import AgentFailureRecord, list_agent_failures, record_agent_failure
+from aegisure.constitution import scan_repository
+from aegisure.diff_parser import parse_unified_diff
+from aegisure.diff_risk import analyze_diff
+from aegisure.policy_engine import default_policy_yaml, evaluate_policy
+from aegisure.repair_prompt import generate_repair_prompt
+from aegisure.second_opinion import heuristic_second_opinion
 
 
 RISKY_DIFF = """diff --git a/auth/session.py b/auth/session.py

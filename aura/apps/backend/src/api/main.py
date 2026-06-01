@@ -1,20 +1,23 @@
 from __future__ import annotations
 
 import json
+import os
 import queue
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from api.routes.pivot import router as pivot_router
+from api.security import auth_context_from_header
 
-from aura.assist import capture_structured_context
-from aura.agent_router import get_agent, list_agents, route_agent, workflow_suggestions
-from aura.ambient_adapters import adapter_contracts, classify_ambient_action, create_ambient_routine, get_ambient_routine, list_ambient_routines
-from aura.branding import get_brand, update_brand
-from aura.context_engine import capture_current_context, latest_context_snapshot, list_context_snapshots
-from aura.cost_router import (
+from aegisure.assist import capture_structured_context
+from aegisure.agent_router import get_agent, list_agents, route_agent, workflow_suggestions
+from aegisure.ambient_adapters import adapter_contracts, classify_ambient_action, create_ambient_routine, get_ambient_routine, list_ambient_routines
+from aegisure.branding import get_brand, update_brand
+from aegisure.context_engine import capture_current_context, latest_context_snapshot, list_context_snapshots
+from aegisure.cost_router import (
     list_usage_events,
     model_candidates,
     put_cached_response,
@@ -23,12 +26,12 @@ from aura.cost_router import (
     set_budget,
     usage_summary,
 )
-from aura.guardian import record_human_guardian_event
-from aura.guardian_policy import guardian_policy, update_guardian_policy
-from aura.crypto_identity import identity_attestation, list_identity_keys, sign_identity_payload
-from aura.external_agents import external_agent_status, list_external_agents, upsert_external_agent
-from aura.device_handoff import create_handoff, get_handoff, list_handoffs, update_handoff
-from aura.identity_boundary import (
+from aegisure.guardian import record_human_guardian_event
+from aegisure.guardian_policy import guardian_policy, update_guardian_policy
+from aegisure.crypto_identity import identity_attestation, list_identity_keys, sign_identity_payload
+from aegisure.external_agents import external_agent_status, list_external_agents, upsert_external_agent
+from aegisure.device_handoff import create_handoff, get_handoff, list_handoffs, update_handoff
+from aegisure.identity_boundary import (
     check_boundary,
     create_identity,
     ensure_default_identities,
@@ -40,7 +43,7 @@ from aura.identity_boundary import (
     upsert_boundary_policy,
 )
 from devices.adapters import get_device_adapter, list_device_adapters
-from aura.learning import (
+from aegisure.learning import (
     consolidate_learning,
     list_preference_memory,
     list_reflection_records,
@@ -49,10 +52,10 @@ from aura.learning import (
     list_workflow_memory,
     query_relevant_memory,
 )
-from aura.launch_services import check_for_updates, launch_env_template, launch_status, report_crash
-from aura.macros import list_macros
-from aura.memory import delete_memory, list_memories, update_memory
-from aura.memory_engine import (
+from aegisure.launch_services import check_for_updates, launch_env_template, launch_status, report_crash
+from aegisure.macros import list_macros
+from aegisure.memory import delete_memory, list_memories, update_memory
+from aegisure.memory_engine import (
     archive_memory_item,
     compact_memory_items,
     create_memory_inbox_item,
@@ -69,10 +72,10 @@ from aura.memory_engine import (
     search_memory_items,
     update_memory_item,
 )
-from aura.local_model_setup import local_model_status, pull_model, select_model, start_ollama_server
-from aura.licensing import activate_license, license_status
-from aura.models import available_models
-from aura.mobile_companion import (
+from aegisure.local_model_setup import local_model_status, pull_model, select_model, start_ollama_server
+from aegisure.licensing import activate_license, license_status
+from aegisure.models import available_models
+from aegisure.mobile_companion import (
     create_mobile_approval_card,
     create_pairing_code,
     decide_mobile_handoff,
@@ -82,15 +85,15 @@ from aura.mobile_companion import (
     mobile_status,
     register_mobile_device,
 )
-from aura.orchestrator import approve_run, reject_run, resume_run, retry_assist_run, run_command
-from aura.planner import plan_from_text
-from aura.prefs import get_prefs, reset_all, reset_pref, set_pref
-from aura.proactive import proactive_suggestions_for_context
-from aura.profile_account import ensure_local_profile, get_profile_status, update_profile_status
-from aura.state import cancel_run, db_conn, get_run_context, list_audit_log, list_run_events, list_safety_events, record_run_event, set_panic
-from aura.state import list_guardian_events
-from aura.user_tools import build_user_ai_prompt, get_user_web_tool, list_user_web_tools, privacy_check_for_handoff
-from aura.workflow_engine import (
+from aegisure.orchestrator import approve_run, reject_run, resume_run, retry_assist_run, run_command
+from aegisure.planner import plan_from_text
+from aegisure.prefs import get_prefs, reset_all, reset_pref, set_pref
+from aegisure.proactive import proactive_suggestions_for_context
+from aegisure.profile_account import ensure_local_profile, get_profile_status, update_profile_status
+from aegisure.state import cancel_run, db_conn, get_run_context, list_audit_log, list_run_events, list_safety_events, record_run_event, set_panic
+from aegisure.state import list_guardian_events
+from aegisure.user_tools import build_user_ai_prompt, get_user_web_tool, list_user_web_tools, privacy_check_for_handoff
+from aegisure.workflow_engine import (
     create_workflow,
     create_workflow_version,
     delete_workflow,
@@ -116,7 +119,7 @@ from tools.registry import actions_for_device, get_tool_spec, list_tool_specs
 
 run_migrations()
 encrypt_existing_memory_items()
-app = FastAPI(title='AURA Backend')
+app = FastAPI(title='Aegisure Backend')
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
@@ -128,10 +131,24 @@ app.add_middleware(
     ],
     allow_credentials=False,
     allow_methods=['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
-    allow_headers=['content-type', 'authorization', 'x-aura-workspace', 'x-github-event', 'x-github-delivery', 'x-hub-signature-256'],
+    allow_headers=['content-type', 'authorization', 'x-aura-workspace', 'x-aegisure-workspace', 'x-github-event', 'x-github-delivery', 'x-hub-signature-256'],
 )
 app.include_router(pivot_router)
 EVENTS: dict[str, queue.Queue[str]] = {}
+
+
+@app.middleware('http')
+async def enforce_auth(request: Request, call_next):
+    if request.method == 'OPTIONS' or request.url.path in {'/health', '/github/webhook'}:
+        return await call_next(request)
+    if os.getenv('AEGISURE_LEGACY_COMPAT') == '1':
+        return await call_next(request)
+    try:
+        workspace = request.headers.get('x-aegisure-workspace') or request.headers.get('x-aura-workspace')
+        request.state.auth = auth_context_from_header(request.headers.get('authorization'), workspace)
+    except HTTPException as exc:
+        return JSONResponse({'detail': exc.detail}, status_code=exc.status_code)
+    return await call_next(request)
 
 
 def _emit(run_id: str, e: dict):
@@ -993,7 +1010,7 @@ def workflows_run(workflow_id: str, body: WorkflowRunBody):
         record_human_guardian_event(
             severity='blocked' if preflight.get('blocked') else 'notice',
             title='Guardian stopped workflow replay.' if preflight.get('blocked') else 'Guardian needs more context before workflow replay.',
-            explanation='Workflow replay contains a secret or unsafe input.' if preflight.get('blocked') else 'Workflow replay is missing required context, so AURA will not blindly continue.',
+            explanation='Workflow replay contains a secret or unsafe input.' if preflight.get('blocked') else 'Workflow replay is missing required context, so Aegisure will not blindly continue.',
             action_required='Edit the workflow or remove sensitive input.' if preflight.get('blocked') else 'Open the required app/page, refresh context, then replay again.',
             event_type='workflow_replay_blocked' if preflight.get('blocked') else 'missing_context',
             action='WORKFLOW_REPLAY',
@@ -1159,11 +1176,11 @@ def _ledger_summary(entry: dict) -> str:
     if event_type in {'action_needs_approval', 'approval_required', 'step_needs_confirmation'}:
         return f'Guardian required approval before {action} under {identity_name}.'
     if event_type in {'action_success', 'step_success'}:
-        return f'AURA acted under {identity_name} to complete {action}.'
+        return f'Aegisure acted under {identity_name} to complete {action}.'
     if event_type == 'memory_used':
         count = len(payload.get('memory_used') or payload.get('items') or [])
-        return f'AURA used {count} relevant memor{"y" if count == 1 else "ies"} under {identity_name}.'
-    return f'AURA recorded {event_type or "an event"} under {identity_name}.'
+        return f'Aegisure used {count} relevant memor{"y" if count == 1 else "ies"} under {identity_name}.'
+    return f'Aegisure recorded {event_type or "an event"} under {identity_name}.'
 
 
 @app.get('/identity/ledger')
@@ -1258,8 +1275,8 @@ def guardian_status(run_id: str | None = None, limit: int = 20):
             highest = risk
     return {
         'status': 'protected',
-        'label': 'AURA Guardian',
-        'summary': 'AURA Guardian is active: risky actions are approval-gated, dangerous actions are blocked, and logs are redacted.',
+        'label': 'Aegisure Guardian',
+        'summary': 'Aegisure Guardian is active: risky actions are approval-gated, dangerous actions are blocked, and logs are redacted.',
         'privacy': {
             'local_first': True,
             'secrets_redacted': True,
@@ -1311,7 +1328,7 @@ def guardian_policy_update(body: GuardianPolicyPatch):
 def guardian_coverage():
     return {
         'protected_today': [
-            'AURA commands',
+            'Aegisure commands',
             'memory writes and secret rejection',
             'paste-back and send approvals',
             'shell execution risk',
@@ -1327,7 +1344,7 @@ def guardian_coverage():
             'Slack/agent mediation',
             'phishing and scam detection',
         ],
-        'honest_scope': 'Guardian currently protects AURA-managed actions. Ambient OS-wide protection is planned.',
+        'honest_scope': 'Guardian currently protects Aegisure-managed actions. Ambient OS-wide protection is planned.',
     }
 
 
@@ -1340,7 +1357,7 @@ def storage_stats():
 
     return {
         'profile_dir': str(base),
-        'db_size': (base / 'aura.sqlite3').stat().st_size if (base / 'aura.sqlite3').exists() else 0,
+        'db_size': (base / 'aegisure.sqlite3').stat().st_size if (base / 'aegisure.sqlite3').exists() else 0,
         'artifacts_size': dir_size(base / 'artifacts'),
         'sessions_size': dir_size(base / 'browser_state'),
         'snapshots_size': dir_size(base / 'snapshots'),
@@ -1464,7 +1481,7 @@ def memory_items_create(body: MemoryItemCreate):
         record_human_guardian_event(
             severity='blocked' if secret else 'notice',
             title='Guardian rejected unsafe memory.' if secret else 'Guardian declined this memory.',
-            explanation='This looked like a password, API key, token, or secret, so AURA did not store it.' if secret else 'The memory did not meet AURA privacy or quality rules.',
+            explanation='This looked like a password, API key, token, or secret, so Aegisure did not store it.' if secret else 'The memory did not meet Aegisure privacy or quality rules.',
             action_required='Remove secrets and save only safe preferences, workflow patterns, or non-sensitive facts.',
             event_type='memory_rejected',
             action='MEMORY_WRITE',
@@ -1536,7 +1553,7 @@ def memory_inbox_create(body: MemoryInboxCreate):
         record_human_guardian_event(
             severity='blocked' if 'secret_never_stored' in reasons else 'notice',
             title='Guardian rejected unsafe memory candidate.' if 'secret_never_stored' in reasons else 'Guardian declined this memory candidate.',
-            explanation='This looked like a password, API key, token, or secret, so AURA did not store it.' if 'secret_never_stored' in reasons else 'The memory did not meet AURA privacy or quality rules.',
+            explanation='This looked like a password, API key, token, or secret, so Aegisure did not store it.' if 'secret_never_stored' in reasons else 'The memory did not meet Aegisure privacy or quality rules.',
             action_required='Save only safe preferences, workflow patterns, or non-sensitive facts.',
             event_type='memory_rejected',
             action='MEMORY_INBOX_WRITE',
@@ -1632,7 +1649,7 @@ def profile_export(path: str, approved: bool = False):
         record_human_guardian_event(
             severity='approval_required',
             title='Guardian needs approval before memory export.',
-            explanation='Exporting memory can move private personal, work, or company context outside AURA.',
+            explanation='Exporting memory can move private personal, work, or company context outside Aegisure.',
             action_required='Approve export only after checking the destination path.',
             event_type='approval_required',
             action='PROFILE_EXPORT',
@@ -1652,7 +1669,7 @@ def profile_import(path: str, approved: bool = False):
         record_human_guardian_event(
             severity='approval_required',
             title='Guardian needs approval before memory import.',
-            explanation='Importing memory can merge untrusted or incorrectly scoped data into AURA.',
+            explanation='Importing memory can merge untrusted or incorrectly scoped data into Aegisure.',
             action_required='Approve import only after checking the source file.',
             event_type='approval_required',
             action='PROFILE_IMPORT',

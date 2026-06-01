@@ -14,11 +14,11 @@ need_command() {
   fi
 }
 
-need_command node "Install Node.js 20 LTS or newer, then rerun ./start-aura.sh."
+need_command node "Install Node.js 20 LTS or newer, then rerun ./start-aegisure.sh."
 node - <<'NODE'
 const major = Number(process.versions.node.split('.')[0]);
 if (major < 18) {
-  console.error(`AURA needs Node.js 18+; found ${process.version}. Install Node.js 20 LTS or newer.`);
+  console.error(`Aegisure needs Node.js 18+; found ${process.version}. Install Node.js 20 LTS or newer.`);
   process.exit(2);
 }
 NODE
@@ -53,4 +53,4 @@ echo "==> Installing backend dependencies"
 apps/backend/.venv/bin/python -m pip install --upgrade pip >/dev/null
 apps/backend/.venv/bin/python -m pip install -e apps/backend
 
-echo "AURA developer dependencies are ready."
+echo "Aegisure developer dependencies are ready."

@@ -2,10 +2,10 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from aura.learning import list_workflow_memory
-from aura.orchestrator import approve_assist_run, reject_assist_run, run_command
-from aura.proactive import proactive_suggestions_for_context
-from aura.state import db_conn
+from aegisure.learning import list_workflow_memory
+from aegisure.orchestrator import approve_assist_run, reject_assist_run, run_command
+from aegisure.proactive import proactive_suggestions_for_context
+from aegisure.state import db_conn
 from storage.db import init_db
 
 
@@ -26,7 +26,7 @@ def _clear_tables():
 
 
 def _patch_assist(monkeypatch):
-    from aura import assist
+    from aegisure import assist
 
     monkeypatch.setattr(assist, 'classify_assist_request', lambda text: SimpleNamespace(
         task_kind='reply',

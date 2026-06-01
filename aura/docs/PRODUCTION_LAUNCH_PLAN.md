@@ -10,7 +10,7 @@ Use a two-layer voice stack:
 2. **Speech input:** move away from browser Web Speech. Recommended path:
    - Short term: Apple Speech framework through a native helper for macOS. Best user experience on Mac, but review Apple terms and permission UX.
    - Local/offline path: `whisper.cpp` with a bundled or user-downloaded Whisper model. It is strong for privacy and cross-platform. Check model licenses before bundling. Safer private-alpha posture: download model after user approval.
-   - Avoid cloud-only STT as the default because AURA’s moat is private/local identity.
+   - Avoid cloud-only STT as the default because Aegisure’s moat is private/local identity.
 
 Recommended implementation: native helper service for macOS that exposes push-to-talk transcription over localhost IPC, with Whisper fallback for users who want offline-only mode.
 
@@ -33,7 +33,7 @@ Current state:
 
 - Desktop app verifies Ed25519-signed license tokens.
 - Website has Stripe Checkout, webhook, license issuance, device activation, revocation, and crash-report scaffolding.
-- Private-alpha state is stored in `AURA_WEB_DB_PATH` as a durable JSON store for a small alpha. Replace with Postgres before a broad launch.
+- Private-alpha state is stored in `AEGISURE_WEB_DB_PATH` as a durable JSON store for a small alpha. Replace with Postgres before a broad launch.
 
 Production path:
 
@@ -50,9 +50,9 @@ STRIPE_SECRET_KEY=...
 STRIPE_PRICE_ID=...
 STRIPE_WEBHOOK_SECRET=...
 PUBLIC_BASE_URL=https://your-domain.com
-AURA_VENDOR_PRIVATE_KEY=...
-AURA_VENDOR_PUBLIC_KEY=...
-AURA_ADMIN_TOKEN=...
+AEGISURE_VENDOR_PRIVATE_KEY=...
+AEGISURE_VENDOR_PUBLIC_KEY=...
+AEGISURE_ADMIN_TOKEN=...
 ```
 
 ## 4. Crash Reporting
@@ -78,7 +78,7 @@ Production:
 
 ## 6. OS-Wide Guardian
 
-Current Guardian protects AURA-managed actions. Do not claim OS-wide protection yet.
+Current Guardian protects Aegisure-managed actions. Do not claim OS-wide protection yet.
 
 Native expansion path:
 
@@ -90,7 +90,7 @@ Native expansion path:
 
 The first launchable version should stay honest:
 
-> Guardian protects actions AURA takes or mediates. OS-wide app and website monitoring are future native extensions.
+> Guardian protects actions Aegisure takes or mediates. OS-wide app and website monitoring are future native extensions.
 
 ## 7. Real User Readiness
 

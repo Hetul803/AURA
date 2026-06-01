@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-DMG_PATH="${1:-apps/desktop/release/AURA-1.0.0-mac-arm64.dmg}"
+DMG_PATH="${1:-apps/desktop/release/Aegisure-1.0.0-mac-arm64.dmg}"
 
 if [[ ! -f "$DMG_PATH" ]]; then
   echo "DMG not found: $DMG_PATH"
@@ -18,7 +18,7 @@ Set:
   APPLE_APP_SPECIFIC_PASSWORD
 
 Then run:
-  scripts/notarize-mac.sh apps/desktop/release/AURA-1.0.0-mac-arm64.dmg
+  scripts/notarize-mac.sh apps/desktop/release/Aegisure-1.0.0-mac-arm64.dmg
 
 You also need a valid Developer ID Application certificate available to electron-builder before packaging.
 EOF

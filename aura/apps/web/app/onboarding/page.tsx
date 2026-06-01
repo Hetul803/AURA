@@ -1,12 +1,12 @@
 import { AppShell, Badge, Card, PageHeader } from "../../components/ui";
 
-const steps = ["Sign in with GitHub", "Install AURA GitHub App", "Pick repositories", "Generate first AURA.md", "Enable PR risk checks"];
+const steps = ["Sign in with GitHub", "Install Aegisure GitHub App", "Pick repositories", "Generate first AEGIS.md", "Enable PR risk checks"];
 
 export default function OnboardingPage() {
   return (
     <AppShell>
       <PageHeader eyebrow="Onboarding" title="Connect one repository and generate its Constitution.">
-        AURA starts by learning the project rules that every coding agent must follow.
+        Aegisure starts by learning the project rules that every coding agent must follow.
       </PageHeader>
       <div className="grid gap-4 p-6 md:p-10">
         {steps.map((step, index) => (

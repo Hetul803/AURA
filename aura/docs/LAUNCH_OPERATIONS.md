@@ -1,6 +1,6 @@
 # Launch Operations
 
-This is the operator checklist for giving AURA to the first 10 real private-alpha users.
+This is the operator checklist for giving Aegisure to the first 10 real private-alpha users.
 
 ## 1. Configure Brand
 
@@ -27,10 +27,10 @@ PUBLIC_BASE_URL=https://your-domain.com
 STRIPE_SECRET_KEY=sk_live_...
 STRIPE_PRICE_ID=price_...
 STRIPE_WEBHOOK_SECRET=whsec_...
-AURA_WEB_DB_PATH=/var/lib/aura/private-alpha-store.json
-AURA_VENDOR_PRIVATE_KEY=...
-AURA_VENDOR_PUBLIC_KEY=...
-AURA_ADMIN_TOKEN=...
+AEGISURE_WEB_DB_PATH=/var/lib/aura/private-alpha-store.json
+AEGISURE_VENDOR_PRIVATE_KEY=...
+AEGISURE_VENDOR_PUBLIC_KEY=...
+AEGISURE_ADMIN_TOKEN=...
 ```
 
 Routes:
@@ -48,11 +48,11 @@ For the first 10 users, the durable JSON store is acceptable on one server with 
 
 The website serves real downloads in this order:
 
-1. `AURA_LOCAL_MAC_ARTIFACT` or `AURA_LOCAL_DMG_PATH` if present on the server.
-2. `apps/desktop/release/AURA-1.0.0-mac-arm64.dmg` for local/private testing.
-3. `AURA_DOWNLOAD_MAC_URL` or the URL in `infra/releases/releases.json`.
+1. `AEGISURE_LOCAL_MAC_ARTIFACT` or `AEGISURE_LOCAL_DMG_PATH` if present on the server.
+2. `apps/desktop/release/Aegisure-1.0.0-mac-arm64.dmg` for local/private testing.
+3. `AEGISURE_DOWNLOAD_MAC_URL` or the URL in `infra/releases/releases.json`.
 
-Set `AURA_DOWNLOAD_MAC_URL` to the final hosted notarized DMG before inviting users.
+Set `AEGISURE_DOWNLOAD_MAC_URL` to the final hosted notarized DMG before inviting users.
 
 ## 4. Build Native Speech Helper
 
@@ -84,7 +84,7 @@ pnpm aura:package:prod
 Output:
 
 ```text
-apps/desktop/release/AURA-1.0.0-mac-arm64.dmg
+apps/desktop/release/Aegisure-1.0.0-mac-arm64.dmg
 ```
 
 ## 6. Clean Install Test
@@ -93,16 +93,16 @@ apps/desktop/release/AURA-1.0.0-mac-arm64.dmg
 pnpm aura:clean-mac-qa
 pnpm aura:package
 scripts/clean-mac-qa.sh --reset-local-state
-open apps/desktop/release/AURA-1.0.0-mac-arm64.dmg
+open apps/desktop/release/Aegisure-1.0.0-mac-arm64.dmg
 ```
 
 Expected:
 
-- AURA opens to onboarding.
+- Aegisure opens to onboarding.
 - Voice output test works through macOS `say`.
 - Native push-to-talk either works or gives a precise permission/helper error.
 - Overlay can be shown and accepts commands.
-- License token activates locally and, when `AURA_LICENSE_SERVER_URL` is set, activates the device online.
+- License token activates locally and, when `AEGISURE_LICENSE_SERVER_URL` is set, activates the device online.
 - Guardian blocks dangerous commands and secret memory.
 
 ## 7. Release Gate Commands

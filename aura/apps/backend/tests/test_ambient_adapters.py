@@ -3,8 +3,8 @@ from pathlib import Path
 from fastapi.testclient import TestClient
 
 from api.main import app
-from aura.ambient_adapters import adapter_contracts, classify_ambient_action, create_ambient_routine, list_ambient_routines
-from aura.state import db_conn
+from aegisure.ambient_adapters import adapter_contracts, classify_ambient_action, create_ambient_routine, list_ambient_routines
+from aegisure.state import db_conn
 from storage.db import init_db
 
 client = TestClient(app)
@@ -76,6 +76,6 @@ def test_home_car_doc_exists():
     doc = Path(__file__).resolve().parents[3] / 'docs/HOME_CAR_ADAPTERS.md'
     assert doc.exists()
     text = doc.read_text(encoding='utf-8')
-    assert 'AURA Home' in text
-    assert 'AURA Car' in text
+    assert 'Aegisure Home' in text
+    assert 'Aegisure Car' in text
     assert 'safety-first' in text

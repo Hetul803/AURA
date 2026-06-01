@@ -1,2 +1,2 @@
-"""GitHub App support for AURA's developer-tool pivot."""
+"""GitHub App support for Aegisure's developer-tool pivot."""
 

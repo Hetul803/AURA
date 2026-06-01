@@ -1,6 +1,6 @@
 # Desktop
 
-Electron GUI overlay for AURA with live backend connection state, SSE run timeline, panic stop, and resume UX.
+Electron GUI overlay for Aegisure with live backend connection state, SSE run timeline, panic stop, and resume UX.
 
 ## Run (macOS/Windows)
 1. Start backend+web from repo root:
@@ -14,11 +14,11 @@ Electron GUI overlay for AURA with live backend connection state, SSE run timeli
    pnpm dev
    ```
 
-Desktop auto-connects to `http://localhost:8000` (override with `AURA_BACKEND_URL`).
+Desktop auto-connects to `http://localhost:8000` (override with `AEGISURE_BACKEND_URL`).
 
 ## What to verify in the desktop app
 - Onboarding opens on first run and saves local profile settings.
-- The Current Context card shows what AURA sees.
+- The Current Context card shows what Aegisure sees.
 - The Run panel shows approvals as decision cards, not chat bubbles.
 - The Guardian panel shows protected status, risk explanations, and panic stop.
 - The Memory panel shows scoped memory and compaction.

@@ -1,10 +1,10 @@
-# AURA Known Limitations
+# Aegisure Known Limitations
 
-AURA is ready for serious local private-alpha testing, but it should stay honest.
+Aegisure is ready for serious local private-alpha testing, but it should stay honest.
 
 ## Not Active Yet
 
-- True OS-wide ambient Guardian monitoring outside AURA-managed actions.
+- True OS-wide ambient Guardian monitoring outside Aegisure-managed actions.
 - Browser permission interception for location, camera, microphone, or downloads.
 - External app file-access monitoring for apps such as Cursor, Slack, Chrome, or Finder.
 - Full Slack/Victor enterprise-agent mediation.
@@ -16,7 +16,7 @@ AURA is ready for serious local private-alpha testing, but it should stay honest
 
 ## Active Today
 
-- AURA-managed shell/file/paste/workflow/model/import/export safety.
+- Aegisure-managed shell/file/paste/workflow/model/import/export safety.
 - Guardian event ledger, policy mode, and trust-rule configuration.
 - Local encrypted memory items with inbox, CRUD, search, health, usage, provenance, and scoped identity behavior.
 - Local Ed25519 identity fingerprint and action ledger.

@@ -127,20 +127,20 @@ export default function OnboardingFlow(props: Props) {
     switch (props.onboardingState.currentStep) {
       case 'welcome':
         return <>
-          <h2>Welcome to AURA</h2>
-          <p>AURA helps you capture text from another app, draft something useful with a local model, let you review it, and then paste or copy the result back safely.</p>
+          <h2>Welcome to Aegisure</h2>
+          <p>Aegisure helps you capture text from another app, draft something useful with a local model, let you review it, and then paste or copy the result back safely.</p>
           <p><strong>This build is a Mac-first private alpha.</strong> It is intended for real desktop testing, but it still honestly depends on a local Python runtime, local backend dependencies, and local Ollama for real drafting.</p>
           <ul>
             <li>Use the overlay for quick cross-app help.</li>
             <li>Review before paste so the workflow stays trustworthy.</li>
-            <li>Start with one small success, then let AURA learn your style over time.</li>
+            <li>Start with one small success, then let Aegisure learn your style over time.</li>
             <li>Unsigned builds may require manual Finder/Open approval on macOS.</li>
           </ul>
         </>;
       case 'presence':
         return <>
           <h2>Set up quick invoke</h2>
-          <p>The overlay is the fastest way to use AURA across apps.</p>
+          <p>The overlay is the fastest way to use Aegisure across apps.</p>
           <div><strong>Current hotkey:</strong> {props.presence.hotkey}</div>
           <div><strong>Registration:</strong> <span style={statusPill(props.presence.hotkeyRegistered ? 'ready' : 'needs_attention')}>{props.presence.hotkeyRegistered ? 'Ready' : 'Needs attention'}</span></div>
           {props.presence.hotkeyError && <div role='alert' style={{ marginTop: 8 }}><strong>Issue:</strong> {props.presence.hotkeyError}</div>}
@@ -153,7 +153,7 @@ export default function OnboardingFlow(props: Props) {
       case 'permissions':
         return <>
           <h2>Permissions and trust</h2>
-          <p>AURA needs honest, limited permissions to capture context and optionally paste results back.</p>
+          <p>Aegisure needs honest, limited permissions to capture context and optionally paste results back.</p>
           <ul>
             <li>
               <strong>Automation / Accessibility:</strong> <span style={statusPill('manual_check')}>Manual check</span>
@@ -161,11 +161,11 @@ export default function OnboardingFlow(props: Props) {
             </li>
             <li>
               <strong>Clipboard / Context capture:</strong> <span style={statusPill(captureWorking ? 'ready' : 'manual_check')}>{captureWorking ? 'Working now' : 'Needs verification'}</span>
-              <div>{captureWorking ? 'AURA can currently see capture metadata from your environment.' : 'Select or copy text in another app, then refresh to verify capture is working.'}</div>
+              <div>{captureWorking ? 'Aegisure can currently see capture metadata from your environment.' : 'Select or copy text in another app, then refresh to verify capture is working.'}</div>
             </li>
             <li>
               <strong>Browser context limits:</strong> <span style={statusPill('guidance')}>Guidance</span>
-              <div>Browser title and URL context may be available, but AURA will only claim page-level context when it actually has it.</div>
+              <div>Browser title and URL context may be available, but Aegisure will only claim page-level context when it actually has it.</div>
             </li>
           </ul>
           <button onClick={props.refreshContext}>Refresh context check</button>
@@ -189,7 +189,7 @@ export default function OnboardingFlow(props: Props) {
       case 'preferences':
         return <>
           <h2>Pick a few starter defaults</h2>
-          <p>These only seed AURA’s behavior. It will still adapt from your actual approvals, edits, and usage.</p>
+          <p>These only seed Aegisure’s behavior. It will still adapt from your actual approvals, edits, and usage.</p>
           <div style={{ display: 'grid', gap: 12 }}>
             <label>Usage mode
               <select value={usageMode} onChange={e => setUsageMode(e.target.value as 'assist' | 'guided')}>
@@ -230,7 +230,7 @@ export default function OnboardingFlow(props: Props) {
           <ol>
             <li>Select or copy a short paragraph in another app.</li>
             <li>Come back here and refresh capture.</li>
-            <li>Run a real summary through AURA.</li>
+            <li>Run a real summary through Aegisure.</li>
             <li>Review and approve the draft.</li>
           </ol>
           <div><strong>Capture detected:</strong> {props.capturedContext?.input_text ? 'Yes' : 'Not yet'}</div>
@@ -239,8 +239,8 @@ export default function OnboardingFlow(props: Props) {
             <button onClick={props.refreshContext}>Refresh capture</button>
             <button onClick={startFirstTask} disabled={!backendReady || !modelReady || !props.capturedContext?.input_text}>Start guided summary</button>
           </div>
-          {!backendReady && <p role='alert'>AURA cannot complete the first task until the packaged backend is healthy.</p>}
-          {!modelReady && <p role='alert'>AURA cannot complete a real drafting task until the local model runtime is ready.</p>}
+          {!backendReady && <p role='alert'>Aegisure cannot complete the first task until the packaged backend is healthy.</p>}
+          {!modelReady && <p role='alert'>Aegisure cannot complete a real drafting task until the local model runtime is ready.</p>}
           {props.runId && <div style={{ marginTop: 16 }}>
             <div><strong>Run status:</strong> {props.runStatus}</div>
             {props.draftText && <>
@@ -260,7 +260,7 @@ export default function OnboardingFlow(props: Props) {
         </>;
       case 'complete':
         return <>
-          <h2>You’re ready to use AURA</h2>
+          <h2>You’re ready to use Aegisure</h2>
           <ul>
             <li>Backend: {backendReady ? 'healthy' : 'needs attention'}</li>
             <li>Hotkey: {readiness.hotkeyReady ? 'ready' : 'needs attention'}</li>
@@ -278,7 +278,7 @@ export default function OnboardingFlow(props: Props) {
   return <section style={{ border: '1px solid #cbd5e1', borderRadius: 12, padding: 16, marginBottom: 16, background: '#f8fafc' }}>
     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
       <div>
-        <strong>Getting started with AURA</strong>
+        <strong>Getting started with Aegisure</strong>
         <div style={{ fontSize: 13, color: '#475569' }}>Step {stepIndex + 1} of {STEPS.length}</div>
       </div>
       <button onClick={props.closeOnboarding}>Skip for now</button>

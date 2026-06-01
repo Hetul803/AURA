@@ -7,7 +7,7 @@ export default function ProvenancePage() {
       <div className="p-6 md:p-10">
         <Card>
           <Badge tone="good">Immutable trail</Badge>
-          <p className="mt-3 text-sm leading-6 text-muted-foreground">AURA captures commit trailers and git notes now; GitHub PR provenance lands through webhooks next.</p>
+          <p className="mt-3 text-sm leading-6 text-muted-foreground">Aegisure captures commit trailers and git notes now; GitHub PR provenance lands through webhooks next.</p>
         </Card>
       </div>
     </AppShell>

@@ -18,11 +18,11 @@ function AuraCrashScreen(props: { title: string; detail: string }) {
   return <div className="renderer-crash">
     <section className="renderer-crash-card">
       <div className="crash-orb" />
-      <span>AURA startup repair</span>
+      <span>Aegisure startup repair</span>
       <h1>{props.title}</h1>
       <p>{props.detail}</p>
-      <p>Try reopening AURA. If this persists, rebuild from a clean clone with <code>pnpm aura:package</code>, then open Advanced / Diagnostics and logs.</p>
-      <button onClick={() => window.location.reload()}>Reload AURA</button>
+      <p>Try reopening Aegisure. If this persists, rebuild from a clean clone with <code>pnpm aura:package</code>, then open Advanced / Diagnostics and logs.</p>
+      <button onClick={() => window.location.reload()}>Reload Aegisure</button>
     </section>
   </div>;
 }
@@ -40,7 +40,7 @@ class ErrorBoundary extends React.Component<React.PropsWithChildren, { error: Er
 
   render() {
     if (this.state.error) {
-      return <AuraCrashScreen title="AURA hit a renderer error." detail={this.state.error.message || 'Unknown renderer error.'} />;
+      return <AuraCrashScreen title="Aegisure hit a renderer error." detail={this.state.error.message || 'Unknown renderer error.'} />;
     }
     return this.props.children;
   }
@@ -56,7 +56,7 @@ window.addEventListener('unhandledrejection', (event) => {
 
 const root = document.getElementById('root');
 if (!root) {
-  document.body.innerHTML = '<div class="renderer-crash"><section class="renderer-crash-card"><h1>AURA could not find its root element.</h1><p>Rebuild the desktop package and reopen the app.</p></section></div>';
+  document.body.innerHTML = '<div class="renderer-crash"><section class="renderer-crash-card"><h1>Aegisure could not find its root element.</h1><p>Rebuild the desktop package and reopen the app.</p></section></div>';
 } else {
   createRoot(root).render(
     <React.StrictMode>

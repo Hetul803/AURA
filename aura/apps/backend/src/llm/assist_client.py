@@ -6,7 +6,7 @@ from typing import Literal
 from pydantic import BaseModel, Field, ValidationError
 
 from llm.ollama_client import default_ollama_model, ollama_available, ollama_generate, parse_json_response
-from aura.state import db_conn
+from aegisure.state import db_conn
 
 AssistTaskKind = Literal['summarize', 'reply', 'rewrite', 'explain', 'answer', 'research_and_respond']
 

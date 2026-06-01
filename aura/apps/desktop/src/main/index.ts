@@ -36,7 +36,7 @@ function saveOverlayBounds(win: BrowserWindow) {
     fs.mkdirSync(path.dirname(overlayStatePath()), { recursive: true });
     fs.writeFileSync(overlayStatePath(), JSON.stringify({ x, y, updatedAt: new Date().toISOString() }, null, 2));
   } catch {
-    // Position persistence should never crash AURA.
+    // Position persistence should never crash Aegisure.
   }
 }
 
@@ -166,7 +166,7 @@ app.whenReady().then(() => {
   setHotkeyStatus(registerHotkeys(win));
   tray = createTray(win);
   waitForBackend(12).then((status) => {
-    if (status !== 'Connected') console.warn(`AURA backend startup status: ${status}`);
+    if (status !== 'Connected') console.warn(`Aegisure backend startup status: ${status}`);
   });
 });
 

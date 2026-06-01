@@ -5,7 +5,7 @@ import re
 from pathlib import Path
 from urllib.parse import quote_plus
 
-from aura import observer
+from aegisure import observer
 from tools.browser_runtime import browser_manager
 from tools.tool_result import success, failure
 
@@ -116,7 +116,7 @@ def _real_upload(url: str, selector: str, file_path: str) -> dict:
 
 
 def handle_web_action(step) -> dict:
-    use_fixture = bool(step.args.get('use_fixture')) or os.getenv('AURA_FORCE_FIXTURES') == '1'
+    use_fixture = bool(step.args.get('use_fixture')) or os.getenv('AEGISURE_FORCE_FIXTURES') == '1'
 
     if step.action_type == 'NOOP':
         return success('NOOP', result={'echo': step.args.get('echo') or step.args.get('message')})

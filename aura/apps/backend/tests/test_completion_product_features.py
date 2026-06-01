@@ -3,12 +3,12 @@ import json
 from fastapi.testclient import TestClient
 
 from api.main import app
-from aura.guardian_policy import guardian_policy, update_guardian_policy
-from aura.memory_engine import memory_health, remember_item
-from aura.planner import plan_from_text
-from aura.safety import step_risk
-from aura.state import GUARDIAN_EVENTS, db_conn, list_guardian_events
-from aura.steps import Step
+from aegisure.guardian_policy import guardian_policy, update_guardian_policy
+from aegisure.memory_engine import memory_health, remember_item
+from aegisure.planner import plan_from_text
+from aegisure.safety import step_risk
+from aegisure.state import GUARDIAN_EVENTS, db_conn, list_guardian_events
+from aegisure.steps import Step
 from storage.db import init_db
 
 
@@ -48,7 +48,7 @@ def test_guardian_policy_api_and_coverage():
     assert patched.json()['mode'] == 'strict'
     assert 'github.com' in client.get('/guardian/policy').json()['trusted_domains']
     coverage = client.get('/guardian/coverage').json()
-    assert 'AURA commands' in coverage['protected_today']
+    assert 'Aegisure commands' in coverage['protected_today']
     assert 'true OS-wide monitoring' in coverage['planned']
 
 
@@ -104,7 +104,7 @@ def test_external_agent_mediation_scaffold():
 def test_helper_plans_for_operator_file_app_and_url():
     assert plan_from_text('prepare my work session')['signature'] == 'daily:operator'
     assert plan_from_text('open app Notes')['signature'] == 'open_app:os'
-    assert plan_from_text('open https://github.com/Hetul803/AURA')['signature'] == 'open_url:browser'
-    note = plan_from_text('create note: AURA is ready', context={'workspace_hint': '/tmp/aura'})
+    assert plan_from_text('open https://github.com/Hetul803/Aegisure')['signature'] == 'open_url:browser'
+    note = plan_from_text('create note: Aegisure is ready', context={'workspace_hint': '/tmp/aura'})
     assert note['signature'] == 'file:note'
     assert note['steps'][0].action_type == 'FS_WRITE_TEXT'

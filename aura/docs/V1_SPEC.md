@@ -1,6 +1,6 @@
-# AURA v1 Spec
+# Aegisure v1 Spec
 
-AURA v1 is a desktop-first, local-first AI operating layer. It is not a chatbot. The app should feel like a command center for the user's computer.
+Aegisure v1 is a desktop-first, local-first AI operating layer. It is not a chatbot. The app should feel like a command center for the user's computer.
 
 ## Core Loop
 
@@ -15,11 +15,11 @@ AURA v1 is a desktop-first, local-first AI operating layer. It is not a chatbot.
 
 ## Required Product Surfaces
 
-- Current context card: what AURA can see.
+- Current context card: what Aegisure can see.
 - Command center: launch flows and typed command input.
 - Run timeline: active steps, errors, retries, and status.
 - Approval cards: approve, reject, retry, edit, or resume.
-- AURA Guardian panel: protection status, risk explanations, redacted audit events.
+- Aegisure Guardian panel: protection status, risk explanations, redacted audit events.
 - Memory panel: editable scoped memory, quality, compaction, storage stats.
 - Workflow panel: saved workflows, suggestions, replay, repair/failure history.
 - Cost/model/profile panel: local profile, model/cost metadata, tool registry.

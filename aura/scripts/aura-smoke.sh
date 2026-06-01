@@ -4,7 +4,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 export PROFILE_DIR_OVERRIDE="${PROFILE_DIR_OVERRIDE:-$(mktemp -d /tmp/aura-smoke-profile.XXXXXX)}"
 
-echo "AURA private-alpha smoke"
+echo "Aegisure private-alpha smoke"
 echo "Repo: $ROOT"
 echo "Profile: $PROFILE_DIR_OVERRIDE"
 
@@ -29,4 +29,4 @@ echo "4/5 Desktop build"
 echo "5/5 Electron install verification"
 (cd "$ROOT" && pnpm aura:verify-electron)
 
-echo "AURA smoke passed."
+echo "Aegisure smoke passed."

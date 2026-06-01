@@ -1,8 +1,8 @@
 from fastapi.testclient import TestClient
 
 from api.main import app
-from aura.profile_account import ensure_local_profile, update_profile_status
-from aura.state import db_conn
+from aegisure.profile_account import ensure_local_profile, update_profile_status
+from aegisure.state import db_conn
 from storage.db import init_db
 
 client = TestClient(app)

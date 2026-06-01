@@ -1,8 +1,8 @@
 from fastapi.testclient import TestClient
 
 from api.main import app
-from aura.state import db_conn
-from aura.workflow_engine import (
+from aegisure.state import db_conn
+from aegisure.workflow_engine import (
     create_workflow_version,
     create_workflow,
     delete_workflow,

@@ -9,7 +9,7 @@ export default function MemoryExportPage() {
         {agentExports.map((target) => (
           <Card key={target}>
             <Badge>{target}</Badge>
-            <p className="mt-3 text-sm text-muted-foreground">Generated idempotently from AURA.md so every agent receives the same project rules.</p>
+            <p className="mt-3 text-sm text-muted-foreground">Generated idempotently from AEGIS.md so every agent receives the same project rules.</p>
           </Card>
         ))}
       </div>

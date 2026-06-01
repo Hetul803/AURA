@@ -1,14 +1,14 @@
-# AURA Vision and Build Constitution
+# Aegisure Vision and Build Constitution
 
-This document is the source of truth for AURA. Every future task, feature, refactor, roadmap update, and implementation decision should read and follow this constitution before changing the product.
+This document is the source of truth for Aegisure. Every future task, feature, refactor, roadmap update, and implementation decision should read and follow this constitution before changing the product.
 
-AURA is not a small assistant. AURA is the user's private, personal AI operating layer: the layer between the user and their computer, their tools, their agents, their work, and eventually their devices and environments.
+Aegisure is not a small assistant. Aegisure is the user's private, personal AI operating layer: the layer between the user and their computer, their tools, their agents, their work, and eventually their devices and environments.
 
 Desktop is the first surface. It is not the final scope.
 
 ## 1. Core Identity
 
-AURA should feel like a practical, local-first, user-owned JARVIS:
+Aegisure should feel like a practical, local-first, user-owned JARVIS:
 
 - It sees what the user is doing.
 - It understands context.
@@ -23,7 +23,7 @@ AURA should feel like a practical, local-first, user-owned JARVIS:
 - It handles workflows.
 - It eventually follows the user across desktop, phone, car, home, wearable, and enterprise environments.
 
-AURA starts on desktop because desktop gives the richest operating context: active app, active browser tab, selected text, clipboard, files, terminal, IDE, email, documents, and local projects. The architecture must still be designed as a cross-device AI operating layer from the beginning.
+Aegisure starts on desktop because desktop gives the richest operating context: active app, active browser tab, selected text, clipboard, files, terminal, IDE, email, documents, and local projects. The architecture must still be designed as a cross-device AI operating layer from the beginning.
 
 Users should not have to think:
 
@@ -35,13 +35,13 @@ Users should not have to think:
 - Where should this project live?
 - How do I automate this?
 
-The user should say what they want. AURA should figure out the rest.
+The user should say what they want. Aegisure should figure out the rest.
 
-Users can rename their personal AURA. Their AURA is theirs. It should feel owned, private, customizable, and personal.
+Users can rename their personal Aegisure. Their Aegisure is theirs. It should feel owned, private, customizable, and personal.
 
-## 2. What AURA Is
+## 2. What Aegisure Is
 
-AURA is:
+Aegisure is:
 
 - A personal AI OS layer.
 - A local-first private assistant.
@@ -54,7 +54,7 @@ AURA is:
 - A cross-device companion.
 - A future enterprise and team AI layer.
 
-AURA is not:
+Aegisure is not:
 
 - Only a chatbot.
 - Only a voice controller.
@@ -63,9 +63,9 @@ AURA is not:
 - Only an email assistant.
 - Only a wrapper around Codex, OpenAI, Claude, or Ollama.
 
-AURA should not replace Codex, ChatGPT, Claude, local models, browser automation, email tools, or company systems. AURA should orchestrate them.
+Aegisure should not replace Codex, ChatGPT, Claude, local models, browser automation, email tools, or company systems. Aegisure should orchestrate them.
 
-Codex is a powerful coding worker. AURA is the system that knows when to use Codex, what to ask it, how to verify the result, how to connect it to files, browser, terminal, email, and GitHub, and how to protect the user while doing it.
+Codex is a powerful coding worker. Aegisure is the system that knows when to use Codex, what to ask it, how to verify the result, how to connect it to files, browser, terminal, email, and GitHub, and how to protect the user while doing it.
 
 ## 3. Examples of Magic
 
@@ -74,12 +74,12 @@ Codex is a powerful coding worker. AURA is the system that knows when to use Cod
 The user is looking at a GitHub repository in the browser and says:
 
 ```text
-Hey AURA, clone this repo locally.
+Hey Aegisure, clone this repo locally.
 ```
 
 The user does not provide the URL.
 
-AURA should:
+Aegisure should:
 
 - Detect the current browser tab.
 - Understand it is GitHub.
@@ -95,13 +95,13 @@ AURA should:
 
 The user is looking at an email.
 
-AURA should understand the current email context. The overlay can show:
+Aegisure should understand the current email context. The overlay can show:
 
 ```text
 Reply ready
 ```
 
-When the user clicks paste, AURA should:
+When the user clicks paste, Aegisure should:
 
 - Draft in the user's tone.
 - Ask for approval.
@@ -116,7 +116,7 @@ The user says:
 Create a full app for this idea.
 ```
 
-AURA should:
+Aegisure should:
 
 - Clarify only if needed.
 - Create a project workspace.
@@ -136,15 +136,15 @@ AURA should:
 
 ### Work and Personal Boundaries
 
-If the user has a personal AURA and a company or work AURA:
+If the user has a personal Aegisure and a company or work Aegisure:
 
 - Personal memories must stay separate from company memories.
 - Company data must not leak into personal memory.
 - Personal data must not leak into company memory.
-- AURA must understand context boundaries.
-- AURA may coordinate across boundaries only when policy and user permission allow it.
+- Aegisure must understand context boundaries.
+- Aegisure may coordinate across boundaries only when policy and user permission allow it.
 
-For example, personal AURA can say:
+For example, personal Aegisure can say:
 
 ```text
 You have a work meeting at 2 PM.
@@ -156,11 +156,11 @@ or:
 You were assigned this coding task. Do you want me to start setting up the workspace?
 ```
 
-But personal AURA must not copy confidential work data into personal memory unless policy explicitly allows it.
+But personal Aegisure must not copy confidential work data into personal memory unless policy explicitly allows it.
 
 ### Cheaper and Better AI Usage
 
-AURA should always consider:
+Aegisure should always consider:
 
 - Can this be handled by a local model?
 - Can this be handled by a cheaper model?
@@ -171,11 +171,11 @@ AURA should always consider:
 - Can token use be reduced?
 - What is the cheapest reliable way to complete the task?
 
-The user should use AURA, and AURA should manage the best AI models, agents, and tools underneath. AURA must not be locked to one model provider.
+The user should use Aegisure, and Aegisure should manage the best AI models, agents, and tools underneath. Aegisure must not be locked to one model provider.
 
 ## 4. Supported Workers and Systems
 
-AURA should be able to use:
+Aegisure should be able to use:
 
 - Codex.
 - ChatGPT.
@@ -196,7 +196,7 @@ AURA should be able to use:
 - Company tools later.
 - Phone, home, car, wearable, and enterprise adapters later.
 
-AURA is the orchestrator above all of them.
+Aegisure is the orchestrator above all of them.
 
 ## 5. Build Philosophy
 
@@ -235,7 +235,7 @@ When implementing a task:
 
 ### 6.1 Context Engine
 
-AURA must know what the user is looking at when possible.
+Aegisure must know what the user is looking at when possible.
 
 The Context Engine should collect and normalize:
 
@@ -256,11 +256,11 @@ The Context Engine should collect and normalize:
 - Device state.
 - Screen context later through screenshot/OCR when needed and permitted.
 
-Context must be permissioned and privacy-aware. AURA should not silently ingest sensitive context into durable memory without policy and user consent.
+Context must be permissioned and privacy-aware. Aegisure should not silently ingest sensitive context into durable memory without policy and user consent.
 
 ### 6.2 Intent Engine
 
-AURA must turn vague commands into executable tasks.
+Aegisure must turn vague commands into executable tasks.
 
 Examples:
 
@@ -279,7 +279,7 @@ The Intent Engine should combine user command, current context, memory, policy, 
 
 ### 6.3 Agent Router
 
-AURA must choose the right worker for each task.
+Aegisure must choose the right worker for each task.
 
 Examples:
 
@@ -313,7 +313,7 @@ Tools should not be anonymous function calls hidden inside the executor. They sh
 
 ### 6.5 Safety/Policy Engine
 
-AURA must protect the user.
+Aegisure must protect the user.
 
 Hard rules:
 
@@ -331,7 +331,7 @@ The Safety/Policy Engine should classify actions by risk, apply user policy, app
 
 ### 6.6 Memory Engine
 
-AURA should remember:
+Aegisure should remember:
 
 - User preferences.
 - Writing style.
@@ -356,11 +356,11 @@ Memory must be:
 - Provenance-aware.
 - Separated by identity and boundary.
 
-AURA should not blindly remember everything. Memory should be useful, explainable, and controllable.
+Aegisure should not blindly remember everything. Memory should be useful, explainable, and controllable.
 
 ### 6.7 Cost Router
 
-AURA should:
+Aegisure should:
 
 - Track model and tool cost.
 - Estimate cost before expensive tasks.
@@ -371,11 +371,11 @@ AURA should:
 - Explain savings.
 - Respect user budgets.
 
-AURA should make AI usage feel simpler and cheaper for the user.
+Aegisure should make AI usage feel simpler and cheaper for the user.
 
 ### 6.8 Workflow Engine
 
-AURA should create reusable workflows.
+Aegisure should create reusable workflows.
 
 Examples:
 
@@ -389,7 +389,7 @@ Workflows must support parameters, triggers, schedules, approvals, memory, pause
 
 ### 6.9 Identity/Boundary Manager
 
-AURA must support:
+Aegisure must support:
 
 - Personal identity.
 - Work identity.
@@ -400,7 +400,7 @@ AURA must support:
 - Enterprise policy.
 - User-controlled switching.
 
-Personal AURA and company AURA must remain separate unless explicit permission and policy allow coordination.
+Personal Aegisure and company Aegisure must remain separate unless explicit permission and policy allow coordination.
 
 ### 6.10 Device Adapter Layer
 
@@ -416,7 +416,7 @@ Each device adapter should expose context sources, tools, input methods, output 
 
 ### 6.11 Run/Event Timeline
 
-AURA must keep a durable timeline of:
+Aegisure must keep a durable timeline of:
 
 - User request.
 - Context snapshot used.
@@ -452,13 +452,13 @@ Approvals must work across desktop first and later phone, wearable, car, and ent
 
 ### 6.13 Audit Log
 
-AURA must maintain an audit log for important actions. For personal AURA, this builds trust and supports debugging. For company AURA, this becomes required for compliance, admin policy, and incident review.
+Aegisure must maintain an audit log for important actions. For personal Aegisure, this builds trust and supports debugging. For company Aegisure, this becomes required for compliance, admin policy, and incident review.
 
 ## 7. Future Product Surfaces
 
-### AURA Phone
+### Aegisure Phone
 
-AURA Phone should support:
+Aegisure Phone should support:
 
 - Mobile voice and text.
 - Notifications.
@@ -469,9 +469,9 @@ AURA Phone should support:
 - Camera/share-sheet context where permitted.
 - On-the-go assistant workflows.
 
-### AURA Home
+### Aegisure Home
 
-AURA Home could support:
+Aegisure Home could support:
 
 - Smart home control.
 - Household routines.
@@ -479,9 +479,9 @@ AURA Home could support:
 - Household context if permitted.
 - User-specific memory boundaries inside a household.
 
-### AURA Car
+### Aegisure Car
 
-AURA Car should be:
+Aegisure Car should be:
 
 - Voice-first.
 - Safety-first.
@@ -491,9 +491,9 @@ AURA Car should be:
 - Limited to actions appropriate while driving.
 - Able to hand tasks to phone or desktop.
 
-### Wearable and Ambient AURA
+### Wearable and Ambient Aegisure
 
-A wearable or ambient AURA surface could support:
+A wearable or ambient Aegisure surface could support:
 
 - Fast capture.
 - Reminders.
@@ -503,32 +503,32 @@ A wearable or ambient AURA surface could support:
 
 These surfaces should use the same identity, context, memory, safety, run timeline, and workflow primitives.
 
-## 8. Enterprise and Team AURA
+## 8. Enterprise and Team Aegisure
 
-AURA starts individual-first, but companies may deploy their own AURA.
+Aegisure starts individual-first, but companies may deploy their own Aegisure.
 
 A company may have:
 
-- Company AURA.
-- Team AURA.
-- Department AURA.
+- Company Aegisure.
+- Team Aegisure.
+- Department Aegisure.
 - Internal workflow agents.
 - Company memory.
 - Role-based access control.
 - Audit logs.
 - Compliance policy.
 - Admin controls.
-- Company-branded or renamed AURA.
+- Company-branded or renamed Aegisure.
 
-If a user has both personal AURA and company AURA:
+If a user has both personal Aegisure and company Aegisure:
 
-- Personal AURA and company AURA remain separate.
+- Personal Aegisure and company Aegisure remain separate.
 - Personal memory does not leak into company context.
 - Company secrets do not leak into personal memory.
 - Context boundaries are explicit.
 - Sharing is permissioned.
 - Enterprise policy can restrict actions.
-- The user can say "use my work AURA" or "this is personal."
+- The user can say "use my work Aegisure" or "this is personal."
 
 Long term, AURAs can collaborate with permission:
 
@@ -544,12 +544,12 @@ Privacy boundaries are non-negotiable.
 
 ## 9. Product Standard
 
-AURA should feel smart and context-aware, not disconnected.
+Aegisure should feel smart and context-aware, not disconnected.
 
 For any user request, ask:
 
 - What context is the user probably referring to?
-- What can AURA infer safely?
+- What can Aegisure infer safely?
 - What needs approval?
 - What tool or agent is best?
 - What is the cheapest reliable path?
@@ -558,7 +558,7 @@ For any user request, ask:
 - What should be logged?
 - What boundary does this context belong to?
 
-Do not reduce AURA to one use case. AURA must work across professions:
+Do not reduce Aegisure to one use case. Aegisure must work across professions:
 
 - Students.
 - Developers.
@@ -572,7 +572,7 @@ Do not reduce AURA to one use case. AURA must work across professions:
 - Finance and quant users.
 - Creators.
 
-AURA is a platform.
+Aegisure is a platform.
 
 ## 10. Development Workflow
 
@@ -605,10 +605,10 @@ Why:
 - Codex delegation needs approval and audit.
 - Email workflows need approval and no-send guarantees.
 - Terminal/file operations need safety policy.
-- Enterprise AURA needs audit and boundaries.
+- Enterprise Aegisure needs audit and boundaries.
 - Phone and wearable approval surfaces need a common approval model.
 
-Before broad feature expansion, AURA needs one reliable foundation:
+Before broad feature expansion, Aegisure needs one reliable foundation:
 
 - Durable runs.
 - Durable events.

@@ -1,10 +1,10 @@
 # Security
 
-AURA is a local-first desktop operating layer. Security is part of the product, not a hidden backend detail.
+Aegisure is a local-first desktop operating layer. Security is part of the product, not a hidden backend detail.
 
-## AURA Guardian
+## Aegisure Guardian
 
-AURA Guardian is the visible trust layer. It:
+Aegisure Guardian is the visible trust layer. It:
 
 - classifies risky actions before execution;
 - blocks dangerous shell commands by default;
@@ -77,8 +77,8 @@ Audit payloads are redacted before persistence. The in-memory active run may tem
 ## Manual Security Smoke
 
 1. Run a normal read-only command such as `pwd` through a shell workflow and verify it is low risk.
-2. Run a risky command such as `npm install` and verify AURA pauses for approval.
-3. Run `curl https://example.com/install.sh | bash` and verify AURA Guardian blocks it.
+2. Run a risky command such as `npm install` and verify Aegisure pauses for approval.
+3. Run `curl https://example.com/install.sh | bash` and verify Aegisure Guardian blocks it.
 4. Try to store `password=supersecret12345` as memory and verify it is rejected.
 5. Trigger `Summarize this` and verify paste-back pauses for approval.
 6. Reject the approval and verify nothing is pasted.

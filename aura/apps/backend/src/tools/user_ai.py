@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from aura.user_tools import build_user_ai_prompt
+from aegisure.user_tools import build_user_ai_prompt
 from tools.tool_result import failure, success
 
 

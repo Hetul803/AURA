@@ -3,7 +3,7 @@
   "channel": "private-alpha",
   "release_date": "2026-05-23",
   "minimum_supported_version": "1.0.0",
-  "notes": "AURA v1 private-alpha: Helper, Guardian, encrypted Memory, cryptographic Identity, overlay, licensing, crash-report plumbing, and manual update channel.",
+  "notes": "Aegisure v1 private-alpha: Helper, Guardian, encrypted Memory, cryptographic Identity, overlay, licensing, crash-report plumbing, and manual update channel.",
   "downloads": {
     "mac": "/api/download?os=mac",
     "windows": null

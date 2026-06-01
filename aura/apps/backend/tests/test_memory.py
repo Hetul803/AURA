@@ -1,6 +1,6 @@
 from pathlib import Path
 from datetime import datetime, timedelta
-from aura.memory import write_memory, list_memories, update_memory, delete_memory
+from aegisure.memory import write_memory, list_memories, update_memory, delete_memory
 from storage.profile_paths import profile_dir
 from storage.retention import enforce_retention
 

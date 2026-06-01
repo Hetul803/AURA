@@ -6,7 +6,7 @@ from typing import Any
 
 
 REQUIRED_FILES = [
-    'docs/AURA_VISION_AND_BUILD_CONSTITUTION.md',
+    'docs/AEGISURE_VISION_AND_BUILD_CONSTITUTION.md',
     'docs/PRIVACY.md',
     'docs/SECURITY.md',
     'docs/PACKAGING.md',
@@ -27,12 +27,12 @@ def check_private_alpha_readiness(repo_root: str | Path) -> dict[str, Any]:
     builder = root / 'apps/desktop/electron-builder.yml'
     text = builder.read_text(encoding='utf-8') if builder.exists() else ''
     checks.extend([
-        {'name': 'desktop:product_name', 'ok': 'productName: AURA' in text, 'detail': 'electron-builder productName'},
+        {'name': 'desktop:product_name', 'ok': 'productName: Aegisure' in text, 'detail': 'electron-builder productName'},
         {'name': 'desktop:artifact_name', 'ok': 'artifactName:' in text, 'detail': 'release artifact naming'},
         {'name': 'desktop:targets', 'ok': all(token in text for token in ['nsis', 'dmg', 'AppImage']), 'detail': 'windows/mac/linux targets declared'},
     ])
 
-    docs = (root / 'docs/AURA_VISION_AND_BUILD_CONSTITUTION.md').read_text(encoding='utf-8') if (root / 'docs/AURA_VISION_AND_BUILD_CONSTITUTION.md').exists() else ''
+    docs = (root / 'docs/AEGISURE_VISION_AND_BUILD_CONSTITUTION.md').read_text(encoding='utf-8') if (root / 'docs/AEGISURE_VISION_AND_BUILD_CONSTITUTION.md').exists() else ''
     checks.extend([
         {'name': 'constitution:local_first', 'ok': 'local-first' in docs.lower(), 'detail': 'local-first standard present'},
         {'name': 'constitution:approval_system', 'ok': 'Approval System' in docs, 'detail': 'approval primitive documented'},

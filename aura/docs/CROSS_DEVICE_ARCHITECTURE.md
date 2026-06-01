@@ -1,6 +1,6 @@
 # Cross-Device Architecture
 
-AURA starts on desktop, but desktop is only the first surface. Phone, home, car, wearable, and enterprise deployments must plug into the same platform primitives: identity, context, tools, policy, approvals, memory, audit, cost, workflows, and run timelines.
+Aegisure starts on desktop, but desktop is only the first surface. Phone, home, car, wearable, and enterprise deployments must plug into the same platform primitives: identity, context, tools, policy, approvals, memory, audit, cost, workflows, and run timelines.
 
 ## Core Contract
 
@@ -72,7 +72,7 @@ The first mobile companion should support:
 
 ## Car and Home Constraints
 
-AURA Car:
+Aegisure Car:
 
 - Voice-first.
 - Minimal visual complexity.
@@ -80,7 +80,7 @@ AURA Car:
 - Defer complex actions to phone/desktop.
 - Message sending still requires explicit confirmation.
 
-AURA Home:
+Aegisure Home:
 
 - Household routines.
 - Smart home actions.
@@ -89,11 +89,11 @@ AURA Home:
 
 ## Enterprise Constraints
 
-Enterprise AURA uses the same handoff shape but adds:
+Enterprise Aegisure uses the same handoff shape but adds:
 
 - RBAC.
 - Admin policy.
 - Tenant isolation.
 - Company audit requirements.
 - Separate company-owned memory.
-- Permissioned collaboration with personal AURA.
+- Permissioned collaboration with personal Aegisure.

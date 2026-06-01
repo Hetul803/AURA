@@ -2,12 +2,12 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from aura.assist import classify_assist_task
-from aura.learning import list_reflection_records
-from aura.orchestrator import approve_assist_run, reject_assist_run, retry_assist_run, run_command
-from aura.planner import plan_from_text
-from aura.prefs import get_pref_value, reset_all
-from aura.state import db_conn
+from aegisure.assist import classify_assist_task
+from aegisure.learning import list_reflection_records
+from aegisure.orchestrator import approve_assist_run, reject_assist_run, retry_assist_run, run_command
+from aegisure.planner import plan_from_text
+from aegisure.prefs import get_pref_value, reset_all
+from aegisure.state import db_conn
 from storage.db import init_db
 from tools.os_automation import capture_context as os_capture_context
 from tools.os_automation import copy_selected_text, restore_target_and_paste
@@ -48,7 +48,7 @@ def _intent(task_kind: str, *, needs_research: bool = False, confidence: float =
 
 
 def _patch_assist(monkeypatch, *, task_kind='summarize', input_text='Original source text. It has two useful details.', search_points=None, paste_result=None):
-    from aura import assist
+    from aegisure import assist
 
     generate_calls = []
     search_calls = []
@@ -193,7 +193,7 @@ def test_selection_copy_preserves_and_restores_clipboard(monkeypatch):
 
 
 def test_planner_produces_richer_assisted_writing_plan(monkeypatch):
-    from aura import assist
+    from aegisure import assist
 
     monkeypatch.setattr(assist, 'classify_assist_request', lambda text: _intent('research_and_respond', needs_research=True, confidence=0.91))
     plan = plan_from_text('Research this and respond')
@@ -218,7 +218,7 @@ def test_drafting_uses_model_backed_provider(monkeypatch):
 
 def test_explicit_failure_if_no_real_model_is_available(monkeypatch):
     _clear_learning_tables()
-    from aura import assist
+    from aegisure import assist
 
     monkeypatch.setattr(assist, 'classify_assist_request', lambda text: _intent('summarize'))
     monkeypatch.setattr(assist, 'capture_context', lambda: {

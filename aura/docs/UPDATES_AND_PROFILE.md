@@ -29,7 +29,7 @@ Secrets are redacted before export. Relative export paths are written under the 
 
 ## Import Rules
 
-Imports are local file operations only. AURA blocks:
+Imports are local file operations only. Aegisure blocks:
 
 - path traversal;
 - unknown tables;

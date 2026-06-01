@@ -2,7 +2,7 @@
 
 Home and car support must be safety-first. These adapters are contracts now, not live device integrations.
 
-## AURA Home
+## Aegisure Home
 
 Initial future capabilities:
 
@@ -18,7 +18,7 @@ Hard rules:
 - Household context must respect each person boundary.
 - Guest or family data should not silently enter personal memory.
 
-## AURA Car
+## Aegisure Car
 
 Initial future capabilities:
 

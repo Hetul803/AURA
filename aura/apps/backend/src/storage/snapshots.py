@@ -8,7 +8,7 @@ def create_snapshot() -> str:
     ts = datetime.utcnow().strftime("%Y%m%d%H%M%S")
     dest = base / "snapshots" / ts
     dest.mkdir(parents=True, exist_ok=True)
-    db = base / "aura.sqlite3"
+    db = base / "aegisure.sqlite3"
     if db.exists():
-        shutil.copy2(db, dest / "aura.sqlite3")
+        shutil.copy2(db, dest / "aegisure.sqlite3")
     return ts

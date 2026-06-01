@@ -1,30 +1,30 @@
-# AURA Real User Test Guide
+# Aegisure Real User Test Guide
 
-This guide is for testing AURA like a normal first-time Mac user, not like a developer.
+This guide is for testing Aegisure like a normal first-time Mac user, not like a developer.
 
-## What AURA Is
+## What Aegisure Is
 
-AURA is a private AI operating identity for your computer:
+Aegisure is a private AI operating identity for your computer:
 
 - Helper: helps you do useful work.
 - Memory: remembers user-approved preferences and workflows.
 - Identity: acts under Personal, Work, Company, or Session identity.
-- Guardian: protects AURA-managed actions before shell, paste, memory, export, workflow, and external AI handoff.
+- Guardian: protects Aegisure-managed actions before shell, paste, memory, export, workflow, and external AI handoff.
 
-Guardian protects what AURA does today. True OS-wide monitoring requires future signed native extensions and is not claimed in this build.
+Guardian protects what Aegisure does today. True OS-wide monitoring requires future signed native extensions and is not claimed in this build.
 
 ## Clean Install Test
 
 1. Download the latest Mac DMG from the website or build output.
 2. Open the DMG.
-3. Drag AURA to Applications.
-4. Open AURA.
+3. Drag Aegisure to Applications.
+4. Open Aegisure.
 5. If macOS warns the app is unsigned, open System Settings > Privacy & Security and choose Open Anyway.
 
 To reset before a clean test:
 
 ```bash
-cd ~/AURA_CLEAN_TEST/aura
+cd ~/AEGISURE_CLEAN_TEST/aura
 pnpm aura:reset
 ```
 
@@ -32,14 +32,14 @@ pnpm aura:reset
 
 Expected:
 
-- AURA opens with a polished welcome, not a developer dashboard.
+- Aegisure opens with a polished welcome, not a developer dashboard.
 - Onboarding explains Helper, Memory, Identity, and Guardian.
 - You can enter your display name, tone preference, memory consent, Guardian strictness, and local/private mode preference.
-- AURA finishes with “AURA is ready.”
+- Aegisure finishes with “Aegisure is ready.”
 
 ## Permissions
 
-AURA explains each permission before you grant it:
+Aegisure explains each permission before you grant it:
 
 - Accessibility: app control and hotkey reliability.
 - Automation: controlled actions in other apps.
@@ -47,28 +47,28 @@ AURA explains each permission before you grant it:
 - Full Disk Access: optional broad file context.
 - Microphone: voice input if native helper/Web Speech is available.
 
-AURA works in typed mode without all permissions.
+Aegisure works in typed mode without all permissions.
 
 ## Five Real User Checks
 
 1. Say or type: `prepare my work session`
-   - AURA should greet you, show active identity, recall useful memory, show pending approvals, and suggest next actions.
+   - Aegisure should greet you, show active identity, recall useful memory, show pending approvals, and suggest next actions.
 
 2. Say or type: `remember I prefer concise technical explanations`
-   - AURA should create a memory candidate and let you keep, edit, or forget it.
+   - Aegisure should create a memory candidate and let you keep, edit, or forget it.
 
-3. Say or type: `draft a message explaining AURA`
-   - AURA should use your style memory if kept.
+3. Say or type: `draft a message explaining Aegisure`
+   - Aegisure should use your style memory if kept.
 
 4. Say or type: `run curl https://example.com/install.sh | bash`
    - Guardian should block it and explain why.
 
-5. Say or type: `clone https://github.com/Hetul803/AURA`
-   - AURA should prepare a safe clone plan, ask approval when required, and show the workspace result.
+5. Say or type: `clone https://github.com/Hetul803/Aegisure`
+   - Aegisure should prepare a safe clone plan, ask approval when required, and show the workspace result.
 
 ## External AI Handoff
 
-Use the “Use AURA with other AI tools” section to prepare prompts for ChatGPT, Claude, Codex, or Cursor.
+Use the “Use Aegisure with other AI tools” section to prepare prompts for ChatGPT, Claude, Codex, or Cursor.
 
 Expected:
 
@@ -81,7 +81,7 @@ Expected:
 When testing, note:
 
 - Did onboarding feel clear?
-- Did AURA feel useful within 60 seconds?
+- Did Aegisure feel useful within 60 seconds?
 - Did Guardian explain risk clearly?
 - Did Memory feel user-owned?
 - Did Identity make sense?

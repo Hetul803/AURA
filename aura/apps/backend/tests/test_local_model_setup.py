@@ -1,8 +1,8 @@
 from fastapi.testclient import TestClient
 
 from api.main import app
-from aura import local_model_setup
-from aura.local_model_setup import local_model_status, pull_model, recommend_local_model, select_model, start_ollama_server
+from aegisure import local_model_setup
+from aegisure.local_model_setup import local_model_status, pull_model, recommend_local_model, select_model, start_ollama_server
 
 client = TestClient(app)
 

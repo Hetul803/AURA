@@ -26,7 +26,8 @@ describe('pivot dashboard scaffold', () => {
 
   it('landing page names the pivot promise', () => {
     const page = fs.readFileSync(path.join(appRoot, 'page.tsx'), 'utf-8');
-    expect(page).toContain('Trust, memory, and control for AI coding agents');
+    expect(page).toContain('control and audit plane for AI coding agents');
+    expect(page).toContain('See, govern, and remember everything every agent does');
     expect(page).toContain('No card collection');
   });
 });

@@ -32,7 +32,7 @@ function setupFetch(commandResponses: any[], contextOverride?: any, localModelOv
     if (url.includes('/user-tools')) return { ok: true, json: async () => [{ id: 'chatgpt', name: 'ChatGPT', status: 'manual_handoff' }, { id: 'claude', name: 'Claude', status: 'manual_handoff' }, { id: 'codex', name: 'Codex', status: 'manual_handoff' }] } as any;
     if (url.includes('/tools')) return { ok: true, json: async () => [{ action_type: 'OS_PASTE', tool: 'os', risk_level: 'high', requires_approval: true }] } as any;
     if (url.includes('/devices')) return { ok: true, json: async () => [{ adapter_id: 'desktop-local', name: 'Local Desktop', surface: 'desktop', status: 'available' }] } as any;
-    if (url.includes('/memory/search')) return { ok: true, json: async () => [{ memory_id: 'm1', memory_key: 'workspace.preference', value: 'prefers ~/AURA/workspaces', score: 0.8 }] } as any;
+    if (url.includes('/memory/search')) return { ok: true, json: async () => [{ memory_id: 'm1', memory_key: 'workspace.preference', value: 'prefers ~/Aegisure/workspaces', score: 0.8 }] } as any;
     if (url.includes('/memory/items')) return { ok: true, json: async () => [] } as any;
     if (url.includes('/workflows/suggestions')) return { ok: true, json: async () => [{ suggested_workflow_name: 'Clone repo locally', command_template: 'Clone this repo locally', task_type: 'github' }] } as any;
     if (url.includes('/workflows')) return { ok: true, json: async () => [] } as any;
@@ -90,8 +90,8 @@ describe('renderer', () => {
 
   it('ships the one-command start script and root scripts', () => {
     let root = process.cwd();
-    for (let i = 0; i < 6 && !existsSync(join(root, 'start-aura.sh')); i += 1) root = dirname(root);
-    const scriptPath = join(root, 'start-aura.sh');
+    for (let i = 0; i < 6 && !existsSync(join(root, 'start-aegisure.sh')); i += 1) root = dirname(root);
+    const scriptPath = join(root, 'start-aegisure.sh');
     const packagePath = join(root, 'package.json');
     expect(existsSync(scriptPath)).toBe(true);
     expect(statSync(scriptPath).mode & 0o111).toBeGreaterThan(0);
@@ -109,8 +109,8 @@ describe('renderer', () => {
     vi.stubGlobal('EventSource', class { onmessage: any; close() {} } as any);
     render(<App />);
     await waitFor(() => expect(screen.getByText(/AI operating layer/)).toBeTruthy());
-    expect(screen.getAllByText(/AURA Core online/).length).toBeGreaterThan(0);
-    expect(screen.getAllByText(/AURA sees/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Aegisure Core online/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Aegisure sees/).length).toBeGreaterThan(0);
     expect(screen.getByText(/Captured text/)).toBeTruthy();
     expect(screen.getAllByText(/Hotkey needs Accessibility|Hotkey setup/).length).toBeGreaterThan(0);
   });
@@ -120,7 +120,7 @@ describe('renderer', () => {
     setupFetch([{ ok: true, run_id: 'r1' }]);
     vi.stubGlobal('EventSource', class { onmessage: any; close() {} } as any);
     render(<App />);
-    await waitFor(() => expect(screen.getByText(/Welcome to AURA/)).toBeTruthy());
+    await waitFor(() => expect(screen.getByText(/Welcome to Aegisure/)).toBeTruthy());
     expect(screen.getByText(/Your AI is here/)).toBeTruthy();
     expect((window.speechSynthesis.speak as any).mock.calls.length).toBeGreaterThan(0);
     await advanceOnboardingTo(/Local model setup is optional/);
@@ -139,7 +139,7 @@ describe('renderer', () => {
     setupFetch([{ ok: true, run_id: 'r1' }]);
     vi.stubGlobal('EventSource', class { onmessage: any; close() {} } as any);
     const { unmount } = render(<App />);
-    await waitFor(() => expect(screen.getByText(/Welcome to AURA/)).toBeTruthy());
+    await waitFor(() => expect(screen.getByText(/Welcome to Aegisure/)).toBeTruthy());
     expect(screen.queryByText(/Restart onboarding/)).toBeNull();
     unmount();
     cleanup();
@@ -147,7 +147,7 @@ describe('renderer', () => {
     render(<App />);
     await waitFor(() => expect(screen.getByText(/Restart onboarding/)).toBeTruthy());
     fireEvent.click(screen.getByText(/Restart onboarding/));
-    await waitFor(() => expect(screen.getByText(/Welcome to AURA/)).toBeTruthy());
+    await waitFor(() => expect(screen.getByText(/Welcome to Aegisure/)).toBeTruthy());
   });
 
   it('can finish onboarding when hardware or model detection fails', async () => {
@@ -160,7 +160,7 @@ describe('renderer', () => {
     }) as any);
     vi.stubGlobal('EventSource', class { onmessage: any; close() {} } as any);
     render(<App />);
-    await waitFor(() => expect(screen.getByText(/Welcome to AURA/)).toBeTruthy());
+    await waitFor(() => expect(screen.getByText(/Welcome to Aegisure/)).toBeTruthy());
     fireEvent.click(screen.getByText('Enter command layer'));
     await waitFor(() => expect(screen.getByText(/AI operating layer/)).toBeTruthy());
   });
@@ -240,9 +240,9 @@ describe('renderer', () => {
     }) as any);
     vi.stubGlobal('EventSource', class { onmessage: any; close() {} } as any);
     render(<App />);
-    await waitFor(() => expect(screen.getAllByText(/AURA Core disconnected/).length).toBeGreaterThan(0));
+    await waitFor(() => expect(screen.getAllByText(/Aegisure Core disconnected/).length).toBeGreaterThan(0));
     expect(screen.getAllByText(/Repair Backend/).length).toBeGreaterThan(0);
-    expect(screen.getAllByText(/cannot reach AURA Core/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/cannot reach Aegisure Core/).length).toBeGreaterThan(0);
   });
 
   it('renders hotkey active status from desktop bridge', async () => {
@@ -272,8 +272,8 @@ describe('renderer', () => {
       onHotkey: () => () => undefined,
     };
     render(<App />);
-    await waitFor(() => expect(screen.getByText(/Test AURA voice/)).toBeTruthy());
-    fireEvent.click(screen.getByText(/Test AURA voice/));
+    await waitFor(() => expect(screen.getByText(/Test Aegisure voice/)).toBeTruthy());
+    fireEvent.click(screen.getByText(/Test Aegisure voice/));
     await waitFor(() => expect(speakText).toHaveBeenCalled());
     await waitFor(() => expect(screen.getByText(/macos_say/)).toBeTruthy());
   });
@@ -300,7 +300,7 @@ describe('renderer', () => {
     setupFetch([{ ok: true, run_id: 'r1' }]);
     vi.stubGlobal('EventSource', class { onmessage: any; close() {} } as any);
     render(<App />);
-    await waitFor(() => expect(screen.getByText(/Welcome to AURA/)).toBeTruthy());
+    await waitFor(() => expect(screen.getByText(/Welcome to Aegisure/)).toBeTruthy());
     await advanceOnboardingTo(/yours to name/);
     fireEvent.change(screen.getByLabelText('assistant name'), { target: { value: 'Alice' } });
     fireEvent.click(screen.getByText('Save name'));
@@ -337,7 +337,7 @@ describe('renderer', () => {
   it('submits a transcribed push-to-talk command', async () => {
     localStorage.setItem('aura:onboarding-complete', '1');
     setupSpeech();
-    setupFetch([{ ok: true, run_id: 'r1' }], { active_app: 'Arc', browser_url: 'https://github.com/Hetul803/AURA', window_title: 'Hetul803/AURA: GitHub' });
+    setupFetch([{ ok: true, run_id: 'r1' }], { active_app: 'Arc', browser_url: 'https://github.com/Hetul803/Aegisure', window_title: 'Hetul803/Aegisure: GitHub' });
     vi.stubGlobal('EventSource', class { onmessage: any; close() {} } as any);
     class FakeRecognition {
       lang = '';
@@ -392,12 +392,12 @@ describe('renderer', () => {
   it('shows GitHub context actions when URL is supplied', async () => {
     localStorage.setItem('aura:onboarding-complete', '1');
     setupSpeech();
-    setupFetch([{ ok: true, run_id: 'r1' }], { active_app: 'Arc', browser_url: 'https://github.com/Hetul803/AURA', window_title: 'Hetul803/AURA: GitHub' });
+    setupFetch([{ ok: true, run_id: 'r1' }], { active_app: 'Arc', browser_url: 'https://github.com/Hetul803/Aegisure', window_title: 'Hetul803/Aegisure: GitHub' });
     vi.stubGlobal('EventSource', class { onmessage: any; close() {} } as any);
     render(<App />);
     await waitFor(() => expect(screen.getAllByText(/GitHub repo/).length).toBeGreaterThan(0));
-    expect(screen.getByText(/github.com\/Hetul803\/AURA/)).toBeTruthy();
-    expect(screen.getByText(/What AURA can do right now/)).toBeTruthy();
+    expect(screen.getByText(/github.com\/Hetul803\/Aegisure/)).toBeTruthy();
+    expect(screen.getByText(/What Aegisure can do right now/)).toBeTruthy();
     expect(screen.getAllByText(/Clone this repo/).length).toBeGreaterThan(0);
   });
 
@@ -481,9 +481,9 @@ describe('renderer', () => {
     setupFetch([{ ok: true, run_id: 'r1' }]);
     vi.stubGlobal('EventSource', class { onmessage: any; close() {} } as any);
     render(<App />);
-    await waitFor(() => expect(screen.getByText(/What AURA knows about me/)).toBeTruthy());
-    expect(screen.getByText(/Teach AURA a preference/)).toBeTruthy();
-    expect(screen.getByText(/Use AURA with other AI tools/)).toBeTruthy();
+    await waitFor(() => expect(screen.getByText(/What Aegisure knows about me/)).toBeTruthy());
+    expect(screen.getByText(/Teach Aegisure a preference/)).toBeTruthy();
+    expect(screen.getByText(/Use Aegisure with other AI tools/)).toBeTruthy();
     fireEvent.click(screen.getAllByText(/Privacy check/)[0]);
     await waitFor(() => expect(screen.getByText(/Guardian Privacy Check/)).toBeTruthy());
     expect(screen.getByText(/Approval required before handoff/)).toBeTruthy();
@@ -499,7 +499,7 @@ describe('renderer', () => {
     fireEvent.click(screen.getByText(/Advanced \/ Diagnostics/));
     fireEvent.click(screen.getAllByText(/OS Guardian Foundation/)[0]);
     await waitFor(() => expect(screen.getByText(/Honest protection map/)).toBeTruthy());
-    expect(screen.getByText(/AURA-managed actions today/)).toBeTruthy();
+    expect(screen.getByText(/Aegisure-managed actions today/)).toBeTruthy();
     expect(screen.getByText(/Endpoint Security native extension/)).toBeTruthy();
   });
 });

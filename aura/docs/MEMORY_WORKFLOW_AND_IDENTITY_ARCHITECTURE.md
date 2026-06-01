@@ -1,11 +1,11 @@
-# AURA Memory, Workflow, and Identity Architecture
+# Aegisure Memory, Workflow, and Identity Architecture
 
-This document defines the local-first brain layer for AURA. It extends the product constitution with implementation rules for durable memory, reusable workflows, workflow repair, and subscription-ready profile identity.
+This document defines the local-first brain layer for Aegisure. It extends the product constitution with implementation rules for durable memory, reusable workflows, workflow repair, and subscription-ready profile identity.
 
 ## Principles
 
 - Memory is local-first, private by default, editable, exportable, and recoverable.
-- AURA should remember useful patterns, not junk logs.
+- Aegisure should remember useful patterns, not junk logs.
 - Memory should improve behavior through retrieval, reinforcement, compaction, and lifecycle management.
 - Workflows should be versioned products, not untracked command snippets.
 - Identity and subscription data must not break local-only usage.
@@ -32,7 +32,7 @@ Core fields:
 
 ## Memory Quality
 
-AURA rejects low-value memories before storage:
+Aegisure rejects low-value memories before storage:
 
 - empty or trivial values like `ok`, `done`, or `n/a`;
 - unknown memory kinds;
@@ -44,7 +44,7 @@ Duplicate memories are reinforced instead of stored again. Reinforcement increas
 
 ## Memory Lifecycle
 
-AURA memory follows this lifecycle:
+Aegisure memory follows this lifecycle:
 
 1. New memory: passes quality gate, stores provenance.
 2. Reinforcement: duplicate or successful reuse increases confidence/usage.
@@ -132,7 +132,7 @@ Each record captures:
 - whether repair succeeded;
 - whether the workflow template should be updated.
 
-Repeated failures create update suggestions. AURA should propose a revised version while preserving older versions for audit and rollback.
+Repeated failures create update suggestions. Aegisure should propose a revised version while preserving older versions for audit and rollback.
 
 ## Identity and Subscription Readiness
 
@@ -162,7 +162,7 @@ Default state is local-only:
 
 ## User-Owned Cloud Future
 
-AURA must remain portable:
+Aegisure must remain portable:
 
 - memory export bundle includes memories, workflows, versions, repairs, identity hooks, learning records, approvals, and audit logs;
 - encrypted backup bundle should be added before any cloud sync;

@@ -1,8 +1,8 @@
 from fastapi.testclient import TestClient
 
 from api.main import app
-from aura.memory import write_memory
-from aura.memory_engine import (
+from aegisure.memory import write_memory
+from aegisure.memory_engine import (
     compact_memory_items,
     create_memory_inbox_item,
     delete_memory_item,
@@ -16,7 +16,7 @@ from aura.memory_engine import (
     search_memory_items,
     update_memory_item,
 )
-from aura.state import db_conn
+from aegisure.state import db_conn
 from storage.db import init_db
 
 client = TestClient(app)
@@ -157,7 +157,7 @@ def test_memory_compaction_archives_raw_records_and_creates_summary():
 def test_memory_retrieval_ranking_uses_scope_task_usage_and_recency():
     _clear_memory_items()
     weak = remember_item(kind='project', key='repo', value='Old unrelated repo note', scope='work', confidence=0.9)
-    strong = remember_item(kind='project', key='repo', value='AURA github clone workflow repo note', scope='personal', confidence=0.6, tags=['github:clone'], metadata={'task_type': 'github:clone'})
+    strong = remember_item(kind='project', key='repo', value='Aegisure github clone workflow repo note', scope='personal', confidence=0.6, tags=['github:clone'], metadata={'task_type': 'github:clone'})
     reinforce_memory_item(strong['memory_id'], evidence='used_in_clone', confidence_delta=0.05)
 
     ranked = search_memory_items('github clone repo', scope='personal', task_type='github:clone', limit=2)

@@ -8,15 +8,18 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from pydantic import BaseModel
 
 from api.security import AuthContext, require_api_auth
-from aura.agent_memory_export import build_memory_exports
-from aura.attribution import query_attribution_ledger
-from aura.constitution import render_constitution, scan_repository
-from aura.diff_parser import parse_unified_diff
-from aura.diff_risk import analyze_diff
-from aura.policy_engine import default_policy_yaml, evaluate_policy
-from aura.repair_prompt import generate_repair_prompt
-from aura.second_opinion import heuristic_second_opinion
+from aegisure.agent_memory_export import build_memory_exports
+from aegisure.attribution import query_attribution_ledger
+from aegisure.constitution import render_constitution, scan_repository
+from aegisure.diff_parser import parse_unified_diff
+from aegisure.diff_risk import analyze_diff
+from aegisure.policy_engine import default_policy_yaml, evaluate_policy
+from aegisure.repair_prompt import generate_repair_prompt
+from aegisure.second_opinion import heuristic_second_opinion
+from aegisure.llm_provider import LLMProvider, cap_status, store_user_api_key
+from aegisure.state import list_audit_log
 from github.webhooks import WebhookHeaders, WebhookVerificationError, parse_verified_webhook
+from github.pr_flow import process_pull_request_webhook
 
 
 router = APIRouter()
@@ -46,6 +49,15 @@ class SecondOpinionRequest(BaseModel):
 class PolicyEvaluateRequest(BaseModel):
     diff: str
     policy_yaml: str | None = None
+
+
+class AuditChatRequest(BaseModel):
+    question: str
+
+
+class StoreKeyRequest(BaseModel):
+    provider: str
+    api_key: str
 
 
 @router.post("/diffs/analyze")
@@ -97,6 +109,52 @@ async def attribution_endpoint(repo_path: str, agent: str | None = None, auth: A
     return {"workspace_id": auth.workspace_id, "records": query_attribution_ledger(repo_path, agent=agent)}
 
 
+@router.get("/repos")
+async def repos_endpoint(auth: AuthContext = Depends(require_api_auth)):
+    return {"workspace_id": auth.workspace_id, "repos": []}
+
+
+@router.get("/risk-reports")
+async def risk_reports_endpoint(auth: AuthContext = Depends(require_api_auth)):
+    return {"workspace_id": auth.workspace_id, "reports": []}
+
+
+@router.get("/audit")
+async def pivot_audit_endpoint(auth: AuthContext = Depends(require_api_auth)):
+    return {"workspace_id": auth.workspace_id, "events": list_audit_log(limit=100)}
+
+
+@router.get("/settings/llm")
+async def llm_settings_endpoint(auth: AuthContext = Depends(require_api_auth)):
+    return {"workspace_id": auth.workspace_id, "cap_status": cap_status(auth.user_id), "providers": ["anthropic", "openai", "ollama"]}
+
+
+@router.post("/settings/llm-key")
+async def store_llm_key_endpoint(body: StoreKeyRequest, auth: AuthContext = Depends(require_api_auth)):
+    if body.provider not in {"anthropic", "openai"}:
+        raise HTTPException(status_code=400, detail="Only anthropic and openai BYOK keys are stored")
+    return store_user_api_key(user_id=auth.user_id, provider=body.provider, api_key=body.api_key)  # type: ignore[arg-type]
+
+
+@router.post("/audit/chat")
+async def audit_chat_endpoint(body: AuditChatRequest, auth: AuthContext = Depends(require_api_auth)):
+    events = list_audit_log(limit=200)
+    compact = "\n".join(f"- {item.get('event_type')}: {item.get('message')} {item.get('payload')}" for item in events[:30])
+    prompt = (
+        "You are Aegisure's audit analyst. Answer only from the workspace records below. "
+        "If the records do not answer the question, say that plainly.\n\n"
+        f"Question: {body.question}\n\nRecords:\n{compact or 'No audit records found.'}"
+    )
+    response = await LLMProvider("anthropic", user_id=auth.user_id).complete(prompt)
+    if response.status == "completed":
+        answer = response.text
+        source = "llm_grounded"
+    else:
+        answer = f"I found {len(events)} audit events. LLM phrasing is unavailable ({response.reason}), so here is the grounded summary: " + (compact[:1200] or "No audit records found.")
+        source = "deterministic_grounded_fallback"
+    return {"workspace_id": auth.workspace_id, "answer": answer, "source": source, "records_considered": len(events), "cap_status": cap_status(auth.user_id)}
+
+
 @router.post("/github/webhook")
 async def github_webhook(
     request: Request,
@@ -105,7 +163,7 @@ async def github_webhook(
     x_hub_signature_256: str = Header(default=""),
 ):
     raw = await request.body()
-    secret = os.getenv("GITHUB_WEBHOOK_SECRET") or os.getenv("AURA_GITHUB_WEBHOOK_SECRET") or ""
+    secret = os.getenv("GITHUB_WEBHOOK_SECRET") or os.getenv("AEGISURE_GITHUB_WEBHOOK_SECRET") or ""
     try:
         event, duplicate = parse_verified_webhook(
             raw,
@@ -116,4 +174,8 @@ async def github_webhook(
         raise HTTPException(status_code=401, detail=str(exc)) from exc
     except json.JSONDecodeError as exc:
         raise HTTPException(status_code=400, detail="Invalid JSON payload") from exc
-    return {"ok": True, "duplicate": duplicate, "event": event.model_dump()}
+    flow = None
+    if not duplicate:
+        flow_result = await process_pull_request_webhook(event)
+        flow = flow_result.__dict__
+    return {"ok": True, "duplicate": duplicate, "event": event.model_dump(), "flow": flow}

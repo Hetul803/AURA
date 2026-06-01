@@ -4,7 +4,7 @@ from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import pytest
-from aura.steps import Step
+from aegisure.steps import Step
 from tools.web_playwright import handle_web_action
 
 

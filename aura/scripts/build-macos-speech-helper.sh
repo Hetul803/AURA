@@ -18,7 +18,7 @@ swiftc is not installed.
 Install Xcode or Apple Command Line Tools, then rerun:
   scripts/build-macos-speech-helper.sh
 
-AURA will still work with typed commands and macOS speech output.
+Aegisure will still work with typed commands and macOS speech output.
 EOF
   exit 0
 fi

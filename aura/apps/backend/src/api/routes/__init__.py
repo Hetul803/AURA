@@ -1,2 +1,2 @@
-"""Split API routers for the AURA developer-tool pivot."""
+"""Split API routers for the Aegisure developer-tool pivot."""
 

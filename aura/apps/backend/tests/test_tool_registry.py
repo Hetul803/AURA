@@ -1,8 +1,8 @@
 from fastapi.testclient import TestClient
 
 from api.main import app
-from aura.safety import guard_step
-from aura.steps import Step
+from aegisure.safety import guard_step
+from aegisure.steps import Step
 from devices.adapters import get_device_adapter, list_device_adapters
 from tools.registry import actions_for_device, get_tool_spec, requires_tool_approval, risk_for_action
 from tools.tool_router import dispatch_tool_action

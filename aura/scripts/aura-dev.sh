@@ -4,9 +4,9 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
-echo "==> AURA one-command start"
+echo "==> Aegisure one-command start"
 echo "    Working directory: $ROOT"
-echo "    Expected command: cd AURA/aura && ./start-aura.sh"
+echo "    Expected command: cd Aegisure/aura && ./start-aegisure.sh"
 echo
 
 if [[ ! -d node_modules || ! -d apps/desktop/node_modules || ! -x apps/backend/.venv/bin/python ]]; then
@@ -17,7 +17,7 @@ else
   pnpm rebuild electron esbuild >/dev/null
 fi
 
-PORT="${AURA_BACKEND_PORT:-8000}"
+PORT="${AEGISURE_BACKEND_PORT:-8000}"
 BACKEND_URL="http://127.0.0.1:${PORT}"
 BACKEND_PID=""
 
@@ -29,9 +29,9 @@ cleanup() {
 trap cleanup EXIT INT TERM
 
 if curl -fsS "${BACKEND_URL}/health" >/dev/null 2>&1; then
-  echo "==> AURA backend already running at ${BACKEND_URL}"
+  echo "==> Aegisure backend already running at ${BACKEND_URL}"
 else
-  echo "==> Starting AURA backend at ${BACKEND_URL}"
+  echo "==> Starting Aegisure backend at ${BACKEND_URL}"
   apps/backend/.venv/bin/python -m uvicorn api.main:app --app-dir apps/backend/src --host 127.0.0.1 --port "$PORT" &
   BACKEND_PID="$!"
   for _ in {1..40}; do
@@ -53,9 +53,9 @@ if ! curl -fsS "${BACKEND_URL}/health" >/dev/null 2>&1; then
   exit 2
 fi
 
-echo "==> Starting AURA desktop"
+echo "==> Starting Aegisure desktop"
 echo "Backend: ${BACKEND_URL}"
 echo "If Electron fails after a fresh clone, run: pnpm approve-builds --all && pnpm rebuild electron esbuild"
 echo "Quit the desktop app or press Ctrl+C here to stop the dev session."
-export AURA_BACKEND_URL="$BACKEND_URL"
+export AEGISURE_BACKEND_URL="$BACKEND_URL"
 pnpm --filter aura-desktop dev

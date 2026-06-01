@@ -1,7 +1,7 @@
 from fastapi.testclient import TestClient
 
 from api.main import app
-from aura.cost_router import (
+from aegisure.cost_router import (
     get_cached_response,
     list_usage_events,
     model_candidates,
@@ -11,7 +11,7 @@ from aura.cost_router import (
     set_budget,
     usage_summary,
 )
-from aura.state import db_conn
+from aegisure.state import db_conn
 from storage.db import init_db
 
 client = TestClient(app)

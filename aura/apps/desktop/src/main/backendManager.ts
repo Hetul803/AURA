@@ -4,8 +4,8 @@ import fs from 'fs';
 import path from 'path';
 import { findBackendDir } from './backendPaths.js';
 
-const BACKEND = process.env.AURA_BACKEND_URL || 'http://localhost:8000';
-const DEFAULT_PORT = process.env.AURA_BACKEND_PORT || '8000';
+const BACKEND = process.env.AEGISURE_BACKEND_URL || 'http://localhost:8000';
+const DEFAULT_PORT = process.env.AEGISURE_BACKEND_PORT || '8000';
 
 export type BackendStatus = 'Connected' | 'Disconnected' | 'Starting';
 
@@ -17,7 +17,7 @@ function sleep(ms: number) {
 }
 
 function pythonExecutable(): string {
-  return process.env.AURA_BACKEND_PYTHON || process.env.PYTHON || (process.platform === 'win32' ? 'python' : 'python3');
+  return process.env.AEGISURE_BACKEND_PYTHON || process.env.PYTHON || (process.platform === 'win32' ? 'python' : 'python3');
 }
 
 function venvPython() {
@@ -29,17 +29,17 @@ function venvPython() {
 
 function pythonForBackend() {
   const repairedPython = venvPython();
-  if (!process.env.AURA_BACKEND_PYTHON && fs.existsSync(repairedPython)) {
+  if (!process.env.AEGISURE_BACKEND_PYTHON && fs.existsSync(repairedPython)) {
     return repairedPython;
   }
   return pythonExecutable();
 }
 
 function backendCommand(backendDir: string) {
-  if (process.env.AURA_BACKEND_COMMAND) {
+  if (process.env.AEGISURE_BACKEND_COMMAND) {
     return {
-      command: process.env.AURA_BACKEND_COMMAND,
-      args: (process.env.AURA_BACKEND_ARGS || '').split(' ').filter(Boolean),
+      command: process.env.AEGISURE_BACKEND_COMMAND,
+      args: (process.env.AEGISURE_BACKEND_ARGS || '').split(' ').filter(Boolean),
       cwd: backendDir,
     };
   }
@@ -79,14 +79,14 @@ export function stopManagedBackend() {
 export async function ensureBackendStarted(): Promise<BackendStatus> {
   const existing = await checkBackend();
   if (existing === 'Connected') return existing;
-  if (process.env.AURA_BACKEND_URL) return existing;
+  if (process.env.AEGISURE_BACKEND_URL) return existing;
   if (backendProcess) return 'Starting';
 
   const backendDir = findBackendDir({
     cwd: process.cwd(),
     appPath: app.getAppPath(),
     resourcesPath: process.resourcesPath,
-    envBackendDir: process.env.AURA_BACKEND_DIR,
+    envBackendDir: process.env.AEGISURE_BACKEND_DIR,
   });
   if (!backendDir) {
     appendLog(`[backend] unable to locate backend from cwd=${process.cwd()} appPath=${app.getAppPath()} resources=${process.resourcesPath}\n`);
@@ -132,7 +132,7 @@ export async function repairBackendDependencies() {
     cwd: process.cwd(),
     appPath: app.getAppPath(),
     resourcesPath: process.resourcesPath,
-    envBackendDir: process.env.AURA_BACKEND_DIR,
+    envBackendDir: process.env.AEGISURE_BACKEND_DIR,
   });
   if (!backendDir) {
     appendLog('[backend-repair] backend directory not found\n');
@@ -156,7 +156,7 @@ export async function repairBackendDependencies() {
   const installed = await runRepairStep(venvPython(), ['-m', 'pip', 'install', '-r', requirements], backendDir);
   if (!installed.ok) return { ok: false, message: 'Could not install backend dependencies. Open logs for details.' };
   appendLog(`[backend-repair] ready: ${venvPython()}\n`);
-  return { ok: true, message: 'Backend dependencies repaired. Restarting AURA Core.', python: venvPython(), backendDir };
+  return { ok: true, message: 'Backend dependencies repaired. Restarting Aegisure Core.', python: venvPython(), backendDir };
 }
 
 export function backendDiagnostics() {
@@ -164,7 +164,7 @@ export function backendDiagnostics() {
     cwd: process.cwd(),
     appPath: app.getAppPath(),
     resourcesPath: process.resourcesPath,
-    envBackendDir: process.env.AURA_BACKEND_DIR,
+    envBackendDir: process.env.AEGISURE_BACKEND_DIR,
   });
   const cmd = backendDir ? backendCommand(backendDir) : null;
   return {

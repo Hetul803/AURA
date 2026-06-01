@@ -6,7 +6,7 @@ import json
 from dataclasses import dataclass
 
 from storage.db import init_db
-from aura.state import db_conn
+from aegisure.state import db_conn
 
 from .models import GitHubWebhookEvent, webhook_event_from_payload
 

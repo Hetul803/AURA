@@ -1,8 +1,8 @@
 from fastapi.testclient import TestClient
 
 from api.main import app
-from aura.planner import intent_signature, plan_from_text
-from aura.user_tools import build_user_ai_prompt, infer_user_tool, list_user_web_tools, privacy_check_for_handoff
+from aegisure.planner import intent_signature, plan_from_text
+from aegisure.user_tools import build_user_ai_prompt, infer_user_tool, list_user_web_tools, privacy_check_for_handoff
 from tools.user_ai import handle_user_ai_action
 
 client = TestClient(app)

@@ -4,7 +4,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
-DMG="${1:-apps/desktop/release/AURA-1.0.0-mac-$(uname -m | sed 's/aarch64/arm64/;s/x86_64/x64/').dmg}"
+DMG="${1:-apps/desktop/release/Aegisure-1.0.0-mac-$(uname -m | sed 's/aarch64/arm64/;s/x86_64/x64/').dmg}"
 
 ok=0
 warn=0
@@ -13,7 +13,7 @@ pass() { printf '[ok] %s\n' "$1"; ok=$((ok + 1)); }
 note() { printf '[warn] %s\n' "$1"; warn=$((warn + 1)); }
 fail() { printf '[fail] %s\n' "$1"; warn=$((warn + 1)); }
 
-echo "AURA production release checklist"
+echo "Aegisure production release checklist"
 echo "Root: $ROOT"
 echo
 
@@ -51,7 +51,7 @@ else
   note "Set CSC_NAME or CSC_LINK/CSC_KEY_PASSWORD before production signing"
 fi
 
-for key in PUBLIC_BASE_URL STRIPE_SECRET_KEY STRIPE_PRICE_ID STRIPE_WEBHOOK_SECRET AURA_VENDOR_PRIVATE_KEY AURA_VENDOR_PUBLIC_KEY AURA_ADMIN_TOKEN AURA_DOWNLOAD_MAC_URL; do
+for key in PUBLIC_BASE_URL STRIPE_SECRET_KEY STRIPE_PRICE_ID STRIPE_WEBHOOK_SECRET AEGISURE_VENDOR_PRIVATE_KEY AEGISURE_VENDOR_PUBLIC_KEY AEGISURE_ADMIN_TOKEN AEGISURE_DOWNLOAD_MAC_URL; do
   if [[ -n "${!key:-}" ]]; then pass "$key configured"; else note "$key not set"; fi
 done
 
@@ -65,6 +65,6 @@ if (( warn > 0 )); then
 
 Warnings are expected on a development Mac without Apple/Stripe production secrets.
 For real public distribution, clear every warning, build with pnpm aura:package:prod,
-then upload the notarized DMG to the URL configured as AURA_DOWNLOAD_MAC_URL.
+then upload the notarized DMG to the URL configured as AEGISURE_DOWNLOAD_MAC_URL.
 EOF
 fi

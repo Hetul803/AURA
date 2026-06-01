@@ -10,7 +10,7 @@ from api.main import app
 
 
 def test_pivot_api_requires_auth(monkeypatch):
-    monkeypatch.setenv("AURA_API_TOKEN", "dev-token")
+    monkeypatch.setenv("AEGISURE_API_TOKEN", "dev-token")
     client = TestClient(app)
 
     res = client.post("/diffs/analyze", json={"diff": ""})
@@ -18,7 +18,7 @@ def test_pivot_api_requires_auth(monkeypatch):
 
 
 def test_pivot_diff_analyze_authenticated(monkeypatch):
-    monkeypatch.setenv("AURA_API_TOKEN", "dev-token")
+    monkeypatch.setenv("AEGISURE_API_TOKEN", "dev-token")
     client = TestClient(app)
     diff = """diff --git a/app.py b/app.py
 --- a/app.py

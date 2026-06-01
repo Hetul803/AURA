@@ -3,7 +3,7 @@ from pathlib import Path
 from fastapi.testclient import TestClient
 
 from api.main import app
-from aura.mobile_companion import (
+from aegisure.mobile_companion import (
     create_mobile_approval_card,
     create_pairing_code,
     decide_mobile_handoff,
@@ -11,7 +11,7 @@ from aura.mobile_companion import (
     mobile_inbox,
     register_mobile_device,
 )
-from aura.state import db_conn
+from aegisure.state import db_conn
 from storage.db import init_db
 
 client = TestClient(app)
@@ -58,7 +58,7 @@ def test_mobile_api_contracts():
     card = client.post('/mobile/approval-cards', json={
         'run_id': 'run-2',
         'title': 'Approve action',
-        'body': 'Allow AURA to continue?',
+        'body': 'Allow Aegisure to continue?',
         'action': 'continue_run',
     })
     assert card.status_code == 200

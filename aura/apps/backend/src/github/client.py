@@ -31,12 +31,12 @@ class GitHubAppConfig:
 
     @classmethod
     def from_env(cls) -> "GitHubAppConfig":
-        app_id = os.getenv("GITHUB_APP_ID") or os.getenv("AURA_GITHUB_APP_ID") or ""
-        key = os.getenv("GITHUB_APP_PRIVATE_KEY") or os.getenv("AURA_GITHUB_APP_PRIVATE_KEY") or ""
-        key_path = os.getenv("GITHUB_APP_PRIVATE_KEY_PATH") or os.getenv("AURA_GITHUB_APP_PRIVATE_KEY_PATH")
+        app_id = os.getenv("GITHUB_APP_ID") or os.getenv("AEGISURE_GITHUB_APP_ID") or ""
+        key = os.getenv("GITHUB_APP_PRIVATE_KEY") or os.getenv("AEGISURE_GITHUB_APP_PRIVATE_KEY") or ""
+        key_path = os.getenv("GITHUB_APP_PRIVATE_KEY_PATH") or os.getenv("AEGISURE_GITHUB_APP_PRIVATE_KEY_PATH")
         if not key and key_path:
             key = Path(key_path).read_text(encoding="utf-8")
-        secret = os.getenv("GITHUB_WEBHOOK_SECRET") or os.getenv("AURA_GITHUB_WEBHOOK_SECRET") or ""
+        secret = os.getenv("GITHUB_WEBHOOK_SECRET") or os.getenv("AEGISURE_GITHUB_WEBHOOK_SECRET") or ""
         return cls(app_id=app_id, private_key_pem=key.replace("\\n", "\n"), webhook_secret=secret)
 
     def require_ready(self) -> None:
@@ -71,7 +71,7 @@ class GitHubAppClient:
             "Accept": accept,
             "Authorization": f"Bearer {bearer}",
             "X-GitHub-Api-Version": "2022-11-28",
-            "User-Agent": "AURA-Risk-Review",
+            "User-Agent": "Aegisure-Risk-Review",
         }
 
     async def create_installation_token(self, installation_id: int) -> str:
@@ -97,3 +97,23 @@ class GitHubAppClient:
             response = await client.post(f"/repos/{owner}/{repo}/issues/{number}/comments", headers=self._headers(installation_token), json={"body": body})
             response.raise_for_status()
             return response.json()
+
+    async def list_pr_comments(self, *, owner: str, repo: str, number: int, installation_token: str) -> list[dict[str, Any]]:
+        async with httpx.AsyncClient(base_url=self.config.api_base, timeout=20) as client:
+            response = await client.get(f"/repos/{owner}/{repo}/issues/{number}/comments", headers=self._headers(installation_token))
+            response.raise_for_status()
+            return list(response.json())
+
+    async def update_pr_comment(self, *, owner: str, repo: str, comment_id: int, body: str, installation_token: str) -> dict[str, Any]:
+        async with httpx.AsyncClient(base_url=self.config.api_base, timeout=20) as client:
+            response = await client.patch(f"/repos/{owner}/{repo}/issues/comments/{comment_id}", headers=self._headers(installation_token), json={"body": body})
+            response.raise_for_status()
+            return response.json()
+
+    async def get_file_text(self, *, owner: str, repo: str, path: str, ref: str, installation_token: str) -> str | None:
+        async with httpx.AsyncClient(base_url=self.config.api_base, timeout=20) as client:
+            response = await client.get(f"/repos/{owner}/{repo}/contents/{path}", headers=self._headers(installation_token, accept="application/vnd.github.raw"), params={"ref": ref})
+            if response.status_code == 404:
+                return None
+            response.raise_for_status()
+            return response.text

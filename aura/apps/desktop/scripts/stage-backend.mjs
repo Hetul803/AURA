@@ -50,7 +50,7 @@ removeGeneratedPythonFiles(stageRoot);
 fs.writeFileSync(
   path.join(stageRoot, 'PRIVATE_ALPHA_BUNDLE.txt'),
   [
-    'AURA Mac private-alpha backend bundle',
+    'Aegisure Mac private-alpha backend bundle',
     '',
     'This bundle contains the backend source used by the packaged desktop app.',
     'Runtime expectation:',

@@ -1,6 +1,6 @@
 # Packaging
 
-AURA private alpha packaging is desktop-first and local-first.
+Aegisure private alpha packaging is desktop-first and local-first.
 
 ## Targets
 
@@ -32,7 +32,7 @@ On macOS/Linux, run:
 pnpm aura:package
 ```
 
-The macOS build writes DMG artifacts under `apps/desktop/release/`. On Apple Silicon Macs, the expected first-user artifact is `apps/desktop/release/AURA-1.0.0-mac-arm64.dmg`.
+The macOS build writes DMG artifacts under `apps/desktop/release/`. On Apple Silicon Macs, the expected first-user artifact is `apps/desktop/release/Aegisure-1.0.0-mac-arm64.dmg`.
 
 ## Alpha Guarantees
 

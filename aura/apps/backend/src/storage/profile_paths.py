@@ -8,7 +8,7 @@ def profile_dir() -> Path:
     if override:
         base = Path(override)
     elif os.name == "nt":
-        base = Path(os.getenv("APPDATA", str(Path.home()))) / "AURA"
+        base = Path(os.getenv("APPDATA", str(Path.home()))) / "Aegisure"
     else:
         base = Path.home() / ".aura"
     base.mkdir(parents=True, exist_ok=True)

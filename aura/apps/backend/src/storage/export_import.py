@@ -1,7 +1,7 @@
 from __future__ import annotations
 import json
 from pathlib import Path
-from aura.privacy import detect_secret, redact_value
+from aegisure.privacy import detect_secret, redact_value
 from .db import get_conn
 from .profile_paths import profile_dir
 

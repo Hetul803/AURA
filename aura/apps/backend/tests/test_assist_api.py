@@ -5,7 +5,7 @@ from types import SimpleNamespace
 from fastapi.testclient import TestClient
 
 from api.main import app
-from aura.state import db_conn
+from aegisure.state import db_conn
 from storage.db import init_db
 from tools.tool_result import failure, success
 
@@ -29,7 +29,7 @@ def _clear_tables():
 
 
 def _patch_assist(monkeypatch):
-    from aura import assist
+    from aegisure import assist
 
     monkeypatch.setattr(assist, 'classify_assist_request', lambda text: SimpleNamespace(
         task_kind='reply', source_text_present=True, intent_confidence=0.88, needs_research=False,
@@ -117,7 +117,7 @@ def test_approve_retry_and_reject_flow_visible_in_run_state(monkeypatch):
 def test_paste_failure_reason_is_visible_via_run_state(monkeypatch):
     _clear_tables()
     _patch_assist(monkeypatch)
-    from aura import assist
+    from aegisure import assist
 
     monkeypatch.setattr(assist, 'restore_target_and_paste', lambda text, target, strict=False, cautious=False: failure('OS_PASTE', error='paste_target_changed', observation={'failure_class': 'paste_target_changed', 'failure_detail': 'browser_domain_changed', 'target_validation_result': 'drifted', 'target_validation': 'active_app_changed', 'paste_attempted': False, 'paste_blocked_reason': 'target_drift_detected', 'context_drift_reason': 'browser_domain_changed', 'clipboard_restored_after_paste': True, 'strict_validation': strict, 'cautious_validation': cautious, 'target_fingerprint': target}, requires_user=True, retryable=True, result={'pasted': 0}))
 

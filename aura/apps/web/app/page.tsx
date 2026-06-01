@@ -7,9 +7,9 @@ export default function LandingPage() {
     <main className="min-h-screen bg-background text-foreground">
       <section className="mx-auto flex min-h-[82vh] max-w-6xl flex-col justify-center px-6 py-20">
         <Badge tone="good">Private alpha</Badge>
-        <h1 className="mt-6 max-w-5xl text-5xl font-semibold tracking-tight md:text-7xl">Trust, memory, and control for AI coding agents.</h1>
+        <h1 className="mt-6 max-w-5xl text-5xl font-semibold tracking-tight md:text-7xl">Aegisure — the control and audit plane for AI coding agents.</h1>
         <p className="mt-6 max-w-3xl text-lg leading-8 text-muted-foreground">
-          AURA connects to GitHub, builds a project Constitution, analyzes AI-generated diffs, scores risk, exports cross-agent memory, and writes repair prompts that keep Codex, Claude Code, Cursor, Copilot, Cline, and Roo aligned.
+          See, govern, and remember everything every agent does, across vendors. Aegisure watches PRs, scores risky AI-generated diffs, preserves provenance, and gives teams an audit trail across Codex, Claude Code, Cursor, Copilot, Cline, and Roo. Cross-agent memory export is the free on-ramp.
         </p>
         <div className="mt-8 flex flex-wrap gap-3">
           <Link href="/dashboard" className="rounded-md bg-white px-4 py-2 text-sm font-medium text-black">Open dashboard</Link>

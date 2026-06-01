@@ -5,12 +5,12 @@ from pathlib import Path
 
 from typer.testing import CliRunner
 
-from aura.agent_memory_export import EXPORT_TARGETS, build_memory_exports, write_memory_exports
-from aura.attribution import attribution_records, infer_agent, query_attribution_ledger
-from aura.cli import app
-from aura.constitution import scan_repository, write_constitution
-from aura.diff_parser import parse_unified_diff
-from aura.provenance import build_commit_message, parse_provenance_text, read_commit_provenance
+from aegisure.agent_memory_export import EXPORT_TARGETS, build_memory_exports, write_memory_exports
+from aegisure.attribution import attribution_records, infer_agent, query_attribution_ledger
+from aegisure.cli import app
+from aegisure.constitution import scan_repository, write_constitution
+from aegisure.diff_parser import parse_unified_diff
+from aegisure.provenance import build_commit_message, parse_provenance_text, read_commit_provenance
 
 
 def test_cross_agent_memory_exports_are_idempotent(tmp_path: Path):
@@ -31,7 +31,7 @@ def test_export_content_targets_each_agent_style(tmp_path: Path):
     constitution = scan_repository(tmp_path)
     exports = build_memory_exports(constitution)
 
-    assert "AURA_CONSTITUTION_JSON" in exports["AURA.md"]
+    assert "AEGISURE_CONSTITUTION_JSON" in exports["AEGIS.md"]
     assert "Claude Code Memory" in exports["CLAUDE.md"]
     assert "GitHub Copilot Instructions" in exports[".github/copilot-instructions.md"]
 
@@ -55,7 +55,7 @@ def test_attribution_ledger_records_agent_per_file(tmp_path: Path):
 +y = 2
 """
     records = attribution_records(parse_unified_diff(diff), repo="demo", change_id="abc123", agent="codex")
-    from aura.attribution import append_attribution_ledger
+    from aegisure.attribution import append_attribution_ledger
 
     append_attribution_ledger(tmp_path, records)
     rows = query_attribution_ledger(tmp_path, agent="codex")
@@ -68,7 +68,7 @@ def test_attribution_ledger_records_agent_per_file(tmp_path: Path):
 def test_cli_export_and_commit_capture_provenance(tmp_path: Path):
     subprocess.run(["git", "init"], cwd=tmp_path, check=True, capture_output=True)
     subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=tmp_path, check=True)
-    subprocess.run(["git", "config", "user.name", "AURA Test"], cwd=tmp_path, check=True)
+    subprocess.run(["git", "config", "user.name", "Aegisure Test"], cwd=tmp_path, check=True)
     (tmp_path / "README.md").write_text("# Demo\n", encoding="utf-8")
     subprocess.run(["git", "add", "README.md"], cwd=tmp_path, check=True)
     subprocess.run(["git", "commit", "-m", "initial"], cwd=tmp_path, check=True, capture_output=True)

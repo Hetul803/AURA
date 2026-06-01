@@ -3,8 +3,8 @@
 ## Now: Private Alpha Desktop
 
 - Make the desktop app testable end to end.
-- Keep AURA local-first and approval-first.
-- Strengthen AURA Guardian as the visible trust layer.
+- Keep Aegisure local-first and approval-first.
+- Strengthen Aegisure Guardian as the visible trust layer.
 - Make memory useful, scoped, editable, and safe.
 - Make workflow replay safe and explainable.
 - Keep launch flows visible from the command center.

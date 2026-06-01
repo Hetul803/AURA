@@ -21,7 +21,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   return (
     <div className="min-h-screen bg-background text-foreground">
       <aside className="fixed inset-y-0 left-0 hidden w-64 border-r border-white/10 bg-black/40 p-5 lg:block">
-        <Link href="/" className="block text-lg font-semibold tracking-tight">AURA</Link>
+        <Link href="/" className="block text-lg font-semibold tracking-tight">Aegisure</Link>
         <p className="mt-1 text-sm text-muted-foreground">Trust layer for AI coding agents.</p>
         <nav className="mt-8 space-y-1">
           {navItems.map((item) => (

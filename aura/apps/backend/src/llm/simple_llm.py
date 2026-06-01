@@ -35,8 +35,8 @@ def respond(prompt: str) -> str:
         return f'Summary: {_compact(prompt, 420)}'
     if 'explain aura' in lower or 'what is aura' in lower:
         return (
-            'AURA is a private AI operating identity: Helper does the work, Guardian protects risky actions, '
-            'Memory remembers user-owned context, and Identity records which profile AURA acted under.'
+            'Aegisure is a private AI operating identity: Helper does the work, Guardian protects risky actions, '
+            'Memory remembers user-owned context, and Identity records which profile Aegisure acted under.'
         )
     return (
         'I can help with that in local fallback mode. I will keep the action private, check context first, '

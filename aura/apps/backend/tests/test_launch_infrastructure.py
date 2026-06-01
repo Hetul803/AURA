@@ -7,8 +7,8 @@ client = TestClient(app)
 
 
 def test_launch_status_reports_license_update_and_crash_service_configuration(monkeypatch):
-    monkeypatch.setenv('AURA_LICENSE_SERVER_URL', 'https://alpha.example.com')
-    monkeypatch.delenv('AURA_UPDATE_FEED_URL', raising=False)
+    monkeypatch.setenv('AEGISURE_LICENSE_SERVER_URL', 'https://alpha.example.com')
+    monkeypatch.delenv('AEGISURE_UPDATE_FEED_URL', raising=False)
     response = client.get('/launch/status')
     body = response.json()
 
@@ -19,8 +19,8 @@ def test_launch_status_reports_license_update_and_crash_service_configuration(mo
 
 
 def test_update_check_is_honest_when_feed_missing(monkeypatch):
-    monkeypatch.delenv('AURA_LICENSE_SERVER_URL', raising=False)
-    monkeypatch.delenv('AURA_UPDATE_FEED_URL', raising=False)
+    monkeypatch.delenv('AEGISURE_LICENSE_SERVER_URL', raising=False)
+    monkeypatch.delenv('AEGISURE_UPDATE_FEED_URL', raising=False)
     response = client.get('/updates/latest', params={'current_version': '1.0.0'})
     body = response.json()
 
@@ -31,8 +31,8 @@ def test_update_check_is_honest_when_feed_missing(monkeypatch):
 
 
 def test_crash_report_redacts_secrets_and_stays_local_without_server(monkeypatch):
-    monkeypatch.delenv('AURA_LICENSE_SERVER_URL', raising=False)
-    monkeypatch.delenv('AURA_CRASH_REPORT_URL', raising=False)
+    monkeypatch.delenv('AEGISURE_LICENSE_SERVER_URL', raising=False)
+    monkeypatch.delenv('AEGISURE_CRASH_REPORT_URL', raising=False)
     response = client.post('/crash/report', json={
         'source': 'test',
         'message': 'renderer error',
@@ -57,4 +57,4 @@ def test_launch_env_template_documents_replaceable_keys():
     assert response.status_code == 200
     assert body['ok'] is True
     assert 'STRIPE_SECRET_KEY' in body['env']
-    assert 'AURA_LICENSE_SERVER_URL' in body['env']
+    assert 'AEGISURE_LICENSE_SERVER_URL' in body['env']

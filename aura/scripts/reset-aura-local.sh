@@ -2,7 +2,7 @@
 set -euo pipefail
 
 TARGETS=(
-  "/Applications/AURA.app"
+  "/Applications/Aegisure.app"
   "$HOME/Library/Application Support/aura-desktop"
   "$HOME/Library/Logs/aura-desktop"
   "$HOME/.aura"
@@ -23,13 +23,13 @@ for arg in "$@"; do
 done
 
 STAMP="$(date +%Y%m%d-%H%M%S)"
-ARCHIVE_DIR="$HOME/AURA_LOCAL_RESET_ARCHIVE_$STAMP"
+ARCHIVE_DIR="$HOME/AEGISURE_LOCAL_RESET_ARCHIVE_$STAMP"
 
-echo "AURA local reset"
+echo "Aegisure local reset"
 if [[ "$DELETE_MODE" == "1" ]]; then
-  echo "This permanently removes the installed app and local AURA profile/cache/log data."
+  echo "This permanently removes the installed app and local Aegisure profile/cache/log data."
 else
-  echo "This moves the installed app and local AURA profile/cache/log data into:"
+  echo "This moves the installed app and local Aegisure profile/cache/log data into:"
   echo "  $ARCHIVE_DIR"
 fi
 echo
@@ -41,14 +41,14 @@ echo
 
 if [[ "$YES_MODE" != "1" ]]; then
   if [[ "$DELETE_MODE" == "1" ]]; then
-    read -r -p "Type DELETE AURA to permanently delete local AURA state: " CONFIRM
-    if [[ "$CONFIRM" != "DELETE AURA" ]]; then
+    read -r -p "Type DELETE Aegisure to permanently delete local Aegisure state: " CONFIRM
+    if [[ "$CONFIRM" != "DELETE Aegisure" ]]; then
       echo "Reset cancelled."
       exit 0
     fi
   else
-    read -r -p "Type RESET AURA to archive local AURA state: " CONFIRM
-    if [[ "$CONFIRM" != "RESET AURA" ]]; then
+    read -r -p "Type RESET Aegisure to archive local Aegisure state: " CONFIRM
+    if [[ "$CONFIRM" != "RESET Aegisure" ]]; then
       echo "Reset cancelled."
       exit 0
     fi
@@ -92,4 +92,4 @@ if [[ "$DELETE_MODE" != "1" ]]; then
   echo "Archive created: $ARCHIVE_DIR"
 fi
 
-echo "AURA local reset complete."
+echo "Aegisure local reset complete."

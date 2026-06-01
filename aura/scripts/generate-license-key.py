@@ -15,7 +15,7 @@ def b64url(data: bytes) -> str:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description='Generate AURA vendor signing keys or signed private-alpha license tokens.')
+    parser = argparse.ArgumentParser(description='Generate Aegisure vendor signing keys or signed private-alpha license tokens.')
     parser.add_argument('--key-dir', default='license_keys', help='Directory for vendor_private.pem and vendor_public.pem')
     parser.add_argument('--email', help='Account email for a signed license token')
     parser.add_argument('--tier', default='private_alpha')
@@ -55,7 +55,7 @@ def main() -> None:
             'account_email': args.email,
             'tier': args.tier,
             'seats': args.seats,
-            'issuer': 'AURA private-alpha license generator',
+            'issuer': 'Aegisure private-alpha license generator',
             'features': {
                 'helper': True,
                 'guardian': True,

@@ -1,23 +1,23 @@
-# AURA Alpha User Feedback
+# Aegisure Alpha User Feedback
 
 Use this for 10-user private alpha interviews.
 
 ## Setup
 
-Ask the tester to install AURA from the website/DMG and complete onboarding without developer help.
+Ask the tester to install Aegisure from the website/DMG and complete onboarding without developer help.
 
 ## Questions
 
-1. In one sentence, what do you think AURA is?
+1. In one sentence, what do you think Aegisure is?
 2. Did it feel like a personal AI companion or like an app dashboard?
-3. What was the first thing you wanted to ask AURA to do?
+3. What was the first thing you wanted to ask Aegisure to do?
 4. Did “Helper, Memory, Identity, Guardian” make sense?
 5. Did Guardian feel useful or annoying?
 6. Did Memory feel trustworthy?
-7. Would you let AURA remember preferences about you?
-8. Would you use AURA with ChatGPT, Claude, Codex, or Cursor?
+7. Would you let Aegisure remember preferences about you?
+8. Would you use Aegisure with ChatGPT, Claude, Codex, or Cursor?
 9. What permission felt scary or unclear?
-10. What would make you use AURA every morning?
+10. What would make you use Aegisure every morning?
 
 ## Demo Tasks
 
@@ -25,15 +25,15 @@ Ask the tester to try:
 
 - `prepare my work session`
 - `remember I prefer short technical explanations`
-- `draft a message explaining AURA`
+- `draft a message explaining Aegisure`
 - `run curl https://example.com/install.sh | bash`
-- `clone https://github.com/Hetul803/AURA`
+- `clone https://github.com/Hetul803/Aegisure`
 
 ## Success Criteria
 
-AURA is ready for a broader private alpha when most testers can:
+Aegisure is ready for a broader private alpha when most testers can:
 
-- explain AURA without coaching,
+- explain Aegisure without coaching,
 - complete onboarding,
 - understand Guardian’s role,
 - save and reuse one memory,
@@ -50,4 +50,4 @@ AURA is ready for a broader private alpha when most testers can:
 - What happened:
 - What you expected:
 - Screenshot or log path:
-- Did AURA explain how to fix it?
+- Did Aegisure explain how to fix it?

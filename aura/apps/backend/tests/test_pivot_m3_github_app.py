@@ -33,7 +33,7 @@ def test_webhook_signature_verification_and_idempotency(monkeypatch, tmp_path):
     raw = json.dumps({
         "action": "opened",
         "installation": {"id": 44},
-        "repository": {"id": 1, "full_name": "Hetul803/AURA", "name": "AURA", "owner": {"login": "Hetul803"}},
+        "repository": {"id": 1, "full_name": "Hetul803/Aegisure", "name": "Aegisure", "owner": {"login": "Hetul803"}},
         "pull_request": {"id": 9, "number": 3, "title": "Risky PR", "state": "open", "head": {"sha": "abc"}, "base": {"sha": "def"}},
     }).encode("utf-8")
     import hashlib
@@ -49,7 +49,7 @@ def test_webhook_signature_verification_and_idempotency(monkeypatch, tmp_path):
     assert duplicate is False
     assert duplicate_second is True
     assert event.installation_id == 44
-    assert event.repository and event.repository.full_name == "Hetul803/AURA"
+    assert event.repository and event.repository.full_name == "Hetul803/Aegisure"
     assert event.pull_request and event.pull_request.number == 3
 
 

@@ -133,11 +133,11 @@ export function registerIpcHandlers(controls: WindowControls = {}) {
     appVersion: app.getVersion(),
     appPath: app.getAppPath(),
     executablePath: app.getPath('exe'),
-    installedAppPath: process.platform === 'darwin' ? '/Applications/AURA.app' : app.getPath('exe'),
+    installedAppPath: process.platform === 'darwin' ? '/Applications/Aegisure.app' : app.getPath('exe'),
     resourcesPath: process.resourcesPath,
     userDataPath: app.getPath('userData'),
     logsPath: app.getPath('logs'),
-    profilePath: process.env.AURA_PROFILE_DIR || path.join(os.homedir(), '.aura'),
+    profilePath: process.env.AEGISURE_PROFILE_DIR || path.join(os.homedir(), '.aura'),
     packaged: app.isPackaged,
     platform: process.platform,
     backend: backendDiagnostics(),
@@ -152,7 +152,7 @@ export function registerIpcHandlers(controls: WindowControls = {}) {
     fs.mkdirSync(logsPath, { recursive: true });
     const line = JSON.stringify({ at: new Date().toISOString(), source: 'renderer', issue }) + '\n';
     fs.appendFileSync(path.join(logsPath, 'aura-renderer.log'), line);
-    const backendUrl = process.env.AURA_BACKEND_URL || 'http://localhost:8000';
+    const backendUrl = process.env.AEGISURE_BACKEND_URL || 'http://localhost:8000';
     fetch(`${backendUrl}/crash/report`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },

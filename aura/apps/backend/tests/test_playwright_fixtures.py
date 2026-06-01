@@ -1,5 +1,5 @@
 from tools.web_playwright import handle_web_action, parse_search_html, parse_flights_html
-from aura.steps import Step
+from aegisure.steps import Step
 
 
 def test_search_fixture_parses():

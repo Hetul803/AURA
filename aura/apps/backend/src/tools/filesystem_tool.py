@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from aura.privacy import redact_text
+from aegisure.privacy import redact_text
 from tools.tool_result import success, failure
 
 
@@ -60,7 +60,7 @@ def handle_filesystem_action(step) -> dict:
     if action == 'FS_WRITE_TEXT':
         path.parent.mkdir(parents=True, exist_ok=True)
         if path.exists() and not step.args.get('allow_overwrite'):
-            backup = path.with_suffix(path.suffix + '.aura.bak')
+            backup = path.with_suffix(path.suffix + '.aegisure.bak')
             backup.write_text(path.read_text(encoding=step.args.get('encoding', 'utf-8')), encoding=step.args.get('encoding', 'utf-8'))
             observation['backup_path'] = str(backup)
         text = redact_text(step.args.get('text', ''))

@@ -1,10 +1,10 @@
 from fastapi.testclient import TestClient
 
 from api.main import app
-from aura.agent_router import diagnose_breakage, list_agents, route_agent, workflow_suggestions
-from aura.orchestrator import run_command
-from aura.planner import plan_from_text
-from aura.state import db_conn
+from aegisure.agent_router import diagnose_breakage, list_agents, route_agent, workflow_suggestions
+from aegisure.orchestrator import run_command
+from aegisure.planner import plan_from_text
+from aegisure.state import db_conn
 from storage.db import init_db
 from tools.agent_worker import handle_agent_action
 
@@ -19,7 +19,7 @@ def _clear_workflow_memory():
 
 
 def test_agent_registry_and_local_coding_route(monkeypatch):
-    monkeypatch.delenv('AURA_CODEX_ENABLED', raising=False)
+    monkeypatch.delenv('AEGISURE_CODEX_ENABLED', raising=False)
     monkeypatch.delenv('CODEX_HOME', raising=False)
 
     agents = {agent['agent_id']: agent for agent in list_agents()}
@@ -33,7 +33,7 @@ def test_agent_registry_and_local_coding_route(monkeypatch):
 
 
 def test_codex_route_when_configured_for_large_coding_task(monkeypatch):
-    monkeypatch.setenv('AURA_CODEX_ENABLED', '1')
+    monkeypatch.setenv('AEGISURE_CODEX_ENABLED', '1')
 
     route = route_agent(task='build me an app with frontend and backend', task_type='agent:coding', context={'workspace': 'repo'})
 
@@ -57,7 +57,7 @@ def test_diagnose_breakage_identifies_repairable_failure():
 
 
 def test_agent_delegate_tool_returns_prompt(monkeypatch):
-    monkeypatch.delenv('AURA_CODEX_ENABLED', raising=False)
+    monkeypatch.delenv('AEGISURE_CODEX_ENABLED', raising=False)
     monkeypatch.delenv('CODEX_HOME', raising=False)
 
     class Step:
@@ -76,7 +76,7 @@ def test_agent_delegate_tool_returns_prompt(monkeypatch):
 
 
 def test_planner_routes_app_creation_to_agent_delegate(monkeypatch):
-    monkeypatch.delenv('AURA_CODEX_ENABLED', raising=False)
+    monkeypatch.delenv('AEGISURE_CODEX_ENABLED', raising=False)
     monkeypatch.delenv('CODEX_HOME', raising=False)
 
     plan = plan_from_text('Create a full app for this idea', context={'workspace_hint': 'C:/demo'})

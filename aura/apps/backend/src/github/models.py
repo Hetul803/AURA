@@ -41,7 +41,7 @@ class GitHubCommit(BaseModel):
 
 
 class GitHubCheckRun(BaseModel):
-    name: str = "AURA Risk Review"
+    name: str = "Aegisure Risk Review"
     head_sha: str
     status: Literal["queued", "in_progress", "completed"] = "completed"
     conclusion: Literal["success", "neutral", "failure", "cancelled", "skipped", "timed_out", "action_required"] | None = None

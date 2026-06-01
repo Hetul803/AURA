@@ -1,15 +1,15 @@
 # Enterprise and Team Architecture
 
-AURA starts personal, but the platform must support company and team deployments without mixing ownership boundaries.
+Aegisure starts personal, but the platform must support company and team deployments without mixing ownership boundaries.
 
 ## Identity Model
 
-Each AURA context belongs to an identity:
+Each Aegisure context belongs to an identity:
 
-- Personal AURA: user-owned memory, preferences, workflows, and policy.
-- Company AURA: organization-owned memory, workflow agents, audit requirements, and policy.
-- Team AURA: scoped company identity for a team or department.
-- Collaborative AURA: permissioned coordination between identities.
+- Personal Aegisure: user-owned memory, preferences, workflows, and policy.
+- Company Aegisure: organization-owned memory, workflow agents, audit requirements, and policy.
+- Team Aegisure: scoped company identity for a team or department.
+- Collaborative Aegisure: permissioned coordination between identities.
 
 Identities have separate memory scopes and policy scopes. The backend exposes this through identity records and boundary policies.
 
@@ -42,7 +42,7 @@ Default posture is conservative: cross-identity transfers require approval unles
 
 ## Future Enterprise Runtime
 
-Enterprise AURA should add:
+Enterprise Aegisure should add:
 
 - Tenant isolation.
 - RBAC and group mapping.
@@ -55,7 +55,7 @@ Enterprise AURA should add:
 
 ## Personal + Company Coordination
 
-Personal AURA can know that a work task exists without ingesting confidential details. For example:
+Personal Aegisure can know that a work task exists without ingesting confidential details. For example:
 
 ```text
 You have a work meeting at 2 PM.
@@ -64,7 +64,7 @@ You have a work meeting at 2 PM.
 or:
 
 ```text
-You were assigned a coding task. Do you want me to open your work AURA?
+You were assigned a coding task. Do you want me to open your work Aegisure?
 ```
 
 The handoff payload must be explicit and policy-checked.

@@ -17,7 +17,7 @@ if (!productName) {
 
 const companyName = args.company || `${productName} Labs`;
 const appId = args['app-id'] || `com.${companyName.toLowerCase().replace(/[^a-z0-9]+/g, '')}.${productName.toLowerCase().replace(/[^a-z0-9]+/g, '')}`;
-const artifactPrefix = productName.replace(/[^A-Za-z0-9._-]+/g, '-').replace(/^-+|-+$/g, '') || 'AURA';
+const artifactPrefix = productName.replace(/[^A-Za-z0-9._-]+/g, '-').replace(/^-+|-+$/g, '') || 'Aegisure';
 
 const brandPath = path.join(root, 'config', 'brand.json');
 const brand = JSON.parse(fs.readFileSync(brandPath, 'utf8'));

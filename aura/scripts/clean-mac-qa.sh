@@ -9,7 +9,7 @@ if [[ "${1:-}" == "--reset-local-state" ]]; then
   DESTRUCTIVE=1
 fi
 
-echo "AURA clean-Mac QA"
+echo "Aegisure clean-Mac QA"
 echo "Root: $ROOT"
 echo
 
@@ -31,7 +31,7 @@ require_command() {
   fi
 }
 
-require_file start-aura.sh "one-command start script"
+require_file start-aegisure.sh "one-command start script"
 require_file package.json "repo package manifest"
 require_file apps/web/src/server.js "website/download server"
 require_file apps/desktop/electron-builder.yml "desktop package config"
@@ -46,9 +46,9 @@ pnpm aura:alpha-check
 
 echo
 echo "Checking web launch server tests..."
-pnpm --filter aura-web test
+pnpm --filter aegisure-web test
 
-DMG="apps/desktop/release/AURA-1.0.0-mac-$(uname -m | sed 's/aarch64/arm64/;s/x86_64/x64/').dmg"
+DMG="apps/desktop/release/Aegisure-1.0.0-mac-$(uname -m | sed 's/aarch64/arm64/;s/x86_64/x64/').dmg"
 if [[ -f "$DMG" ]]; then
   echo "[ok] DMG already built: $DMG"
 else
@@ -56,15 +56,15 @@ else
 fi
 
 if (( DESTRUCTIVE == 1 )); then
-  ARCHIVE="$HOME/AURA_CLEAN_MAC_QA_ARCHIVE_$(date +%Y%m%d_%H%M%S)"
+  ARCHIVE="$HOME/AEGISURE_CLEAN_MAC_QA_ARCHIVE_$(date +%Y%m%d_%H%M%S)"
   mkdir -p "$ARCHIVE"
   echo
   echo "Archiving local installed/app state to: $ARCHIVE"
-  [[ -d "/Applications/AURA.app" ]] && mv "/Applications/AURA.app" "$ARCHIVE/AURA.app" || true
+  [[ -d "/Applications/Aegisure.app" ]] && mv "/Applications/Aegisure.app" "$ARCHIVE/Aegisure.app" || true
   [[ -d "$HOME/Library/Application Support/aura-desktop" ]] && mv "$HOME/Library/Application Support/aura-desktop" "$ARCHIVE/aura-desktop-support" || true
   [[ -d "$HOME/Library/Logs/aura-desktop" ]] && mv "$HOME/Library/Logs/aura-desktop" "$ARCHIVE/aura-desktop-logs" || true
   [[ -d "$HOME/.aura" ]] && mv "$HOME/.aura" "$ARCHIVE/dot-aura" || true
-  echo "[ok] Local AURA state archived. Open the DMG and test like a new user."
+  echo "[ok] Local Aegisure state archived. Open the DMG and test like a new user."
 else
   cat <<'EOF'
 
@@ -75,7 +75,7 @@ For true clean-Mac QA after confirming your work is pushed, run:
 
 Then:
   pnpm aura:package
-  open apps/desktop/release/AURA-1.0.0-mac-arm64.dmg
+  open apps/desktop/release/Aegisure-1.0.0-mac-arm64.dmg
 
 Expected first-user result:
   - onboarding opens;

@@ -21,7 +21,7 @@ if (fs.existsSync(helper)) {
   fs.writeFileSync(
     path.join(stageRoot, 'README.txt'),
     [
-      'AURA native helper staging area.',
+      'Aegisure native helper staging area.',
       '',
       'AURASpeechHelper was not built.',
       'Run scripts/build-macos-speech-helper.sh before packaging to include native push-to-talk speech recognition.',

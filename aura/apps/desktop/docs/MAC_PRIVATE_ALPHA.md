@@ -1,11 +1,11 @@
-# AURA Mac Private Alpha Install + Test Guide
+# Aegisure Mac Private Alpha Install + Test Guide
 
 This guide is for **private-alpha product testing on macOS**. It is not App Store guidance, and it does not assume code contribution work.
 
 ## What this build includes
 
 - A real Electron packaging path for macOS.
-- A packaged desktop app that bundles the AURA backend source inside the app resources.
+- A packaged desktop app that bundles the Aegisure backend source inside the app resources.
 - Automatic backend start/healthcheck/stop from the desktop app.
 - Honest local-model readiness checks for Ollama-backed drafting.
 
@@ -34,7 +34,7 @@ Install these before first launch:
      ```
    - If you are testing from an installed `.app` without the repo:
      ```bash
-     python3 -m pip install -r "/Applications/AURA.app/Contents/Resources/backend/requirements-private-alpha.txt"
+     python3 -m pip install -r "/Applications/Aegisure.app/Contents/Resources/backend/requirements-private-alpha.txt"
      ```
 3. **Optional browser/research dependency install**
    - Only needed for browser/research flows:
@@ -55,27 +55,27 @@ Install these before first launch:
 From the repo checkout:
 
 ```bash
-cd AURA/aura
+cd Aegisure/aura
 pnpm aura:package
 ```
 
-That produces a macOS DMG at `apps/desktop/release/AURA-1.0.0-mac-arm64.dmg` on Apple Silicon Macs.
+That produces a macOS DMG at `apps/desktop/release/Aegisure-1.0.0-mac-arm64.dmg` on Apple Silicon Macs.
 
 For development launch from a fresh clone:
 
 ```bash
-cd AURA/aura
-./start-aura.sh
+cd Aegisure/aura
+./start-aegisure.sh
 ```
 
-`./start-aura.sh` installs/checks pnpm dependencies, rebuilds Electron/esbuild for pnpm v10, prepares the backend virtual environment, starts the backend, and launches the desktop app.
+`./start-aegisure.sh` installs/checks pnpm dependencies, rebuilds Electron/esbuild for pnpm v10, prepares the backend virtual environment, starts the backend, and launches the desktop app.
 
 ## Output locations
 
 After `pnpm aura:package`:
 
 - Packaged app:
-  - `aura/apps/desktop/release/mac*/AURA.app`
+  - `aura/apps/desktop/release/mac*/Aegisure.app`
 - DMG:
   - `aura/apps/desktop/release/*.dmg`
 - Zip:
@@ -87,12 +87,12 @@ The exact `mac*` folder name depends on the build machine architecture, typicall
 
 ### If you built the DMG
 1. Open the generated `.dmg`.
-2. Drag `AURA.app` into `/Applications`.
+2. Drag `Aegisure.app` into `/Applications`.
 3. Eject the `.dmg`.
-4. Open `AURA.app`.
+4. Open `Aegisure.app`.
 
 ### If macOS blocks the app because it is unsigned
-1. In Finder, right-click `AURA.app`.
+1. In Finder, right-click `Aegisure.app`.
 2. Choose **Open**.
 3. Confirm **Open** again.
 4. If needed, go to **System Settings → Privacy & Security** and allow the blocked app.
@@ -100,8 +100,8 @@ The exact `mac*` folder name depends on the build machine architecture, typicall
 ## What to expect on first launch
 
 1. The desktop app opens the dashboard window.
-2. AURA checks `http://127.0.0.1:8000/health`.
-3. If no backend is already running, AURA attempts to start the bundled backend automatically.
+2. Aegisure checks `http://127.0.0.1:8000/health`.
+3. If no backend is already running, Aegisure attempts to start the bundled backend automatically.
 4. The dashboard should show one of these honest states:
    - backend connected and healthy
    - backend launch failed because Python/dependencies are missing
@@ -111,8 +111,8 @@ The exact `mac*` folder name depends on the build machine architecture, typicall
 
 ## How to verify backend auto-start works
 
-1. Quit any existing AURA backend process.
-2. Open `AURA.app`.
+1. Quit any existing Aegisure backend process.
+2. Open `Aegisure.app`.
 3. Wait a few seconds.
 4. In the app, confirm backend status becomes healthy/connected.
 5. If it fails, confirm the app shows a clear backend failure message.
@@ -141,9 +141,9 @@ The exact `mac*` folder name depends on the build machine architecture, typicall
    ollama list
    ```
 3. Open another app and select or copy a short paragraph.
-4. In AURA, use onboarding or the dashboard and run:
+4. In Aegisure, use onboarding or the dashboard and run:
    - `Summarize this`
-5. Confirm AURA:
+5. Confirm Aegisure:
    - captures context
    - generates a real draft
    - asks for approval

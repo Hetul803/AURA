@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from aura.assist import handle_assist_action
+from aegisure.assist import handle_assist_action
 from tools.agent_worker import handle_agent_action
 from tools.code_runner import handle_code_action
 from tools.filesystem_tool import handle_filesystem_action

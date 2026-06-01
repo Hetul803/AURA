@@ -9,7 +9,7 @@ pass() { printf '✓ %s\n' "$1"; }
 warn() { printf '! %s\n' "$1"; }
 fail() { printf '✗ %s\n' "$1"; exit 1; }
 
-echo "AURA Doctor"
+echo "Aegisure Doctor"
 echo "Repo: $ROOT"
 
 command -v node >/dev/null || fail "Node.js is missing"
@@ -51,14 +51,14 @@ if command -v ollama >/dev/null; then
     warn "Ollama installed but not running. Start the Ollama app or run: ollama serve"
   fi
 else
-  warn "Ollama missing. AURA will use local fallback until Ollama is installed."
+  warn "Ollama missing. Aegisure will use local fallback until Ollama is installed."
 fi
 
-if [[ -f apps/desktop/release/AURA-1.0.0-mac-arm64.dmg ]]; then
-  pass "DMG artifact exists: apps/desktop/release/AURA-1.0.0-mac-arm64.dmg"
+if [[ -f apps/desktop/release/Aegisure-1.0.0-mac-arm64.dmg ]]; then
+  pass "DMG artifact exists: apps/desktop/release/Aegisure-1.0.0-mac-arm64.dmg"
 else
   warn "DMG artifact missing. Build with: pnpm aura:package"
 fi
 
 echo "macOS permissions to verify manually: Accessibility, Automation, Microphone, Screen Recording if using visual context."
-echo "AURA Doctor complete."
+echo "Aegisure Doctor complete."

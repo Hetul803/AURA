@@ -1,7 +1,7 @@
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from aura.planner import plan_from_text
+from aegisure.planner import plan_from_text
 
 
 

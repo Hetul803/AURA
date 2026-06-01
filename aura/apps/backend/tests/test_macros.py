@@ -1,5 +1,5 @@
-from aura.orchestrator import run_command
-from aura.state import db_conn
+from aegisure.orchestrator import run_command
+from aegisure.state import db_conn
 
 
 def test_macro_record_and_replay_suggestion():

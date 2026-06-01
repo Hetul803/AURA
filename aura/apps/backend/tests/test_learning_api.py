@@ -4,7 +4,7 @@ from tempfile import TemporaryDirectory
 from fastapi.testclient import TestClient
 
 from api.main import app
-from aura.state import db_conn
+from aegisure.state import db_conn
 from storage.db import init_db
 
 client = TestClient(app)

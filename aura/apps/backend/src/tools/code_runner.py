@@ -8,8 +8,8 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
-from aura.privacy import redact_text
-from aura.safety import classify_shell_command
+from aegisure.privacy import redact_text
+from aegisure.safety import classify_shell_command
 from tools.tool_result import success, failure
 
 FAILURE_PATTERNS = {

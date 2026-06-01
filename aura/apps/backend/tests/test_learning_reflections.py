@@ -1,11 +1,11 @@
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from aura.learning import consolidate_learning, list_preference_memory, list_safety_memory, list_workflow_memory, list_reflection_records, query_relevant_memory
-from aura.orchestrator import run_command
-from aura.safety import guard_step
-from aura.state import db_conn
-from aura.steps import Step
+from aegisure.learning import consolidate_learning, list_preference_memory, list_safety_memory, list_workflow_memory, list_reflection_records, query_relevant_memory
+from aegisure.orchestrator import run_command
+from aegisure.safety import guard_step
+from aegisure.state import db_conn
+from aegisure.steps import Step
 from storage.db import init_db
 
 
@@ -29,7 +29,7 @@ def test_python_run_writes_structured_reflection_and_promotes_success():
     _clear_learning_tables()
     with TemporaryDirectory() as td:
         script = Path(td) / 'buggy.py'
-        script.write_text("pritn('hello from aura')\n", encoding='utf-8')
+        script.write_text("pritn('hello from aegisure')\n", encoding='utf-8')
 
         result = run_command(f'fix and run python script at "{script}"')
 

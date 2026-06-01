@@ -88,11 +88,53 @@ def upgrade() -> None:
             sa.Column("payload", sa.JSON(), nullable=False, server_default=sa.text("'{}'::jsonb")),
             sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()")),
         )
+    op.create_table(
+        "memory_timeline_events",
+        sa.Column("event_id", sa.String(), primary_key=True),
+        sa.Column("workspace_id", sa.String(), nullable=False, index=True),
+        sa.Column("repository_id", sa.String(), nullable=False, index=True),
+        sa.Column("agent", sa.String(), nullable=False, index=True),
+        sa.Column("event_type", sa.String(), nullable=False),
+        sa.Column("summary", sa.String(), nullable=False),
+        sa.Column("payload", sa.JSON(), nullable=False, server_default=sa.text("'{}'::jsonb")),
+        sa.Column("embedding", sa.Text()),
+        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()")),
+    )
+    workspace_tables = [
+        "github_installations",
+        "github_repositories",
+        "github_pull_requests",
+        "diff_analyses",
+        "risk_findings",
+        "constitutions",
+        "constitution_versions",
+        "agent_memory_exports",
+        "repair_prompts",
+        "second_opinions",
+        "provenance_records",
+        "attribution_ledger",
+        "policy_rules",
+        "policy_evaluations",
+        "agent_failure_records",
+        "waitlist_signups",
+        "founding_pledges",
+        "memory_timeline_events",
+    ]
+    for table in workspace_tables:
+        op.execute(f"ALTER TABLE {table} ENABLE ROW LEVEL SECURITY")
+        op.execute(
+            f"""
+            CREATE POLICY {table}_workspace_isolation ON {table}
+            USING (workspace_id = current_setting('app.workspace_id', true))
+            WITH CHECK (workspace_id = current_setting('app.workspace_id', true))
+            """
+        )
 
 
 def downgrade() -> None:
     for table in [
         "founding_pledges",
+        "memory_timeline_events",
         "waitlist_signups",
         "agent_failure_records",
         "policy_evaluations",

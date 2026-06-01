@@ -3,7 +3,7 @@ from pathlib import Path
 from fastapi.testclient import TestClient
 
 from api.main import app
-from aura.identity_boundary import (
+from aegisure.identity_boundary import (
     get_active_identity,
     check_boundary,
     create_identity,
@@ -14,12 +14,12 @@ from aura.identity_boundary import (
     set_active_identity,
     upsert_boundary_policy,
 )
-from aura.crypto_identity import identity_attestation, list_identity_keys, sign_identity_payload, verify_identity_signature
-from aura.licensing import generate_dev_license_token
-from aura.orchestrator import run_command
-from aura.memory_engine import encrypt_existing_memory_items, list_memory_items
-from aura.state import list_audit_log
-from aura.state import db_conn
+from aegisure.crypto_identity import identity_attestation, list_identity_keys, sign_identity_payload, verify_identity_signature
+from aegisure.licensing import generate_dev_license_token
+from aegisure.orchestrator import run_command
+from aegisure.memory_engine import encrypt_existing_memory_items, list_memory_items
+from aegisure.state import list_audit_log
+from aegisure.state import db_conn
 from storage.db import init_db
 
 client = TestClient(app)
@@ -79,7 +79,7 @@ def test_active_identity_and_memory_scope_policy():
 
 def test_custom_identity_policy_allows_team_transfer():
     _clear_identity_tables()
-    create_identity(name='Team AURA', identity_id='team-eng', identity_type='team', owner='company', memory_scope='company:eng', policy_scope='enterprise')
+    create_identity(name='Team Aegisure', identity_id='team-eng', identity_type='team', owner='company', memory_scope='company:eng', policy_scope='enterprise')
     upsert_boundary_policy(
         source_identity='team-eng',
         target_identity='company',
@@ -110,7 +110,7 @@ def test_identity_boundary_api_contracts():
 
     created = client.post('/identities', json={
         'identity_id': 'department-sales',
-        'name': 'Sales AURA',
+        'name': 'Sales Aegisure',
         'identity_type': 'department',
         'owner': 'company',
         'memory_scope': 'company:sales',
@@ -124,7 +124,7 @@ def test_identity_boundary_api_contracts():
         'data_class': 'pipeline_summary',
         'action': 'share',
         'decision': 'allow',
-        'reason': 'Department summaries can be shared with company AURA.',
+        'reason': 'Department summaries can be shared with company Aegisure.',
     })
     assert policy.status_code == 200
 
@@ -191,7 +191,7 @@ def test_command_memory_and_audit_use_active_identity():
 
     ledger = client.get('/identity/ledger', params={'identity_id': 'work'})
     assert ledger.status_code == 200
-    assert any('Work AURA' in row['summary'] or row['identity_id'] == 'work' for row in ledger.json())
+    assert any('Work Aegisure' in row['summary'] or row['identity_id'] == 'work' for row in ledger.json())
 
 
 def test_identity_attestation_creates_ed25519_key():
@@ -241,7 +241,7 @@ def test_existing_plaintext_memory_items_are_migrated_to_encrypted_storage():
         conn.execute(
             '''
             INSERT INTO memory_items(memory_id, scope, kind, memory_key, value, tags_json, confidence, source, permission)
-            VALUES('mem_plaintext_fixture','personal','preference','workspace.path','Use /Users/me/AURA workspaces','[]',0.8,'fixture','private')
+            VALUES('mem_plaintext_fixture','personal','preference','workspace.path','Use /Users/me/Aegisure workspaces','[]',0.8,'fixture','private')
             '''
         )
 
@@ -250,13 +250,13 @@ def test_existing_plaintext_memory_items_are_migrated_to_encrypted_storage():
     assert migrated['encrypted'] == 1
     row = db_conn().execute("SELECT value FROM memory_items WHERE memory_id='mem_plaintext_fixture'").fetchone()
     assert row['value'].startswith('enc:v1:')
-    assert 'AURA workspaces' not in row['value']
+    assert 'Aegisure workspaces' not in row['value']
     item = list_memory_items(scope='personal')[0]
-    assert item['value'] == 'Use /Users/me/AURA workspaces'
+    assert item['value'] == 'Use /Users/me/Aegisure workspaces'
 
 
 def test_signed_license_token_requires_configured_vendor_key(monkeypatch):
-    monkeypatch.delenv('AURA_LICENSE_PUBLIC_KEY', raising=False)
+    monkeypatch.delenv('AEGISURE_LICENSE_PUBLIC_KEY', raising=False)
     token = 'payload.signature'
     response = client.post('/license/activate', json={'token': token})
     assert response.status_code == 400
@@ -277,7 +277,7 @@ def test_signed_license_token_activates_with_vendor_public_key(tmp_path, monkeyp
         encoding=serialization.Encoding.PEM,
         format=serialization.PublicFormat.SubjectPublicKeyInfo,
     ).decode('utf-8')
-    monkeypatch.setenv('AURA_LICENSE_PUBLIC_KEY', public_pem)
+    monkeypatch.setenv('AEGISURE_LICENSE_PUBLIC_KEY', public_pem)
     with db_conn() as conn:
         conn.execute('DELETE FROM license_records')
 
@@ -301,5 +301,5 @@ def test_enterprise_architecture_doc_exists():
     assert doc.exists()
     text = doc.read_text(encoding='utf-8')
     assert 'RBAC' in text
-    assert 'Company AURA' in text
-    assert 'Personal AURA' in text
+    assert 'Company Aegisure' in text
+    assert 'Personal Aegisure' in text

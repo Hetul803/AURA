@@ -26,7 +26,7 @@ describe('desktop startup paths', () => {
 
     expect(findBackendDir({
       cwd: path.join(root, 'somewhere'),
-      appPath: path.join(root, 'AURA.app', 'Contents', 'Resources', 'app.asar'),
+      appPath: path.join(root, 'Aegisure.app', 'Contents', 'Resources', 'app.asar'),
       resourcesPath: path.join(root, 'resources'),
     })).toBe(backend);
   });
@@ -34,11 +34,11 @@ describe('desktop startup paths', () => {
   it('looks for fresh-clone backends from repo and app paths', () => {
     const root = makeTempRoot();
     const candidates = backendCandidates({
-      cwd: path.join(root, 'AURA', 'aura'),
-      appPath: path.join(root, 'AURA', 'aura', 'apps', 'desktop'),
+      cwd: path.join(root, 'Aegisure', 'aura'),
+      appPath: path.join(root, 'Aegisure', 'aura', 'apps', 'desktop'),
     });
 
-    expect(candidates).toContain(path.join(root, 'AURA', 'aura', 'apps', 'backend'));
+    expect(candidates).toContain(path.join(root, 'Aegisure', 'aura', 'apps', 'backend'));
   });
 
   it('points production Electron at the built renderer index', () => {
@@ -47,7 +47,7 @@ describe('desktop startup paths', () => {
 
   it('uses a startup fallback that explains renderer load failure', () => {
     const html = rendererFallbackHtml('Missing <renderer>');
-    expect(html).toContain('AURA could not load the desktop UI');
+    expect(html).toContain('Aegisure could not load the desktop UI');
     expect(html).toContain('Missing &lt;renderer&gt;');
     expect(rendererFallbackUrl('missing')).toMatch(/^data:text\/html/);
   });
@@ -56,7 +56,7 @@ describe('desktop startup paths', () => {
     const viteConfig = fs.readFileSync(path.join(process.cwd(), 'vite.config.ts'), 'utf8');
     const indexHtml = fs.readFileSync(path.join(process.cwd(), 'index.html'), 'utf8');
     expect(viteConfig).toContain("base: './'");
-    expect(indexHtml).toContain('AURA is starting.');
+    expect(indexHtml).toContain('Aegisure is starting.');
     expect(indexHtml).toContain('boot-fallback');
   });
 

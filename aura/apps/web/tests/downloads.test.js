@@ -7,14 +7,14 @@ import { AlphaStore } from '../src/alphaStore.js';
 import { createServer, incrementDownload, issueLicenseToken } from '../src/server.js';
 
 function tempJson(initial) {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'aura-web-test-'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'aegisure-web-test-'));
   const file = path.join(dir, 'downloads.json');
   fs.writeFileSync(file, JSON.stringify(initial, null, 2));
   return { dir, file };
 }
 
 function tempStore() {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'aura-web-store-test-'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'aegisure-web-store-test-'));
   return { dir, store: new AlphaStore(path.join(dir, 'store.json')) };
 }
 
@@ -36,9 +36,9 @@ function request(server, method, pathname, body) {
 }
 
 afterEach(() => {
-  delete process.env.AURA_VENDOR_PRIVATE_KEY;
-  delete process.env.AURA_LOCAL_MAC_ARTIFACT;
-  delete process.env.AURA_DOWNLOAD_MAC_URL;
+  delete process.env.AEGISURE_VENDOR_PRIVATE_KEY;
+  delete process.env.AEGISURE_LOCAL_MAC_ARTIFACT;
+  delete process.env.AEGISURE_DOWNLOAD_MAC_URL;
   delete process.env.STRIPE_SECRET_KEY;
   delete process.env.STRIPE_PRICE_ID;
   delete process.env.STRIPE_WEBHOOK_SECRET;
@@ -57,7 +57,7 @@ describe('marketing website', () => {
   it('renders the product promise clearly', async () => {
     const downloads = tempJson({ mac: 1, windows: 0, linux: 0 });
     const releases = path.join(downloads.dir, 'releases.json');
-    fs.writeFileSync(releases, JSON.stringify({ downloads: { mac: 'https://example.com/aura.dmg' } }));
+    fs.writeFileSync(releases, JSON.stringify({ downloads: { mac: 'https://example.com/aegisure.dmg' } }));
     const res = await request(createServer({ releasesPath: releases, downloadsPath: downloads.file }), 'GET', '/');
     const html = await res.text();
 
@@ -80,7 +80,7 @@ describe('marketing website', () => {
 
   it('issues signed private-alpha licenses when vendor key is configured', () => {
     const { privateKey, publicKey } = crypto.generateKeyPairSync('ed25519');
-    process.env.AURA_VENDOR_PRIVATE_KEY = privateKey.export({ type: 'pkcs8', format: 'pem' });
+    process.env.AEGISURE_VENDOR_PRIVATE_KEY = privateKey.export({ type: 'pkcs8', format: 'pem' });
 
     const result = issueLicenseToken({ email: 'Alpha@Example.com' });
     const [body, signature] = result.token.split('.');
@@ -111,17 +111,17 @@ describe('marketing website', () => {
 
   it('serves a local Mac DMG artifact instead of a JSON counter', async () => {
     const downloads = tempJson({ mac: 0, windows: 0, linux: 0 });
-    const artifact = path.join(downloads.dir, 'AURA-test.dmg');
+    const artifact = path.join(downloads.dir, 'Aegisure-test.dmg');
     const releases = path.join(downloads.dir, 'releases.json');
     fs.writeFileSync(artifact, 'fake-dmg-for-test');
-    fs.writeFileSync(releases, JSON.stringify({ version: '1.0.0', downloads: { mac: 'https://example.com/aura.dmg' } }));
-    process.env.AURA_LOCAL_MAC_ARTIFACT = artifact;
+    fs.writeFileSync(releases, JSON.stringify({ version: '1.0.0', downloads: { mac: 'https://example.com/aegisure.dmg' } }));
+    process.env.AEGISURE_LOCAL_MAC_ARTIFACT = artifact;
 
     const res = await request(createServer({ releasesPath: releases, downloadsPath: downloads.file }), 'GET', '/api/download?os=mac');
     const body = await res.text();
 
     expect(res.status).toBe(200);
-    expect(res.headers.get('content-disposition')).toContain('AURA-test.dmg');
+    expect(res.headers.get('content-disposition')).toContain('Aegisure-test.dmg');
     expect(body).toBe('fake-dmg-for-test');
     expect(JSON.parse(fs.readFileSync(downloads.file, 'utf-8')).mac).toBe(1);
   });
@@ -129,21 +129,21 @@ describe('marketing website', () => {
   it('redirects download requests to configured hosted artifacts', async () => {
     const downloads = tempJson({ mac: 0, windows: 0, linux: 0 });
     const releases = path.join(downloads.dir, 'releases.json');
-    fs.writeFileSync(releases, JSON.stringify({ downloads: { mac: 'https://cdn.example.net/AURA.dmg' } }));
+    fs.writeFileSync(releases, JSON.stringify({ downloads: { mac: 'https://cdn.example.net/Aegisure.dmg' } }));
 
     const res = await request(createServer({ releasesPath: releases, downloadsPath: downloads.file }), 'GET', '/api/download?os=mac');
 
     expect(res.status).toBe(302);
-    expect(res.headers.get('location')).toBe('https://cdn.example.net/AURA.dmg');
+    expect(res.headers.get('location')).toBe('https://cdn.example.net/Aegisure.dmg');
   });
 
   it('exposes launch health and private-alpha update metadata', async () => {
     const downloads = tempJson({ mac: 0, windows: 0, linux: 0 });
-    const artifact = path.join(downloads.dir, 'AURA-test.dmg');
+    const artifact = path.join(downloads.dir, 'Aegisure-test.dmg');
     const releases = path.join(downloads.dir, 'releases.json');
     fs.writeFileSync(artifact, 'fake');
     fs.writeFileSync(releases, JSON.stringify({ version: '1.2.0', channel: 'private-alpha', notes: 'test build', downloads: { mac: '/api/download?os=mac' } }));
-    process.env.AURA_LOCAL_MAC_ARTIFACT = artifact;
+    process.env.AEGISURE_LOCAL_MAC_ARTIFACT = artifact;
 
     const health = await request(createServer({ releasesPath: releases, downloadsPath: downloads.file }), 'GET', '/api/launch/health');
     const healthBody = await health.json();
@@ -173,7 +173,7 @@ describe('marketing website', () => {
 
   it('activates devices with signed tokens and enforces seat limits', async () => {
     const { privateKey } = crypto.generateKeyPairSync('ed25519');
-    process.env.AURA_VENDOR_PRIVATE_KEY = privateKey.export({ type: 'pkcs8', format: 'pem' });
+    process.env.AEGISURE_VENDOR_PRIVATE_KEY = privateKey.export({ type: 'pkcs8', format: 'pem' });
     const issued = issueLicenseToken({ email: 'alpha@example.com' });
     const { store } = tempStore();
     const server = createServer({ store });

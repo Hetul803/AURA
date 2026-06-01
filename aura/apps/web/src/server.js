@@ -11,12 +11,12 @@ const repoRoot = path.resolve(__dirname, '../../..');
 
 export const defaultReleasesPath = path.join(repoRoot, 'infra/releases/releases.json');
 export const defaultDownloadsPath = path.join(repoRoot, 'infra/releases/downloads.json');
-export const defaultAlphaStorePath = process.env.AURA_WEB_DB_PATH || path.join(repoRoot, 'var/private-alpha-store.json');
-const defaultMacDmgPath = path.join(repoRoot, 'apps/desktop/release/AURA-1.0.0-mac-arm64.dmg');
+export const defaultAlphaStorePath = process.env.AEGISURE_WEB_DB_PATH || path.join(repoRoot, 'var/private-alpha-store.json');
+const defaultMacDmgPath = path.join(repoRoot, 'apps/desktop/release/Aegisure-1.0.0-mac-arm64.dmg');
 
 const brand = {
-  name: 'AURA',
-  company: 'AURA Labs',
+  name: 'Aegisure',
+  company: 'Aegisure Labs',
   tagline: 'Your private AI operating identity.',
   support: 'founder@yourcompany.com',
 };
@@ -109,12 +109,12 @@ function stableStringify(value) {
 }
 
 export function issueLicenseToken({ email, tier = 'private_alpha', expires_at } = {}) {
-  const privateKey = process.env.AURA_VENDOR_PRIVATE_KEY;
+  const privateKey = process.env.AEGISURE_VENDOR_PRIVATE_KEY;
   if (!privateKey) {
     return {
       ok: false,
       status: 'vendor_private_key_missing',
-      message: 'Set AURA_VENDOR_PRIVATE_KEY on the website server to issue signed licenses. Never put this key in the desktop app.',
+      message: 'Set AEGISURE_VENDOR_PRIVATE_KEY on the website server to issue signed licenses. Never put this key in the desktop app.',
     };
   }
   if (!email || !String(email).includes('@')) {
@@ -142,10 +142,10 @@ export function issueLicenseToken({ email, tier = 'private_alpha', expires_at } 
 }
 
 function vendorPublicKey() {
-  if (process.env.AURA_VENDOR_PUBLIC_KEY) return process.env.AURA_VENDOR_PUBLIC_KEY;
-  if (!process.env.AURA_VENDOR_PRIVATE_KEY) return '';
+  if (process.env.AEGISURE_VENDOR_PUBLIC_KEY) return process.env.AEGISURE_VENDOR_PUBLIC_KEY;
+  if (!process.env.AEGISURE_VENDOR_PRIVATE_KEY) return '';
   try {
-    return crypto.createPublicKey(process.env.AURA_VENDOR_PRIVATE_KEY).export({ type: 'spki', format: 'pem' }).toString();
+    return crypto.createPublicKey(process.env.AEGISURE_VENDOR_PRIVATE_KEY).export({ type: 'spki', format: 'pem' }).toString();
   } catch {
     return '';
   }
@@ -153,7 +153,7 @@ function vendorPublicKey() {
 
 export function verifyLicenseTokenForServer(token) {
   const publicKey = vendorPublicKey();
-  if (!publicKey) return { ok: false, status: 'vendor_public_key_missing', message: 'Set AURA_VENDOR_PUBLIC_KEY or AURA_VENDOR_PRIVATE_KEY on the license server.' };
+  if (!publicKey) return { ok: false, status: 'vendor_public_key_missing', message: 'Set AEGISURE_VENDOR_PUBLIC_KEY or AEGISURE_VENDOR_PRIVATE_KEY on the license server.' };
   const parts = String(token || '').split('.');
   if (parts.length !== 2) return { ok: false, status: 'invalid_token_format', message: 'License token must be payload.signature.' };
   const body = Buffer.from(parts[0], 'base64url');
@@ -185,7 +185,7 @@ function formEncode(value, prefix = '') {
 async function createStripeCheckoutSession({ email, plan = 'alpha' } = {}) {
   const secret = process.env.STRIPE_SECRET_KEY;
   const price = process.env.STRIPE_PRICE_ID || process.env.STRIPE_ALPHA_PRICE_ID;
-  const baseUrl = (process.env.PUBLIC_BASE_URL || process.env.AURA_PUBLIC_BASE_URL || 'http://localhost:3000').replace(/\/$/, '');
+  const baseUrl = (process.env.PUBLIC_BASE_URL || process.env.AEGISURE_PUBLIC_BASE_URL || 'http://localhost:3000').replace(/\/$/, '');
   if (!secret || !price) {
     return {
       ok: false,
@@ -244,8 +244,8 @@ function isPlaceholderDownload(url) {
 
 function resolveDownloadTarget(os, releases = {}) {
   const normalized = String(os || 'mac').toLowerCase();
-  const configured = process.env[`AURA_DOWNLOAD_${normalized.toUpperCase()}_URL`] || releases?.downloads?.[normalized];
-  const localOverride = process.env[`AURA_LOCAL_${normalized.toUpperCase()}_ARTIFACT`] || process.env.AURA_LOCAL_DMG_PATH;
+  const configured = process.env[`AEGISURE_DOWNLOAD_${normalized.toUpperCase()}_URL`] || releases?.downloads?.[normalized];
+  const localOverride = process.env[`AEGISURE_LOCAL_${normalized.toUpperCase()}_ARTIFACT`] || process.env.AEGISURE_LOCAL_DMG_PATH;
   if (localOverride && fs.existsSync(localOverride)) {
     return { ok: true, type: 'file', path: localOverride, filename: path.basename(localOverride), source: 'env_local_artifact' };
   }
@@ -261,7 +261,7 @@ function resolveDownloadTarget(os, releases = {}) {
     os: normalized,
     configured: configured || null,
     message: normalized === 'mac'
-      ? 'Mac DMG is not available on this server yet. Build it with `pnpm aura:package` or set AURA_DOWNLOAD_MAC_URL to a hosted artifact.'
+      ? 'Mac DMG is not available on this server yet. Build it with `pnpm aura:package` or set AEGISURE_DOWNLOAD_MAC_URL to a hosted artifact.'
       : `${normalized} download is coming soon.`,
   };
 }
@@ -285,7 +285,7 @@ function updatePayload(url, releases = {}) {
   const latestVersion = releases.version || '1.0.0';
   return {
     ok: true,
-    channel: releases.channel || process.env.AURA_UPDATE_CHANNEL || 'private-alpha',
+    channel: releases.channel || process.env.AEGISURE_UPDATE_CHANNEL || 'private-alpha',
     version: latestVersion,
     current_version: currentVersion || null,
     update_available: currentVersion ? compareSemver(latestVersion, currentVersion) > 0 : false,
@@ -310,9 +310,9 @@ function launchHealth(releases = {}) {
   const configured = {
     stripe: Boolean(process.env.STRIPE_SECRET_KEY && (process.env.STRIPE_PRICE_ID || process.env.STRIPE_ALPHA_PRICE_ID)),
     stripe_webhook: Boolean(process.env.STRIPE_WEBHOOK_SECRET),
-    license_signing: Boolean(process.env.AURA_VENDOR_PRIVATE_KEY),
-    license_public_key: Boolean(process.env.AURA_VENDOR_PUBLIC_KEY || process.env.AURA_VENDOR_PRIVATE_KEY),
-    admin_token: Boolean(process.env.AURA_ADMIN_TOKEN),
+    license_signing: Boolean(process.env.AEGISURE_VENDOR_PRIVATE_KEY),
+    license_public_key: Boolean(process.env.AEGISURE_VENDOR_PUBLIC_KEY || process.env.AEGISURE_VENDOR_PRIVATE_KEY),
+    admin_token: Boolean(process.env.AEGISURE_ADMIN_TOKEN),
     mac_download: Boolean(macTarget.ok),
   };
   return {
@@ -322,8 +322,8 @@ function launchHealth(releases = {}) {
       STRIPE_SECRET_KEY: !process.env.STRIPE_SECRET_KEY,
       STRIPE_PRICE_ID: !(process.env.STRIPE_PRICE_ID || process.env.STRIPE_ALPHA_PRICE_ID),
       STRIPE_WEBHOOK_SECRET: !process.env.STRIPE_WEBHOOK_SECRET,
-      AURA_VENDOR_PRIVATE_KEY: !process.env.AURA_VENDOR_PRIVATE_KEY,
-      AURA_ADMIN_TOKEN: !process.env.AURA_ADMIN_TOKEN,
+      AEGISURE_VENDOR_PRIVATE_KEY: !process.env.AEGISURE_VENDOR_PRIVATE_KEY,
+      AEGISURE_ADMIN_TOKEN: !process.env.AEGISURE_ADMIN_TOKEN,
     }).filter(([, missing]) => missing).map(([key]) => key),
     downloads: { mac: macTarget },
     release: {
@@ -373,7 +373,7 @@ function landingPage(releases = {}) {
     </section>
     <section id="guardian" class="section flow">
       <div><div class="eyebrow">Core loop</div><h2>${brand.name} does the work. Guardian protects the boundary.</h2><p class="lead">Every useful action flows through context, risk classification, approval, audit, memory, and signed identity.</p></div>
-      <div class="dialogue"><div class="turn"><span>User</span><p>Clone this repo.</p></div><div class="turn"><span>${brand.name}</span><p>I’m checking what you’re looking at. I found Hetul803/AURA.</p></div><div class="turn guardian"><span>Guardian</span><p>I need approval before running git clone in your workspace.</p></div><div class="turn"><span>${brand.name}</span><p>Done. I cloned it and recorded the action under Personal identity.</p></div></div>
+      <div class="dialogue"><div class="turn"><span>User</span><p>Clone this repo.</p></div><div class="turn"><span>${brand.name}</span><p>I’m checking what you’re looking at. I found Hetul803/Aegisure.</p></div><div class="turn guardian"><span>Guardian</span><p>I need approval before running git clone in your workspace.</p></div><div class="turn"><span>${brand.name}</span><p>Done. I cloned it and recorded the action under Personal identity.</p></div></div>
     </section>
     <section id="memory" class="section">
       <div class="eyebrow">Why users stay</div><h2>Memory becomes the moat.</h2>
@@ -392,7 +392,7 @@ function legalPage(kind) {
     ? `<p>${brand.name} is local-first. Profile data, encrypted memory, identity keys, and workflow history are stored on the user's device unless the user explicitly exports or enables future sync.</p><ul><li>Memory values are encrypted at rest.</li><li>Secrets are rejected before memory storage.</li><li>Risky actions require approval.</li><li>Cloud model use is optional and user-controlled.</li></ul>`
     : kind === 'terms'
     ? `<p>This private-alpha software is experimental. Users must review approvals before allowing ${brand.name} to control apps, files, browser sessions, terminal commands, or paid tools.</p><ul><li>No unattended destructive automation.</li><li>No resale or redistribution of private alpha builds.</li><li>Licenses may be revoked for abuse.</li></ul>`
-    : `<p>Guardian currently protects AURA-managed shell, file, paste/send, memory, workflow, import/export, and model-cost actions. OS-wide website permission and third-party app file-access monitoring are future native extensions, not claimed in this build.</p><ul><li>Ed25519 identity signing.</li><li>Signed license-token verification.</li><li>Encrypted memory values and identity private keys.</li><li>Audit records for significant actions.</li></ul>`;
+    : `<p>Guardian currently protects Aegisure-managed shell, file, paste/send, memory, workflow, import/export, and model-cost actions. OS-wide website permission and third-party app file-access monitoring are future native extensions, not claimed in this build.</p><ul><li>Ed25519 identity signing.</li><li>Signed license-token verification.</li><li>Encrypted memory values and identity private keys.</li><li>Audit records for significant actions.</li></ul>`;
   return shell(`<main class="legal-page"><div class="eyebrow">${brand.company}</div><h1>${title}</h1>${body}<p>Contact: ${brand.support}</p></main>`, `${title} — ${brand.name}`);
 }
 
@@ -474,7 +474,7 @@ export function createServer(options = {}) {
       return json(res, activation.ok ? 200 : 409, activation);
     }
     if (url.pathname === '/api/devices/revoke' && req.method === 'POST') {
-      const expected = process.env.AURA_ADMIN_TOKEN;
+      const expected = process.env.AEGISURE_ADMIN_TOKEN;
       if (expected && req.headers.authorization !== `Bearer ${expected}`) return json(res, 401, { ok: false, status: 'unauthorized' });
       const body = await readBody(req);
       return json(res, 200, store.revokeActivation(body.activation_id, body.reason || 'manual'));

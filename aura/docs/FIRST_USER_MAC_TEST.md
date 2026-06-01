@@ -1,34 +1,34 @@
 # First User Mac Test
 
-This guide tests AURA like a first-time Mac user: install the packaged app, launch it, complete onboarding, set permissions, choose a local model, and run the launch flows.
+This guide tests Aegisure like a first-time Mac user: install the packaged app, launch it, complete onboarding, set permissions, choose a local model, and run the launch flows.
 
 ## Install
 
 1. From a fresh clone, build the macOS DMG:
 
 ```bash
-git clone https://github.com/Hetul803/AURA.git
-cd AURA/aura
+git clone https://github.com/Hetul803/Aegisure.git
+cd Aegisure/aura
 pnpm aura:package
 ```
 
 2. Or start developer mode directly:
 
 ```bash
-cd AURA/aura
-./start-aura.sh
+cd Aegisure/aura
+./start-aegisure.sh
 ```
 
 If macOS or a copied checkout strips executable permissions:
 
 ```bash
-chmod +x start-aura.sh
-./start-aura.sh
+chmod +x start-aegisure.sh
+./start-aegisure.sh
 ```
 
-3. Open `apps/desktop/release/AURA-1.0.0-mac-arm64.dmg` on Apple Silicon Macs.
-4. Drag AURA into Applications if prompted.
-5. Because this private-alpha build is unsigned, macOS may block the first launch. Use Finder, right-click AURA, choose Open, then confirm Open.
+3. Open `apps/desktop/release/Aegisure-1.0.0-mac-arm64.dmg` on Apple Silicon Macs.
+4. Drag Aegisure into Applications if prompted.
+5. Because this private-alpha build is unsigned, macOS may block the first launch. Use Finder, right-click Aegisure, choose Open, then confirm Open.
 
 Optional brand rename before building:
 
@@ -40,21 +40,21 @@ pnpm aura:package
 Optional signed license setup for a 10-user private alpha:
 
 ```bash
-python scripts/generate-license-key.py --key-dir ~/AURA_VENDOR_KEYS --email alpha-user@example.com --tier private_alpha
-export AURA_LICENSE_PUBLIC_KEY="$(cat ~/AURA_VENDOR_KEYS/vendor_public.pem)"
+python scripts/generate-license-key.py --key-dir ~/AEGISURE_VENDOR_KEYS --email alpha-user@example.com --tier private_alpha
+export AEGISURE_LICENSE_PUBLIC_KEY="$(cat ~/AEGISURE_VENDOR_KEYS/vendor_public.pem)"
 ```
 
 Paste the generated token in Advanced / Diagnostics -> Settings -> License. The private key must never ship inside the app.
 
-Success: AURA opens to the persona-led first launch. You should meet AURA before seeing the home command layer.
+Success: Aegisure opens to the persona-led first launch. You should meet Aegisure before seeing the home command layer.
 
 Failure: macOS says the app is damaged or cannot be opened. Remove quarantine for local testing only:
 
 ```bash
-xattr -dr com.apple.quarantine /Applications/AURA.app
+xattr -dr com.apple.quarantine /Applications/Aegisure.app
 ```
 
-Failure: Electron reports that it failed to install correctly. From `AURA/aura`, run:
+Failure: Electron reports that it failed to install correctly. From `Aegisure/aura`, run:
 
 ```bash
 pnpm approve-builds --all
@@ -65,38 +65,38 @@ pnpm aura:verify-electron
 Failure: the app opens but the backend is disconnected. Developer mode creates a backend virtual environment automatically. For packaged testing without the repo, install the bundled backend requirements:
 
 ```bash
-python3 -m pip install -r "/Applications/AURA.app/Contents/Resources/backend/requirements-private-alpha.txt"
+python3 -m pip install -r "/Applications/Aegisure.app/Contents/Resources/backend/requirements-private-alpha.txt"
 ```
 
 ## Permissions
 
-AURA is local-first, but computer control needs explicit Mac permissions.
+Aegisure is local-first, but computer control needs explicit Mac permissions.
 
 - Accessibility: required for reliable cross-app control and paste-back.
 - Screen Recording: needed for screen-aware context if enabled.
-- Automation: macOS may ask when AURA controls another app.
+- Automation: macOS may ask when Aegisure controls another app.
 - Browser permissions: only needed for browser handoff and automation flows.
 
 Open System Settings -> Privacy & Security and enable permissions when macOS prompts.
 
 ## Persona Onboarding
 
-First launch should feel like meeting the assistant, not filling out a developer form. If onboarding is incomplete, AURA must not open to the home surface first.
+First launch should feel like meeting the assistant, not filling out a developer form. If onboarding is incomplete, Aegisure must not open to the home surface first.
 
-1. Meet AURA: verify the centered encounter screen, living avatar, automatic spoken/captioned intro, and the line "I'm your personal AI operating layer."
-2. Rename AURA: rename it to a test name such as Alice, save it, and verify the caption says "Good choice. I'm Alice now."
-3. What I Can Do: verify AURA explains natural intent examples and clearly separates current abilities from future monitoring.
+1. Meet Aegisure: verify the centered encounter screen, living avatar, automatic spoken/captioned intro, and the line "I'm your personal AI operating layer."
+2. Rename Aegisure: rename it to a test name such as Alice, save it, and verify the caption says "Good choice. I'm Alice now."
+3. What I Can Do: verify Aegisure explains natural intent examples and clearly separates current abilities from future monitoring.
 4. Guardian: verify the Guardian Watchtower explains active protection and marks website/app permission monitoring as planned, not active.
-5. Memory and Identity: verify AURA explains local persistent memory and shows Personal / Work / Company / Session identity scopes.
+5. Memory and Identity: verify Aegisure explains local persistent memory and shows Personal / Work / Company / Session identity scopes.
 6. Local-First Privacy: verify local model, Codex, ChatGPT, and Claude routing is explained without forcing setup.
 7. Workspace: accept the default workspace or choose another folder. This should be fast and skippable.
 8. Local Brain: verify OS, chip, RAM, Ollama installed/running state, available models, recommendation, and approval-gated model pull. Skipping local model setup must not block first use.
 9. Optional Workers: verify Codex, ChatGPT, and Claude are optional.
 10. Permissions: verify Accessibility, Automation, Microphone, Screen Recording, and browser handoff are explained only as needed.
-11. Start Using AURA: enter the command layer.
+11. Start Using Aegisure: enter the command layer.
 
-Success: pressing Enter command layer opens the presence-first home with the living assistant, one command input, captions, conversation stream, "AURA sees", and Guardian Watchtower. Memory, workflows, model setup, raw timeline, context JSON, and diagnostics should be hidden behind Advanced / Diagnostics.
-The home screen should show `AURA Core online`, Guardian Watchtower, local model status, a visible Restart onboarding button, current context, and a natural conversation/action stream.
+Success: pressing Enter command layer opens the presence-first home with the living assistant, one command input, captions, conversation stream, "Aegisure sees", and Guardian Watchtower. Memory, workflows, model setup, raw timeline, context JSON, and diagnostics should be hidden behind Advanced / Diagnostics.
+The home screen should show `Aegisure Core online`, Guardian Watchtower, local model status, a visible Restart onboarding button, current context, and a natural conversation/action stream.
 
 Failure: a blank white window. Rebuild the app with:
 
@@ -106,11 +106,11 @@ pnpm aura:package
 
 The packaged app should now show an explicit startup error if the renderer is missing or cannot load.
 
-If the packaged backend fails with missing Python dependencies, AURA should not silently remain disconnected. It should show **Repair Backend**. Click it to create a local backend venv under the app data folder and install the bundled backend requirements, then retry the backend health check.
+If the packaged backend fails with missing Python dependencies, Aegisure should not silently remain disconnected. It should show **Repair Backend**. Click it to create a local backend venv under the app data folder and install the bundled backend requirements, then retry the backend health check.
 
 ## Ollama And Gemma 4
 
-AURA can start without cloud AI. It falls back to SimpleLLM until Ollama/local models are available.
+Aegisure can start without cloud AI. It falls back to SimpleLLM until Ollama/local models are available.
 
 Install Ollama:
 
@@ -120,7 +120,7 @@ brew install --cask ollama
 
 Or download it from `https://ollama.com/download`.
 
-Start Ollama, then reopen or refresh AURA. Onboarding detects:
+Start Ollama, then reopen or refresh Aegisure. Onboarding detects:
 
 - OS and architecture;
 - Apple Silicon vs Intel;
@@ -128,14 +128,14 @@ Start Ollama, then reopen or refresh AURA. Onboarding detects:
 - Ollama install/running status;
 - available local models.
 
-AURA recommends Gemma 4 by hardware and shows choices instead of forcing one model:
+Aegisure recommends Gemma 4 by hardware and shows choices instead of forcing one model:
 
 - constrained Mac: `gemma4:e4b-nvfp4`;
 - 16 GB class Mac: `gemma4:latest`;
 - 32 GB class Mac: `gemma4:26b`;
 - 64 GB+ Mac: `gemma4:31b`.
 
-Pulling a model requires user approval in onboarding. AURA runs `ollama pull <model>` only after you click Approve download, verifies the selected model through the backend, and saves it as `ollama:<model>` for routing. You can skip local setup and keep using SimpleLLM until later.
+Pulling a model requires user approval in onboarding. Aegisure runs `ollama pull <model>` only after you click Approve download, verifies the selected model through the backend, and saves it as `ollama:<model>` for routing. You can skip local setup and keep using SimpleLLM until later.
 
 After setup, the Memory or Local Model panel should show:
 
@@ -161,10 +161,10 @@ Use Codex for coding implementation and repo changes. Use ChatGPT/Claude browser
 
 Run these from Test First Task or the home command layer:
 
-- Clone current GitHub repo: open a GitHub repo in your browser, press the hotkey or Refresh context, then click Clone this repo. AURA should show "I found a GitHub repo" and ask before running clone/write actions.
-- Missing GitHub context: click Clone this repo with no GitHub page visible. AURA should say "I don't see a GitHub repo yet..." and tell you to open one and refresh context.
-- Draft reply to current email: open Gmail or another email app with a message selected, refresh context, then click Draft reply. AURA should draft locally or via fallback and pause before paste/send.
-- Missing email context: click Draft reply with no email visible. AURA should explain exactly what context is missing.
+- Clone current GitHub repo: open a GitHub repo in your browser, press the hotkey or Refresh context, then click Clone this repo. Aegisure should show "I found a GitHub repo" and ask before running clone/write actions.
+- Missing GitHub context: click Clone this repo with no GitHub page visible. Aegisure should say "I don't see a GitHub repo yet..." and tell you to open one and refresh context.
+- Draft reply to current email: open Gmail or another email app with a message selected, refresh context, then click Draft reply. Aegisure should draft locally or via fallback and pause before paste/send.
+- Missing email context: click Draft reply with no email visible. Aegisure should explain exactly what context is missing.
 - Build app from prompt: should route to coding worker/Codex path, not a chatbot-only response.
 - Use ChatGPT/Claude handoff: should prepare a prompt and pause before pasting into the browser.
 - Save/replay workflow: should save workflow, preflight context, and block missing/risky replay.
@@ -179,7 +179,7 @@ Use this exact sequence for the serious manual pass:
 1. Clean reset:
 
 ```bash
-cd AURA/aura
+cd Aegisure/aura
 scripts/reset-aura-local.sh
 ```
 
@@ -187,19 +187,19 @@ scripts/reset-aura-local.sh
 
 ```bash
 pnpm aura:package
-open apps/desktop/release/AURA-1.0.0-mac-arm64.dmg
+open apps/desktop/release/Aegisure-1.0.0-mac-arm64.dmg
 ```
 
-Drag AURA into Applications, then right-click Open because the private-alpha app is unsigned.
+Drag Aegisure into Applications, then right-click Open because the private-alpha app is unsigned.
 
-3. Open AURA and verify:
+3. Open Aegisure and verify:
 
 - no blank white screen;
 - visible build ID with the latest commit;
-- animated living AURA presence;
+- animated living Aegisure presence;
 - one command input;
 - Guardian Watchtower visible with real events and clearly-labeled examples;
-- active identity visible as Personal AURA by default;
+- active identity visible as Personal Aegisure by default;
 - identity card shows an Ed25519 fingerprint after the local identity key is created;
 - Memory Console available behind Advanced / Diagnostics and in onboarding;
 - Memory Console values are readable in the UI but encrypted at rest in SQLite;
@@ -208,7 +208,7 @@ Drag AURA into Applications, then right-click Open because the private-alpha app
 
 4. Complete onboarding quickly:
 
-- Meet AURA;
+- Meet Aegisure;
 - Rename if desired;
 - What I Can Do;
 - Guardian Watchtower;
@@ -221,7 +221,7 @@ Drag AURA into Applications, then right-click Open because the private-alpha app
 
 ## Private Alpha Completion Checks
 
-From `AURA/aura`, run:
+From `Aegisure/aura`, run:
 
 ```bash
 pnpm aura:doctor
@@ -232,7 +232,7 @@ pnpm aura:smoke
 
 Success means the demo-critical paths pass: Guardian blocks dangerous commands, memory rejects secrets and supports inbox/CRUD, identity scopes and ledger work, desktop tests pass, and the renderer builds.
 
-Inside the app, open **Advanced / Diagnostics -> Private alpha demo checks** only when rehearsing the founder demo. Those buttons verify real AURA-managed paths without making the main surface feel like a dashboard:
+Inside the app, open **Advanced / Diagnostics -> Private alpha demo checks** only when rehearsing the founder demo. Those buttons verify real Aegisure-managed paths without making the main surface feel like a dashboard:
 
 - Test Guardian block;
 - Test secret memory rejection;
@@ -242,45 +242,45 @@ Inside the app, open **Advanced / Diagnostics -> Private alpha demo checks** onl
 - Create Memory Inbox candidate;
 - Test voice;
 - Show overlay.
-- Start Using AURA.
+- Start Using Aegisure.
 
 5. Type `Clone this repo locally` with no GitHub page visible.
 
-Expected: AURA says it does not see a GitHub repo, Guardian creates a missing-context notice, and no shell command runs.
+Expected: Aegisure says it does not see a GitHub repo, Guardian creates a missing-context notice, and no shell command runs.
 
 6. Open a GitHub repo in the browser, press Refresh context, then type `Clone this repo locally`.
 
-Expected: AURA explains what repo it sees, Guardian requires approval before `git clone`, and after approval AURA verifies the destination folder.
+Expected: Aegisure explains what repo it sees, Guardian requires approval before `git clone`, and after approval Aegisure verifies the destination folder.
 
 7. Type `Reply to this email` with no email visible.
 
-Expected: AURA explains that Gmail/email context is missing and Guardian records a context notice.
+Expected: Aegisure explains that Gmail/email context is missing and Guardian records a context notice.
 
 8. Open Gmail or select email text, refresh context, then type `Reply to this email`.
 
-Expected: AURA drafts a reply and requires approval before paste-back. It must not send.
+Expected: Aegisure drafts a reply and requires approval before paste-back. It must not send.
 
 9. Type `Build me a small app from this prompt: a timer app`.
 
-Expected: AURA creates a durable coding job with `AGENT_PROMPT.md`, explains the job location, and does not pretend Codex ran unless configured.
+Expected: Aegisure creates a durable coding job with `AGENT_PROMPT.md`, explains the job location, and does not pretend Codex ran unless configured.
 
 10. Type `Use my ChatGPT subscription to draft a reply`.
 
-Expected: AURA prepares a handoff prompt and pauses before paste/open actions that cross app boundaries.
+Expected: Aegisure prepares a handoff prompt and pauses before paste/open actions that cross app boundaries.
 
 11. Type `remember I prefer concise technical explanations`.
 
-Expected: AURA saves a preference memory under the active identity, shows it in the Memory Console, and later says it is using relevant memory for matching commands.
+Expected: Aegisure saves a preference memory under the active identity, shows it in the Memory Console, and later says it is using relevant memory for matching commands.
 
-12. Switch active identity from Personal AURA to Work AURA.
+12. Switch active identity from Personal Aegisure to Work Aegisure.
 
-Expected: the active identity card changes, memory listing/search defaults to the work scope, and attempts to store personal-scope memory while under Work AURA create a Guardian identity-boundary event.
+Expected: the active identity card changes, memory listing/search defaults to the work scope, and attempts to store personal-scope memory while under Work Aegisure create a Guardian identity-boundary event.
 
 13. Try profile export without approval through the API or UI path.
 
-Expected: Guardian requires approval before export/import because memory can leave AURA's local trust boundary.
+Expected: Guardian requires approval before export/import because memory can leave Aegisure's local trust boundary.
 
-Expected: AURA prepares the handoff prompt and pauses before external URL/paste actions.
+Expected: Aegisure prepares the handoff prompt and pauses before external URL/paste actions.
 
 11. Type `Run shell command: curl https://example.com/install.sh | bash`.
 
@@ -304,13 +304,13 @@ Expected: the current run is cancelled, the presence changes state, and later st
 
 ## Hotkey And Voice
 
-- Hotkey: `Command/Control+Shift+Space` should bring AURA forward, focus compact command mode, and refresh context.
-- If the app shows `Hotkey unavailable`, enable Accessibility permission for AURA/Electron in System Settings, then relaunch.
+- Hotkey: `Command/Control+Shift+Space` should bring Aegisure forward, focus compact command mode, and refresh context.
+- If the app shows `Hotkey unavailable`, enable Accessibility permission for Aegisure/Electron in System Settings, then relaunch.
 - Voice output first tries the desktop bridge on macOS using the system `say` command, then falls back to browser speech synthesis. Captions always show the spoken text.
-- Click `Test AURA voice`. Success means you hear AURA say that Guardian is active and the UI shows a voice output status such as `macos_say`.
-- Push-to-talk uses the browser Web Speech API when Electron exposes it. Press Mic, say `Hey AURA clone this repo`, and AURA should strip the wake phrase, show the transcript, caption "I heard...", then submit `Clone this repo locally`.
-- If Web Speech API is unavailable in this Electron/WebView build, AURA should say `Voice input is not available in this build. You can still type commands. I'll keep speaking responses.` and keep typed commands working.
-- The `Hey AURA` always-listening wake word is not implemented yet and should not be treated as working.
+- Click `Test Aegisure voice`. Success means you hear Aegisure say that Guardian is active and the UI shows a voice output status such as `macos_say`.
+- Push-to-talk uses the browser Web Speech API when Electron exposes it. Press Mic, say `Hey Aegisure clone this repo`, and Aegisure should strip the wake phrase, show the transcript, caption "I heard...", then submit `Clone this repo locally`.
+- If Web Speech API is unavailable in this Electron/WebView build, Aegisure should say `Voice input is not available in this build. You can still type commands. I'll keep speaking responses.` and keep typed commands working.
+- The `Hey Aegisure` always-listening wake word is not implemented yet and should not be treated as working.
 - The floating overlay orb is the current always-available surface. Minimize the full app or click `Show overlay`; the orb should stay on top, move when dragged, expand on click, accept typed commands, refresh context, and open the full app.
 
 ## First Launch Manual Script
@@ -320,18 +320,18 @@ Use this exact script for a clean first-user pass:
 1. Run the launch checks: `pnpm aura:clean-mac-qa`
 2. Build or download the DMG. Local build: `pnpm aura:package`. Website path: start `pnpm aura:web`, open `http://localhost:3000`, and click Download Mac DMG.
 3. Reset local app data if needed: `scripts/clean-mac-qa.sh --reset-local-state`
-4. Open `apps/desktop/release/AURA-1.0.0-mac-arm64.dmg`, drag AURA to Applications, and launch AURA.
-5. Confirm you meet AURA on a cinematic first-launch screen with animated avatar and captions.
-6. Confirm AURA speaks automatically unless muted. Use Mute AURA / Replay message to test controls.
-7. Rename AURA to Alice, then verify the interface changes name and saves it after restart.
-8. Step through What I Can Do, Guardian, Local-First Privacy, workspace, local model, Optional Workers, Permissions, and Start Using AURA.
+4. Open `apps/desktop/release/Aegisure-1.0.0-mac-arm64.dmg`, drag Aegisure to Applications, and launch Aegisure.
+5. Confirm you meet Aegisure on a cinematic first-launch screen with animated avatar and captions.
+6. Confirm Aegisure speaks automatically unless muted. Use Mute Aegisure / Replay message to test controls.
+7. Rename Aegisure to Alice, then verify the interface changes name and saves it after restart.
+8. Step through What I Can Do, Guardian, Local-First Privacy, workspace, local model, Optional Workers, Permissions, and Start Using Aegisure.
 9. Press Enter command layer.
 10. Open a GitHub repo in your browser.
 11. Press `Command/Control+Shift+Space` or Refresh context.
-12. Confirm the home surface is not a dashboard: living AURA presence, one command input, conversation stream, context summary, Guardian Watchtower, and pending approval only.
-13. Click `Test AURA voice` and verify you hear AURA. If not, read the voice output status and logs.
+12. Confirm the home surface is not a dashboard: living Aegisure presence, one command input, conversation stream, context summary, Guardian Watchtower, and pending approval only.
+13. Click `Test Aegisure voice` and verify you hear Aegisure. If not, read the voice output status and logs.
 14. Click `Show overlay`, minimize the full app, move the orb, expand it, and type `clone this repo`.
-15. Press Mic and say `clone this repo`. If native speech is available, verify the transcript appears and AURA starts the clone flow. If not, type `Clone this repo locally`. Wake word is not claimed in this build.
+15. Press Mic and say `clone this repo`. If native speech is available, verify the transcript appears and Aegisure starts the clone flow. If not, type `Clone this repo locally`. Wake word is not claimed in this build.
 16. Verify approval is required before shell/file execution.
 17. Open Gmail or email, refresh context, and verify Draft reply appears.
 18. Try the blocked shell command and verify Guardian blocks it.
@@ -341,12 +341,12 @@ Use this exact script for a clean first-user pass:
 
 ## Logs
 
-In AURA, click Open logs folder. If the desktop bridge is unavailable, inspect the default app logs and backend terminal logs.
+In Aegisure, click Open logs folder. If the desktop bridge is unavailable, inspect the default app logs and backend terminal logs.
 
 Useful local paths may include:
 
-- Electron user data logs from the AURA app support folder.
-- Backend profile data under the local AURA profile directory.
+- Electron user data logs from the Aegisure app support folder.
+- Backend profile data under the local Aegisure profile directory.
 - Terminal output if launched from development mode.
 - Packaged backend log: click Open logs folder, then inspect `aura-backend.log`.
 
@@ -354,9 +354,9 @@ Useful local paths may include:
 
 For a clean first-user test:
 
-1. Quit AURA.
-2. Remove the AURA app support/profile data for this private-alpha build.
-3. Relaunch AURA.
+1. Quit Aegisure.
+2. Remove the Aegisure app support/profile data for this private-alpha build.
+3. Relaunch Aegisure.
 
 Development reset:
 
@@ -366,7 +366,7 @@ scripts/reset-aura-local.sh
 
 The reset script prints these targets and asks for confirmation before archiving:
 
-- `/Applications/AURA.app`
+- `/Applications/Aegisure.app`
 - `~/Library/Application Support/aura-desktop`
 - `~/Library/Logs/aura-desktop`
 - `~/.aura`
@@ -387,9 +387,9 @@ scripts/reset-aura-local.sh --yes --delete
 
 - The private-alpha macOS app is unsigned unless you run `pnpm aura:package:prod` with Apple Developer ID credentials.
 - First launch may require right-click Open or quarantine removal.
-- Packaged AURA still depends on local Python 3.10+ and backend Python dependencies; the backend source is bundled in app resources, but Python itself is not embedded yet.
+- Packaged Aegisure still depends on local Python 3.10+ and backend Python dependencies; the backend source is bundled in app resources, but Python itself is not embedded yet.
 - Ollama model pull progress is shown as an in-app pulling state plus final command output; detailed streaming progress is not yet polished.
-- If Ollama is installed but stopped, AURA can try `ollama serve` after approval/setup. If that fails, the UI shows the exact command to run manually.
+- If Ollama is installed but stopped, Aegisure can try `ollama serve` after approval/setup. If that fails, the UI shows the exact command to run manually.
 - Native Apple Speech requires the bundled helper and microphone permission; typed command input is the supported fallback.
 - The overlay accepts typed commands and quick context refresh. Approval editing and rich draft review still open in the full app.
 - Browser/live-site automation is experimental and approval-gated.

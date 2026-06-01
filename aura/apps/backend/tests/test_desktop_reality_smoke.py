@@ -1,7 +1,7 @@
 from fastapi.testclient import TestClient
 
 from api.main import app
-from aura.state import db_conn
+from aegisure.state import db_conn
 
 client = TestClient(app)
 
@@ -10,9 +10,9 @@ def _github_context() -> dict:
     return {
         'source': 'desktop-smoke',
         'active_app': 'Chrome',
-        'window_title': 'Hetul803/AURA: repo',
-        'browser_url': 'https://github.com/Hetul803/AURA',
-        'browser_title': 'GitHub - Hetul803/AURA',
+        'window_title': 'Hetul803/Aegisure: repo',
+        'browser_url': 'https://github.com/Hetul803/Aegisure',
+        'browser_title': 'GitHub - Hetul803/Aegisure',
         'selected_text': '',
         'clipboard_text': '',
         'workspace_hint': 'C:/Users/aura/workspaces',
@@ -29,7 +29,7 @@ def test_clone_this_repo_uses_browser_context_and_requires_approval():
     assert approval['kind'] == 'tool_confirmation'
     assert approval['action_type'] == 'CODE_RUN'
     assert 'git clone' in approval['requested_args']['command']
-    assert 'https://github.com/Hetul803/AURA.git' in approval['requested_args']['command']
+    assert 'https://github.com/Hetul803/Aegisure.git' in approval['requested_args']['command']
 
 
 def test_email_reply_entrypoint_plans_approval_and_pasteback():

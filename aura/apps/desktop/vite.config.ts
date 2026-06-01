@@ -23,7 +23,7 @@ export default defineConfig({
   plugins: [react()],
   server: { port: 5173 },
   define: {
-    __AURA_BUILD_INFO__: JSON.stringify({
+    __AEGISURE_BUILD_INFO__: JSON.stringify({
       appVersion: packageJson.version,
       gitCommit: gitCommit(),
       buildTimestamp,

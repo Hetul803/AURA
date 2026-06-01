@@ -1,8 +1,8 @@
-from aura import executor
-from aura.orchestrator import approve_run, reject_run
-from aura.safety import classify_shell_command, requires_confirmation, step_risk
-from aura.state import db_conn, get_run_context, list_audit_log, list_run_events, set_run_context
-from aura.steps import Step
+from aegisure import executor
+from aegisure.orchestrator import approve_run, reject_run
+from aegisure.safety import classify_shell_command, requires_confirmation, step_risk
+from aegisure.state import db_conn, get_run_context, list_audit_log, list_run_events, set_run_context
+from aegisure.steps import Step
 from storage.db import init_db
 from tools.filesystem_tool import handle_filesystem_action
 from tools.tool_result import success

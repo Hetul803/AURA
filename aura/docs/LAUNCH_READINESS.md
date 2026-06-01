@@ -1,10 +1,10 @@
-# AURA Private Alpha Launch Readiness
+# Aegisure Private Alpha Launch Readiness
 
 This repo is now set up for a serious private alpha, not public App Store distribution yet.
 
 ## Brand Rename
 
-AURA can be renamed before packaging:
+Aegisure can be renamed before packaging:
 
 ```bash
 pnpm aura:brand -- --name="Your Product Name" --company="Your Company" --app-id="com.yourcompany.yourproduct"
@@ -22,19 +22,19 @@ For public launch, also replace the app icon, legal links, website copy, code-si
 
 ## Signed Licenses
 
-AURA supports offline-verifiable Ed25519 license tokens. The app only ships the public key. Never ship the private key.
+Aegisure supports offline-verifiable Ed25519 license tokens. The app only ships the public key. Never ship the private key.
 
 Generate vendor keys:
 
 ```bash
-python scripts/generate-license-key.py --key-dir ~/AURA_VENDOR_KEYS
+python scripts/generate-license-key.py --key-dir ~/AEGISURE_VENDOR_KEYS
 ```
 
 Generate a private-alpha license:
 
 ```bash
 python scripts/generate-license-key.py \
-  --key-dir ~/AURA_VENDOR_KEYS \
+  --key-dir ~/AEGISURE_VENDOR_KEYS \
   --email alpha-user@example.com \
   --tier private_alpha \
   --expires-at 2026-12-31T23:59:59Z
@@ -43,12 +43,12 @@ python scripts/generate-license-key.py \
 Set the public key for local testing before starting/building:
 
 ```bash
-export AURA_LICENSE_PUBLIC_KEY="$(cat ~/AURA_VENDOR_KEYS/vendor_public.pem)"
+export AEGISURE_LICENSE_PUBLIC_KEY="$(cat ~/AEGISURE_VENDOR_KEYS/vendor_public.pem)"
 ```
 
 Then paste the generated token into Settings -> License.
 
-For paid launch, the website issues signed tokens after Stripe checkout, the app verifies them locally, and `AURA_LICENSE_SERVER_URL` enables online device activation/revocation.
+For paid launch, the website issues signed tokens after Stripe checkout, the app verifies them locally, and `AEGISURE_LICENSE_SERVER_URL` enables online device activation/revocation.
 
 ## Cryptographic Identity
 
@@ -56,7 +56,7 @@ Each local identity gets an Ed25519 keypair:
 
 - public key and fingerprint are visible in the UI;
 - private key is encrypted at rest using a local master key in the profile secrets folder;
-- audit payloads for important AURA actions include identity signatures;
+- audit payloads for important Aegisure actions include identity signatures;
 - hardware-bound identity sync is planned for the license server and is not claimed yet.
 
 This prevents identity from being just a database number, but it is not a full anti-copy DRM system. If someone copies the entire local profile and master key, they can copy that local identity. Production hardening should bind license activation to devices and offer user-controlled backup/recovery.
@@ -90,17 +90,17 @@ Before giving the app to 10 users:
 5. Prepare a clean download page with reset/troubleshooting docs.
 6. Test fresh install on at least two Macs.
 7. Verify voice output, overlay, local model setup, Guardian blocking, memory persistence, identity switching, and clone/coding-job flows.
-8. Configure `AURA_CRASH_REPORT_URL` or `AURA_LICENSE_SERVER_URL`; renderer/backend crash reports are redacted before upload.
+8. Configure `AEGISURE_CRASH_REPORT_URL` or `AEGISURE_LICENSE_SERVER_URL`; renderer/backend crash reports are redacted before upload.
 
 ## Reality Boundary
 
-AURA is much closer to private-alpha readiness, but not yet a fully public production product. The biggest remaining public-launch gaps are:
+Aegisure is much closer to private-alpha readiness, but not yet a fully public production product. The biggest remaining public-launch gaps are:
 
 - Apple Developer ID code signing and notarization credentials;
 - replacing the JSON alpha store with Postgres before broad scale;
 - production Stripe products/prices/webhooks;
 - robust native speech-to-text beyond browser Web Speech fallback;
-- OS-wide Guardian monitoring outside AURA-managed actions;
+- OS-wide Guardian monitoring outside Aegisure-managed actions;
 - full database encryption and backup/recovery;
 - auto-update installation/apply flow; update checks and release feed exist, but users still install DMGs manually in private alpha.
 ## Current Private-Alpha Launch Gate

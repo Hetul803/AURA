@@ -1,10 +1,10 @@
 # Mobile Companion Prototype
 
-The mobile companion starts as a lightweight approval and handoff surface for desktop AURA.
+The mobile companion starts as a lightweight approval and handoff surface for desktop Aegisure.
 
 ## Prototype Capabilities
 
-- Pair a phone with desktop AURA.
+- Pair a phone with desktop Aegisure.
 - View mobile companion status.
 - Receive approval cards.
 - Approve or reject handoffs.

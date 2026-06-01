@@ -1,6 +1,6 @@
-appId: com.aura.desktop
-productName: AURA
-artifactName: AURA-${version}-${os}-${arch}.${ext}
+appId: com.aegisure.desktop
+productName: Aegisure
+artifactName: Aegisure-${version}-${os}-${arch}.${ext}
 directories:
   output: release
 files:
@@ -25,8 +25,8 @@ mac:
   entitlements: entitlements.mac.plist
   entitlementsInherit: entitlements.mac.plist
   extendInfo:
-    NSMicrophoneUsageDescription: AURA uses the microphone only when you press push-to-talk.
-    NSSpeechRecognitionUsageDescription: AURA uses speech recognition only when you press push-to-talk.
+    NSMicrophoneUsageDescription: Aegisure uses the microphone only when you press push-to-talk.
+    NSSpeechRecognitionUsageDescription: Aegisure uses speech recognition only when you press push-to-talk.
 linux:
   target:
     - AppImage

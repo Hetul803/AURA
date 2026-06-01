@@ -3,12 +3,12 @@ import { AppShell, Badge, Card, PageHeader } from "../../../../components/ui";
 export default function ConstitutionPage() {
   return (
     <AppShell>
-      <PageHeader eyebrow="AURA.md" title="Project Constitution editor">
+      <PageHeader eyebrow="AEGIS.md" title="Project Constitution editor">
         Edit the canonical rules that become AGENTS.md, CLAUDE.md, Cursor, Cline/Roo, and Copilot memory.
       </PageHeader>
       <div className="grid gap-6 p-6 md:grid-cols-[1fr_340px] md:p-10">
         <Card>
-          <textarea className="min-h-[480px] w-full resize-y rounded-md border border-white/10 bg-black p-4 font-mono text-sm leading-6 outline-none" defaultValue={`# AURA Constitution\n\n## Agent Rules\n- Inspect before editing\n- Do not remove tests\n- Ask before protected paths\n`} />
+          <textarea className="min-h-[480px] w-full resize-y rounded-md border border-white/10 bg-black p-4 font-mono text-sm leading-6 outline-none" defaultValue={`# Aegisure Constitution\n\n## Agent Rules\n- Inspect before editing\n- Do not remove tests\n- Ask before protected paths\n`} />
         </Card>
         <Card>
           <Badge tone="good">Versioned</Badge>

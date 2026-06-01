@@ -1,7 +1,7 @@
 import threading, time
-from aura.executor import execute_steps
-from aura.steps import Step
-from aura.state import cancel_run
+from aegisure.executor import execute_steps
+from aegisure.steps import Step
+from aegisure.state import cancel_run
 
 
 def test_panic_cancels_wait_step_quickly():

@@ -1,13 +1,13 @@
 # Privacy
 
-AURA is private by default. The current product assumes a local desktop profile, local storage, and explicit user approval before risky actions.
+Aegisure is private by default. The current product assumes a local desktop profile, local storage, and explicit user approval before risky actions.
 
 ## Local-First Defaults
 
-- Profile data lives in the local AURA profile directory.
+- Profile data lives in the local Aegisure profile directory.
 - Cloud sync is off.
 - Billing/payment is not required.
-- User-owned ChatGPT, Claude, or other web AI sessions are treated as browser handoffs, not AURA-owned credentials.
+- User-owned ChatGPT, Claude, or other web AI sessions are treated as browser handoffs, not Aegisure-owned credentials.
 - Local model routing is preferred for private drafting when available.
 
 ## Memory Boundaries
@@ -42,11 +42,11 @@ Bad memory:
 - SSNs;
 - confidential work details without permission.
 
-AURA rejects secret-looking memory writes before storage. Sensitive non-secret memory requires private/sensitive permission.
+Aegisure rejects secret-looking memory writes before storage. Sensitive non-secret memory requires private/sensitive permission.
 
 ## Redaction
 
-AURA redacts secrets before persisting:
+Aegisure redacts secrets before persisting:
 
 - run events;
 - audit log payloads;

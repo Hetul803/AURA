@@ -1,6 +1,6 @@
-from aura.steps import Step
+from aegisure.steps import Step
 from tools.os_automation import handle_os_action
-from aura.executor import execute_steps
+from aegisure.executor import execute_steps
 
 
 def test_os_action_wrapper_returns_structured_response():
